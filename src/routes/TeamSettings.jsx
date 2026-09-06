@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Copy, Check, Pencil, Plus } from 'lucide-react'
+import { Copy, Check, Pencil, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
@@ -19,6 +19,15 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogClose,
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 
 function EditTeamDialog({ team, onTeamUpdated, children }) {
@@ -110,12 +119,26 @@ function EditTeamDialog({ team, onTeamUpdated, children }) {
 export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) {
   const { players } = usePlayers(team.id)
   const [copied, setCopied] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const inviteUrl = `${window.location.origin}/onboarding?code=${team.invite_code}`
 
   async function handleCopy() {
     await navigator.clipboard.writeText(inviteUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleDeleteTeam() {
+    setDeleting(true)
+    const { error } = await supabase.from('teams').delete().eq('id', team.id)
+    setDeleting(false)
+    if (error) {
+      console.error('チームの削除に失敗しました', error)
+      return
+    }
+    setConfirmDelete(false)
+    await onTeamUpdated()
   }
 
   return (
@@ -218,6 +241,36 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
           </Link>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>危険な操作</CardTitle>
+          <CardDescription>選手・試合・スタッツもすべて削除されます</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="destructive" className="w-full" onClick={() => setConfirmDelete(true)}>
+            <Trash2 className="size-4" />
+            このチームを削除する
+          </Button>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>本当に削除しますか?</AlertDialogTitle>
+            <AlertDialogDescription>
+              「{team.name}」を削除します。選手・試合・スタッツの記録もすべて削除され、元に戻せません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>キャンセル</AlertDialogClose>
+            <Button variant="destructive" disabled={deleting} onClick={handleDeleteTeam}>
+              {deleting ? '削除中...' : '削除する'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

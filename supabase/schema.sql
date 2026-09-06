@@ -169,6 +169,9 @@ create policy "select own team" on teams
 create policy "update own team" on teams
   for update using (is_team_member(id)) with check (is_team_member(id));
 
+create policy "delete own team" on teams
+  for delete using (is_team_member(id));
+
 create policy "select own team members" on team_members
   for select using (is_team_member(team_id));
 
