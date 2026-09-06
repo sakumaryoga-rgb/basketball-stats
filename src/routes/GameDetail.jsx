@@ -232,9 +232,17 @@ export function GameDetail({ teamId }) {
   const rows = useMemo(() => {
     return gamePlayers
       .filter((p) => boxByPlayer.has(p.id))
-      .map((p) => ({ id: p.id, name: p.name, number: p.number, isGuest: !!p.guest_game_id, ...EMPTY_STATS, ...boxByPlayer.get(p.id) }))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        number: p.number,
+        isGuest: !!p.guest_game_id,
+        ...EMPTY_STATS,
+        ...boxByPlayer.get(p.id),
+        seconds_played: lineupByPlayer.get(p.id)?.seconds_played ?? 0,
+      }))
       .sort((a, b) => b.pts - a.pts)
-  }, [gamePlayers, boxByPlayer])
+  }, [gamePlayers, boxByPlayer, lineupByPlayer])
 
   const teamScore = rows.reduce((sum, r) => sum + r.pts, 0)
 
@@ -740,7 +748,7 @@ export function GameDetail({ teamId }) {
               statsTab === 'basic' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
             )}
           >
-            ベーシック
+            BOX SCORE
           </button>
           <button
             onClick={() => setStatsTab('shoot')}
@@ -749,7 +757,7 @@ export function GameDetail({ teamId }) {
               statsTab === 'shoot' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
             )}
           >
-            シュート
+            SHOT CHART
           </button>
         </div>
 

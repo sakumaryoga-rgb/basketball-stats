@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom'
 import { Plus, Trash2 } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
+import { formatPositions } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PositionSelect } from '@/components/PositionSelect'
 import {
   Dialog,
   DialogContent,
@@ -32,6 +34,7 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
   const [name, setName] = useState('')
   const [number, setNumber] = useState('')
   const [position, setPosition] = useState('')
+  const [position2, setPosition2] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const { players: otherPlayers, loading: otherLoading } = useOtherTeamPlayers(teams, teamId)
@@ -40,6 +43,7 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
     setName('')
     setNumber('')
     setPosition('')
+    setPosition2('')
     setError('')
     setMode('new')
   }
@@ -49,7 +53,7 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
     setSaving(true)
     setError('')
     try {
-      await addPlayer({ name, number: number ? Number(number) : null, position })
+      await addPlayer({ name, number: number ? Number(number) : null, position, position2 })
       reset()
       setOpen(false)
     } catch (err) {
@@ -67,6 +71,7 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
         name: existing.name,
         number: existing.number,
         position: existing.position,
+        position2: existing.position2,
         heightCm: existing.height_cm,
         weightKg: existing.weight_kg,
         photoUrl: existing.photo_url,
@@ -134,8 +139,12 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="player-position">ポジション</Label>
-                <Input id="player-position" value={position} onChange={(e) => setPosition(e.target.value)} placeholder="例: PG" />
+                <PositionSelect id="player-position" value={position} onChange={setPosition} />
               </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="player-position2">ポジション(第2)</Label>
+              <PositionSelect id="player-position2" value={position2} onChange={setPosition2} />
             </div>
             {error && <p className="text-destructive text-sm">{error}</p>}
             <DialogFooter>
@@ -207,7 +216,9 @@ export function Players({ teamId, teams = [] }) {
               </Avatar>
               <Link to={`/players/${player.id}`} className="flex-1 min-w-0">
                 <p className="font-medium truncate">{player.name}</p>
-                {player.position && <p className="text-xs text-muted-foreground">{player.position}</p>}
+                {player.position && (
+                  <p className="text-xs text-muted-foreground">{formatPositions(player.position, player.position2)}</p>
+                )}
               </Link>
               <Button variant="ghost" size="icon-sm" aria-label="削除" onClick={() => setDeleteTarget(player)}>
                 <Trash2 className="size-4" />

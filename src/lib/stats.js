@@ -78,6 +78,20 @@ export function formatPlusMinus(value) {
   return value > 0 ? `+${value}` : `${value}`
 }
 
+// ポジションの選択肢と表示順(PG, SG, SF, PF, C)
+export const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
+
+// ROSTERの並び替えで使う、第一ポジションの表示順インデックス(未設定は最後)
+export function positionSortIndex(position) {
+  const index = POSITIONS.indexOf(position)
+  return index === -1 ? POSITIONS.length : index
+}
+
+// 第一・第二ポジションをまとめて表示する("PG / SG"のように)
+export function formatPositions(position, position2) {
+  return [position, position2].filter(Boolean).join(' / ')
+}
+
 export function formatClock(totalSeconds) {
   const s = Math.max(0, totalSeconds)
   const m = Math.floor(s / 60)

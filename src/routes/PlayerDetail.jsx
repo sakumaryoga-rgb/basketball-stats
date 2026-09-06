@@ -5,11 +5,12 @@ import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadPlayerPhoto, deletePlayerPhoto } from '@/lib/uploadPlayerPhoto'
-import { formatAvg, formatPct, formatPlusMinus, pct, perGame } from '@/lib/stats'
+import { formatAvg, formatPct, formatPlusMinus, formatPositions, pct, perGame } from '@/lib/stats'
 import { formatMadeAttempt, formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PositionSelect } from '@/components/PositionSelect'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { HotZoneSection } from '@/components/HotZoneSection'
 import {
@@ -81,6 +82,7 @@ function EditProfileDialog({ player, updatePlayer, children }) {
   const [name, setName] = useState(player.name)
   const [number, setNumber] = useState(player.number ?? '')
   const [position, setPosition] = useState(player.position ?? '')
+  const [position2, setPosition2] = useState(player.position2 ?? '')
   const [heightCm, setHeightCm] = useState(player.height_cm ?? '')
   const [weightKg, setWeightKg] = useState(player.weight_kg ?? '')
   const [photoFile, setPhotoFile] = useState(null)
@@ -94,6 +96,7 @@ function EditProfileDialog({ player, updatePlayer, children }) {
       setName(player.name)
       setNumber(player.number ?? '')
       setPosition(player.position ?? '')
+      setPosition2(player.position2 ?? '')
       setHeightCm(player.height_cm ?? '')
       setWeightKg(player.weight_kg ?? '')
       setPhotoFile(null)
@@ -135,6 +138,7 @@ function EditProfileDialog({ player, updatePlayer, children }) {
         name,
         number: number ? Number(number) : null,
         position: position || null,
+        position2: position2 || null,
         height_cm: heightCm ? Number(heightCm) : null,
         weight_kg: weightKg ? Number(weightKg) : null,
         photo_url: photoUrl,
@@ -187,8 +191,12 @@ function EditProfileDialog({ player, updatePlayer, children }) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-position">ポジション</Label>
-              <Input id="edit-position" value={position} onChange={(e) => setPosition(e.target.value)} />
+              <PositionSelect id="edit-position" value={position} onChange={setPosition} />
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-position2">ポジション(第2)</Label>
+            <PositionSelect id="edit-position2" value={position2} onChange={setPosition2} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -262,7 +270,11 @@ export function PlayerDetail({ teamId }) {
         <div className="flex-1 min-w-0">
           <p className="text-lg font-medium">{player.name}</p>
           <p className="text-xs text-muted-foreground">
-            {[player.position, player.height_cm ? `${player.height_cm}cm` : null, player.weight_kg ? `${player.weight_kg}kg` : null]
+            {[
+              formatPositions(player.position, player.position2) || null,
+              player.height_cm ? `${player.height_cm}cm` : null,
+              player.weight_kg ? `${player.weight_kg}kg` : null,
+            ]
               .filter(Boolean)
               .join(' ・ ')}
           </p>

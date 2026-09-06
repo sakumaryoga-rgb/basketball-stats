@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Copy, Check, Pencil, Plus, RefreshCw, LogOut, Trash2 } from 'lucide-react'
+import { Copy, Check, ChevronDown, Pencil, Plus, RefreshCw, LogOut, Trash2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useTeamSeasonStats } from '@/hooks/useTeamSeasonStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
-import { formatAvg, formatPct, formatPlusMinus, pct, perGame } from '@/lib/stats'
+import { formatAvg, formatPct, formatPlusMinus, formatPositions, pct, perGame, positionSortIndex } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -187,10 +187,18 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
   const [confirmRegenerate, setConfirmRegenerate] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
+  const [rosterOpen, setRosterOpen] = useState(false)
   const inviteUrl = `${window.location.origin}/onboarding?code=${team.invite_code}`
 
   const gamesPlayed = games.filter((g) => g.status !== 'scheduled').length
   const startersCount = players.filter((p) => p.is_starter).length
+
+  // 第一ポジション(PG→SG→SF→PF→C、未設定は最後)の順で並べ替える。
+  // 同じポジション内は元の並び順(sort_order/背番号)を保つため安定ソートに依存する。
+  const rosterByPosition = useMemo(
+    () => [...players].sort((a, b) => positionSortIndex(a.position) - positionSortIndex(b.position)),
+    [players]
+  )
 
   const averages = useMemo(() => {
     if (!totals) return null
@@ -290,30 +298,57 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
           {players.length === 0 ? (
             <p className="text-sm text-muted-foreground py-2 text-center">まだ選手が登録されていません</p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {players.map((p) => (
-                <li key={p.id} className="flex items-center gap-3 -mx-2 px-2 py-1.5">
-                  <Link to={`/players/${p.id}`} className="flex flex-1 min-w-0 items-center gap-3 rounded-lg hover:bg-muted/50">
-                    <Avatar className="size-8 shrink-0 text-xs font-medium">
-                      <AvatarImage src={p.photo_url} alt={p.name} />
-                      <AvatarFallback className="tabular-nums">{p.number ?? '-'}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{p.name}</p>
-                      {p.position && <p className="text-xs text-muted-foreground">{p.position}</p>}
-                    </div>
-                  </Link>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] text-muted-foreground">STARTING FIVE</span>
-                    <Switch
-                      checked={p.is_starter}
-                      onCheckedChange={() => handleToggleStarter(p)}
-                      disabled={!p.is_starter && startersCount >= 5}
-                    />
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              <button
+                type="button"
+                onClick={() => setRosterOpen((v) => !v)}
+                className="flex w-full items-center justify-between rounded-lg -mx-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
+              >
+                <span>選手一覧 ({players.length}人)</span>
+                <ChevronDown className={cn('size-4 transition-transform duration-300', rosterOpen && 'rotate-180')} />
+              </button>
+              <div
+                className={cn(
+                  'grid transition-[grid-template-rows] duration-300 ease-in-out',
+                  rosterOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                )}
+              >
+                <div className="overflow-hidden">
+                  <ul className="flex flex-col gap-2 pt-2">
+                    {rosterByPosition.map((p) => (
+                      <li
+                        key={p.id}
+                        className={cn(
+                          'flex items-center gap-3 -mx-2 px-2 py-1.5 rounded-lg transition-colors duration-300',
+                          p.is_starter && 'bg-primary/5'
+                        )}
+                      >
+                        <Link to={`/players/${p.id}`} className="flex flex-1 min-w-0 items-center gap-3 rounded-lg hover:bg-muted/50">
+                          <Avatar className="size-8 shrink-0 text-xs font-medium">
+                            <AvatarImage src={p.photo_url} alt={p.name} />
+                            <AvatarFallback className="tabular-nums">{p.number ?? '-'}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{p.name}</p>
+                            {p.position && (
+                              <p className="text-xs text-muted-foreground">{formatPositions(p.position, p.position2)}</p>
+                            )}
+                          </div>
+                        </Link>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] text-muted-foreground">STARTING FIVE</span>
+                          <Switch
+                            checked={p.is_starter}
+                            onCheckedChange={() => handleToggleStarter(p)}
+                            disabled={!p.is_starter && startersCount >= 5}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

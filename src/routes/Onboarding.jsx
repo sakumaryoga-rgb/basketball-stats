@@ -143,7 +143,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
               className="flex-1"
               onClick={() => setMode('create')}
             >
-              新しく作成
+              CREATE TEAM
             </Button>
             <Button
               type="button"
@@ -151,7 +151,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
               className="flex-1"
               onClick={() => setMode('join')}
             >
-              招待コードで参加
+              JOIN TEAM
             </Button>
           </div>
 
@@ -164,7 +164,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
                   required
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="例: 〇〇バスケットボールクラブ"
+                  placeholder="ここにチーム名を入力"
                 />
               </div>
               {error && <p className="text-destructive text-sm">{error}</p>}

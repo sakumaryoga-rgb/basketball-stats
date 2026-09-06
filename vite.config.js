@@ -12,10 +12,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['apple-touch-icon.png'],
+      includeAssets: ['apple-touch-icon.png', 'favicon.png'],
       manifest: {
-        name: 'バスケスタッツ',
-        short_name: 'バスケスタッツ',
+        name: 'BASKETBALL STATS',
+        short_name: 'BASKETBALL STATS',
         description: 'チームのバスケットボールスタッツを記録・集計するアプリ',
         start_url: '/',
         display: 'standalone',

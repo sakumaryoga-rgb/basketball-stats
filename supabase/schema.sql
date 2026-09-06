@@ -38,6 +38,7 @@ create table if not exists players (
   active boolean not null default true,
   sort_order int not null default 0,
   is_starter boolean not null default false,
+  position2 text,
   created_at timestamptz not null default now()
 );
 
