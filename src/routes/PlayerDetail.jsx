@@ -5,7 +5,7 @@ import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadPlayerPhoto, deletePlayerPhoto } from '@/lib/uploadPlayerPhoto'
-import { formatAvg, formatPct, pct, perGame } from '@/lib/stats'
+import { formatAvg, formatPct, formatPlusMinus, pct, perGame } from '@/lib/stats'
 import { formatMadeAttempt, formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -308,6 +308,7 @@ export function PlayerDetail({ teamId }) {
               <StatBlock label="STL" value={season.stl} />
               <StatBlock label="BLK" value={season.blk} />
               <StatBlock label="TO" value={season.tov} />
+              <StatBlock label="+/-" value={formatPlusMinus(season.plus_minus)} />
             </div>
           </div>
 
@@ -319,6 +320,7 @@ export function PlayerDetail({ teamId }) {
                   <tr className="text-xs text-muted-foreground border-b">
                     <th className="text-left font-normal py-2 pr-3 sticky left-0 bg-background">試合</th>
                     <th className="text-right font-normal py-2 px-2">PTS</th>
+                    <th className="text-right font-normal py-2 px-2">+/-</th>
                     <th className="text-right font-normal py-2 px-2">REB</th>
                     <th className="text-right font-normal py-2 px-2">AST</th>
                     <th className="text-right font-normal py-2 px-2">FG</th>
@@ -335,6 +337,7 @@ export function PlayerDetail({ teamId }) {
                         </Link>
                       </td>
                       <td className="text-right py-2 px-2 tabular-nums font-medium">{row.pts}</td>
+                      <td className="text-right py-2 px-2 tabular-nums">{formatPlusMinus(row.plus_minus)}</td>
                       <td className="text-right py-2 px-2 tabular-nums">{row.reb}</td>
                       <td className="text-right py-2 px-2 tabular-nums">{row.ast}</td>
                       <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">{formatMadeAttempt(row.fgm, row.fga)}</td>

@@ -72,6 +72,12 @@ export function perGame(total, games) {
   return total / games
 }
 
+// プラスマイナス(±)。プラスの値には符号を付けて表示する
+export function formatPlusMinus(value) {
+  if (value === null || value === undefined) return '-'
+  return value > 0 ? `+${value}` : `${value}`
+}
+
 export function formatClock(totalSeconds) {
   const s = Math.max(0, totalSeconds)
   const m = Math.floor(s / 60)

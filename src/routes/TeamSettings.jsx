@@ -7,12 +7,13 @@ import { useGames } from '@/hooks/useGames'
 import { useTeamSeasonStats } from '@/hooks/useTeamSeasonStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
-import { formatAvg, formatPct, pct, perGame } from '@/lib/stats'
+import { formatAvg, formatPct, formatPlusMinus, pct, perGame } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
 import { HotZoneSection } from '@/components/HotZoneSection'
 import {
   Dialog,
@@ -175,7 +176,7 @@ function StatBlock({ label, value }) {
 
 export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) {
   const navigate = useNavigate()
-  const { players: allPlayers } = usePlayers(team.id)
+  const { players: allPlayers, updatePlayer } = usePlayers(team.id)
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const { games } = useGames(team.id)
   const { totals } = useTeamSeasonStats(team.id)
@@ -189,6 +190,7 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
   const inviteUrl = `${window.location.origin}/onboarding?code=${team.invite_code}`
 
   const gamesPlayed = games.filter((g) => g.status !== 'scheduled').length
+  const startersCount = players.filter((p) => p.is_starter).length
 
   const averages = useMemo(() => {
     if (!totals) return null
@@ -245,7 +247,12 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
     }
     setConfirmLeave(false)
     await onTeamUpdated()
-    navigate('/games')
+    navigate('/onboarding')
+  }
+
+  async function handleToggleStarter(player) {
+    if (!player.is_starter && startersCount >= 5) return
+    await updatePlayer(player.id, { is_starter: !player.is_starter })
   }
 
   return (
@@ -274,7 +281,10 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
 
       <Card>
         <CardHeader>
-          <CardTitle>所属選手</CardTitle>
+          <CardTitle>ROSTER</CardTitle>
+          <CardDescription>
+            STARTING FIVE(試合追加時のデフォルト) ・ {startersCount}/5人選択中
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {players.length === 0 ? (
@@ -282,8 +292,8 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
           ) : (
             <ul className="flex flex-col gap-2">
               {players.map((p) => (
-                <li key={p.id}>
-                  <Link to={`/players/${p.id}`} className="flex items-center gap-3 rounded-lg hover:bg-muted/50 -mx-2 px-2 py-1.5">
+                <li key={p.id} className="flex items-center gap-3 -mx-2 px-2 py-1.5">
+                  <Link to={`/players/${p.id}`} className="flex flex-1 min-w-0 items-center gap-3 rounded-lg hover:bg-muted/50">
                     <Avatar className="size-8 shrink-0 text-xs font-medium">
                       <AvatarImage src={p.photo_url} alt={p.name} />
                       <AvatarFallback className="tabular-nums">{p.number ?? '-'}</AvatarFallback>
@@ -293,6 +303,14 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
                       {p.position && <p className="text-xs text-muted-foreground">{p.position}</p>}
                     </div>
                   </Link>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] text-muted-foreground">STARTING FIVE</span>
+                    <Switch
+                      checked={p.is_starter}
+                      onCheckedChange={() => handleToggleStarter(p)}
+                      disabled={!p.is_starter && startersCount >= 5}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -332,6 +350,7 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
               <StatBlock label="STL" value={totals.stl} />
               <StatBlock label="BLK" value={totals.blk} />
               <StatBlock label="TO" value={totals.tov} />
+              <StatBlock label="+/-" value={formatPlusMinus(totals.plus_minus)} />
             </div>
           </div>
 
@@ -341,7 +360,7 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
 
       <Card>
         <CardHeader>
-          <CardTitle>招待</CardTitle>
+          <CardTitle>INVITATION</CardTitle>
           <CardDescription>このURLまたはコードを共有すると、コーチ・マネージャーがチームに参加できます</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -390,7 +409,7 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
 
       <Card>
         <CardHeader>
-          <CardTitle>マイチーム</CardTitle>
+          <CardTitle>MYTEAM</CardTitle>
           <CardDescription>所属している他のチームに切り替えられます</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">

@@ -3,8 +3,8 @@ import { CalendarDays, ChevronDown, Users, Trophy, Settings } from 'lucide-react
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 
 const NAV_ITEMS = [
-  { to: '/games', label: 'GAME', icon: CalendarDays },
-  { to: '/players', label: 'PLAYER', icon: Users },
+  { to: '/games', label: 'GAMES', icon: CalendarDays },
+  { to: '/players', label: 'PLAYERS', icon: Users },
   { to: '/leaders', label: 'LEADERS', icon: Trophy },
   { to: '/team', label: 'TEAM', icon: Settings },
 ]

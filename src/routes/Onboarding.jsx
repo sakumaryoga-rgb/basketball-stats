@@ -109,7 +109,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   return (
     <div className="min-h-svh relative flex flex-col items-center justify-center gap-8 overflow-hidden px-4 py-10">
       <div className="pointer-events-none absolute -top-24 -right-24 size-72 rounded-full bg-primary/10 blur-3xl" aria-hidden />
-      <div className="pointer-events-none absolute -bottom-24 -left-24 size-72 rounded-full bg-secondary/40 blur-3xl" aria-hidden />
+      <div className="pointer-events-none absolute -bottom-24 -left-24 size-72 rounded-full bg-primary/8 blur-3xl" aria-hidden />
 
       <div className="relative flex flex-col items-center gap-3">
         <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30">

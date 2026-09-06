@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Undo2, ChevronLeft, Minus, Plus, Play, Pause, UserPlus, Check } from 'lucide-react'
+import { Undo2, ChevronLeft, Minus, Plus, Play, Pause, UserPlus, Check, Repeat } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
+import { useGameLineups } from '@/hooks/useGameLineups'
 import { STAT_CATEGORIES, STAT_KEY_LABEL, QUARTER_OPTIONS, formatClock, formatQuarter } from '@/lib/stats'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -149,7 +150,7 @@ const STATUS_LABEL = { scheduled: '予定', in_progress: '試合中', final: '�
 
 const EMPTY_STATS = {
   pts: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0,
-  fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
+  fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, plus_minus: 0,
 }
 
 export function GameDetail({ teamId }) {
@@ -158,6 +159,7 @@ export function GameDetail({ teamId }) {
   const { players, addPlayer } = usePlayers(teamId)
   const { games, updateGame, deleteGame } = useGames(teamId)
   const { events, boxScore, recordStat, undoLast } = useGameStats(id)
+  const { lineups, substitute, incrementSeconds } = useGameLineups(id)
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [activeCategoryKey, setActiveCategoryKey] = useState('fg2')
@@ -169,6 +171,11 @@ export function GameDetail({ teamId }) {
   const [recordedFlash, setRecordedFlash] = useState(null)
   const flashTimerRef = useRef(null)
   const [timePickerOpen, setTimePickerOpen] = useState(false)
+  const [substitutionTarget, setSubstitutionTarget] = useState(null)
+  const [substituting, setSubstituting] = useState(false)
+  const pendingSecondsRef = useRef(0)
+  const longPressTimerRef = useRef(null)
+  const longPressFiredRef = useRef(false)
 
   const game = games.find((g) => g.id === id)
   const activeCategory = STAT_CATEGORIES.find((c) => c.key === activeCategoryKey)
@@ -187,14 +194,34 @@ export function GameDetail({ teamId }) {
   }
 
   useEffect(() => () => clearTimeout(flashTimerRef.current), [])
+  useEffect(() => () => clearTimeout(longPressTimerRef.current), [])
 
   useEffect(() => {
     if (!clockRunning) return
     const timer = setInterval(() => {
       setSecondsLeft((s) => Math.max(0, s - 1))
+      pendingSecondsRef.current += 1
+      // 出場時間の書き込み回数を抑えるため、5秒分たまってからまとめて反映する
+      if (pendingSecondsRef.current >= 5) {
+        const delta = pendingSecondsRef.current
+        pendingSecondsRef.current = 0
+        incrementSeconds(delta)
+      }
     }, 1000)
-    return () => clearInterval(timer)
-  }, [clockRunning])
+    return () => {
+      clearInterval(timer)
+      if (pendingSecondsRef.current > 0) {
+        const delta = pendingSecondsRef.current
+        pendingSecondsRef.current = 0
+        incrementSeconds(delta)
+      }
+    }
+  }, [clockRunning, incrementSeconds])
+
+  const onCourtIds = useMemo(() => new Set(lineups.filter((l) => l.on_court).map((l) => l.player_id)), [lineups])
+  const lineupByPlayer = useMemo(() => new Map(lineups.map((l) => [l.player_id, l])), [lineups])
+  const starters = useMemo(() => gamePlayers.filter((p) => onCourtIds.has(p.id)), [gamePlayers, onCourtIds])
+  const reserves = useMemo(() => gamePlayers.filter((p) => !onCourtIds.has(p.id)), [gamePlayers, onCourtIds])
 
   const boxByPlayer = useMemo(() => {
     const map = new Map()
@@ -275,6 +302,38 @@ export function GameDetail({ teamId }) {
 
   function adjustClock(delta) {
     setSecondsLeft((s) => Math.max(0, s + delta))
+  }
+
+  function handlePlayerPressStart(player) {
+    longPressFiredRef.current = false
+    clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = setTimeout(() => {
+      longPressFiredRef.current = true
+      setSubstitutionTarget(player)
+    }, 500)
+  }
+
+  function handlePlayerPressEnd() {
+    clearTimeout(longPressTimerRef.current)
+  }
+
+  function handlePlayerClick(player) {
+    if (longPressFiredRef.current) {
+      longPressFiredRef.current = false
+      return
+    }
+    setSelectedPlayerId(player.id)
+  }
+
+  async function handleSubstitute(otherPlayer) {
+    if (!substitutionTarget) return
+    setSubstituting(true)
+    const targetOnCourt = onCourtIds.has(substitutionTarget.id)
+    const playerOutId = targetOnCourt ? substitutionTarget.id : otherPlayer.id
+    const playerInId = targetOnCourt ? otherPlayer.id : substitutionTarget.id
+    await substitute(playerOutId, playerInId)
+    setSubstituting(false)
+    setSubstitutionTarget(null)
   }
 
   function handleCategorySelect(key) {
@@ -474,6 +533,41 @@ export function GameDetail({ teamId }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <Dialog open={!!substitutionTarget} onOpenChange={(o) => !o && setSubstitutionTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>選手交代</DialogTitle>
+            <DialogDescription>
+              {substitutionTarget &&
+                (onCourtIds.has(substitutionTarget.id)
+                  ? `${substitutionTarget.name} と交代するRESERVEの選手を選んでください`
+                  : `${substitutionTarget.name} と交代するSTARTING FIVEの選手を選んでください`)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+            {(substitutionTarget && onCourtIds.has(substitutionTarget.id) ? reserves : starters)
+              .filter((p) => p.id !== substitutionTarget?.id)
+              .map((p) => (
+                <Button
+                  key={p.id}
+                  type="button"
+                  variant="outline"
+                  className="justify-start"
+                  disabled={substituting}
+                  onClick={() => handleSubstitute(p)}
+                >
+                  {p.number != null ? `#${p.number} ` : ''}
+                  {p.name}
+                </Button>
+              ))}
+            {substitutionTarget &&
+              (onCourtIds.has(substitutionTarget.id) ? reserves : starters).length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">交代できる選手がいません</p>
+              )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {game.status !== 'final' && (
         <div className="flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex items-center justify-between">
@@ -483,26 +577,77 @@ export function GameDetail({ teamId }) {
           {gamePlayers.length === 0 ? (
             <p className="text-sm text-muted-foreground">先に選手を登録してください</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {gamePlayers.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedPlayerId(p.id)}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
-                    selectedPlayerId === p.id
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background hover:bg-muted'
-                  )}
-                >
-                  {p.number != null ? `#${p.number} ` : ''}
-                  {p.name}
-                  {p.guest_game_id && (
-                    <span className="rounded bg-muted-foreground/20 px-1 text-[10px] leading-4">ゲスト</span>
-                  )}
-                  <span className="opacity-70 tabular-nums">{playerPtsById.get(p.id) ?? 0}</span>
-                </button>
-              ))}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-heading tracking-wide text-muted-foreground">STARTING FIVE</p>
+                {starters.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">TEAMタブでSTARTING FIVEを設定してください</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {starters.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => handlePlayerClick(p)}
+                        onPointerDown={() => handlePlayerPressStart(p)}
+                        onPointerUp={handlePlayerPressEnd}
+                        onPointerLeave={handlePlayerPressEnd}
+                        className={cn(
+                          'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors select-none',
+                          selectedPlayerId === p.id
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background hover:bg-muted'
+                        )}
+                      >
+                        {p.number != null ? `#${p.number} ` : ''}
+                        {p.name}
+                        {p.guest_game_id && (
+                          <span className="rounded bg-muted-foreground/20 px-1 text-[10px] leading-4">ゲスト</span>
+                        )}
+                        <span className="opacity-70 tabular-nums">{playerPtsById.get(p.id) ?? 0}</span>
+                        <span className="opacity-70 tabular-nums text-[10px]">
+                          {formatClock(lineupByPlayer.get(p.id)?.seconds_played ?? 0)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-heading tracking-wide text-muted-foreground">RESERVE</p>
+                {reserves.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">-</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {reserves.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => handlePlayerClick(p)}
+                        onPointerDown={() => handlePlayerPressStart(p)}
+                        onPointerUp={handlePlayerPressEnd}
+                        onPointerLeave={handlePlayerPressEnd}
+                        className={cn(
+                          'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors select-none',
+                          selectedPlayerId === p.id
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background hover:bg-muted'
+                        )}
+                      >
+                        {p.number != null ? `#${p.number} ` : ''}
+                        {p.name}
+                        {p.guest_game_id && (
+                          <span className="rounded bg-muted-foreground/20 px-1 text-[10px] leading-4">ゲスト</span>
+                        )}
+                        <span className="opacity-70 tabular-nums">{playerPtsById.get(p.id) ?? 0}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Repeat className="size-3" />
+                選手を長押しすると交代できます
+              </p>
             </div>
           )}
 

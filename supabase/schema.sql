@@ -37,6 +37,7 @@ create table if not exists players (
   photo_url text,
   active boolean not null default true,
   sort_order int not null default 0,
+  is_starter boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -83,6 +84,18 @@ create index if not exists idx_stat_events_player on stat_events(player_id);
 alter table players add column if not exists guest_game_id uuid references games(id) on delete cascade;
 create index if not exists idx_players_guest_game_id on players(guest_game_id);
 
+-- 試合ごとの出場状況(STARTING FIVE / RESERVE、出場時間、プラスマイナス)
+create table if not exists game_lineups (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games(id) on delete cascade,
+  player_id uuid not null references players(id) on delete cascade,
+  on_court boolean not null default false,
+  seconds_played int not null default 0,
+  plus_minus int not null default 0,
+  unique (game_id, player_id)
+);
+create index if not exists idx_game_lineups_game on game_lineups(game_id);
+
 -- ============================================================
 -- 2. 「自分がそのチームのメンバーか」を判定するヘルパー関数
 --    (1端末が複数チームに所属できるため、単一チームIDを返す方式ではなく
@@ -128,7 +141,11 @@ select
   count(*) filter (where stat_key = 'pf')                                         as pf,
   (count(*) filter (where stat_key = 'fg2_make') * 2
     + count(*) filter (where stat_key = 'fg3_make') * 3
-    + count(*) filter (where stat_key = 'ft_make'))                              as pts
+    + count(*) filter (where stat_key = 'ft_make'))                              as pts,
+  coalesce((
+    select gl.plus_minus from game_lineups gl
+    where gl.game_id = stat_events.game_id and gl.player_id = stat_events.player_id
+  ), 0)::int as plus_minus
 from stat_events
 group by game_id, player_id;
 
@@ -152,7 +169,8 @@ select
   coalesce(sum(pgs.stl), 0)::int    as stl,
   coalesce(sum(pgs.blk), 0)::int    as blk,
   coalesce(sum(pgs.tov), 0)::int    as tov,
-  coalesce(sum(pgs.pf), 0)::int     as pf
+  coalesce(sum(pgs.pf), 0)::int     as pf,
+  coalesce(sum(pgs.plus_minus), 0)::int as plus_minus
 from players p
 left join player_game_stats pgs on pgs.player_id = p.id
 where p.guest_game_id is null
@@ -168,6 +186,7 @@ alter table team_members enable row level security;
 alter table players enable row level security;
 alter table games enable row level security;
 alter table stat_events enable row level security;
+alter table game_lineups enable row level security;
 
 create policy "select own team" on teams
   for select using (is_team_member(id));
@@ -203,6 +222,147 @@ create policy "manage own team stat_events" on stat_events
   with check (
     exists (select 1 from games g where g.id = stat_events.game_id and is_team_member(g.team_id))
   );
+
+create policy "manage own team game_lineups" on game_lineups
+  for all
+  using (exists (select 1 from games g where g.id = game_lineups.game_id and is_team_member(g.team_id)))
+  with check (exists (select 1 from games g where g.id = game_lineups.game_id and is_team_member(g.team_id)));
+
+-- ============================================================
+-- 4b. STARTING FIVE / 出場時間 / プラスマイナスの自動更新
+-- ============================================================
+
+-- 試合作成時、その時点の選手のis_starterを引き継いでgame_lineupsを作成する。
+-- 誰もSTARTING FIVEに設定されていない場合は並び順で先頭5人を仮のSTARTING FIVEにする。
+create or replace function seed_game_lineups()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into game_lineups (game_id, player_id, on_court)
+  select new.id, p.id, p.is_starter
+  from players p
+  where p.team_id = new.team_id and p.guest_game_id is null;
+
+  if not exists (select 1 from game_lineups where game_id = new.id and on_court) then
+    update game_lineups
+    set on_court = true
+    where id in (
+      select gl.id from game_lineups gl
+      join players p on p.id = gl.player_id
+      where gl.game_id = new.id
+      order by p.sort_order, p.number
+      limit 5
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger trg_seed_game_lineups
+  after insert on games
+  for each row execute function seed_game_lineups();
+
+-- プラスマイナス: 自チームの得点イベントの記録・取り消し時、その時点でSTARTING FIVE
+-- (on_court)の選手全員に加減算する。
+create or replace function stat_event_points(stat_key text)
+returns int
+language sql
+immutable
+as $$
+  select case stat_key
+    when 'fg2_make' then 2
+    when 'fg3_make' then 3
+    when 'ft_make' then 1
+    else 0
+  end;
+$$;
+
+create or replace function apply_stat_event_plus_minus()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  pts int := stat_event_points(NEW.stat_key);
+begin
+  if pts > 0 then
+    update game_lineups
+    set plus_minus = plus_minus + pts
+    where game_id = NEW.game_id and on_court = true;
+  end if;
+  return NEW;
+end;
+$$;
+
+create trigger trg_stat_event_plus_minus_ins
+  after insert on stat_events
+  for each row execute function apply_stat_event_plus_minus();
+
+create or replace function revert_stat_event_plus_minus()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  pts int := stat_event_points(OLD.stat_key);
+begin
+  if pts > 0 then
+    update game_lineups
+    set plus_minus = plus_minus - pts
+    where game_id = OLD.game_id and on_court = true;
+  end if;
+  return OLD;
+end;
+$$;
+
+create trigger trg_stat_event_plus_minus_del
+  after delete on stat_events
+  for each row execute function revert_stat_event_plus_minus();
+
+-- 相手の得点(手動カウンター)の増減もSTARTING FIVEのプラスマイナスに反映する
+create or replace function apply_opponent_score_plus_minus()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  delta int := NEW.opponent_score - OLD.opponent_score;
+begin
+  if delta <> 0 then
+    update game_lineups
+    set plus_minus = plus_minus - delta
+    where game_id = NEW.id and on_court = true;
+  end if;
+  return NEW;
+end;
+$$;
+
+create trigger trg_opponent_score_plus_minus
+  after update of opponent_score on games
+  for each row execute function apply_opponent_score_plus_minus();
+
+-- 出場時間の加算(タイマー進行中、クライアントから数秒おきに呼び出す)
+create or replace function increment_lineup_seconds(p_game_id uuid, p_delta int)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update game_lineups
+  set seconds_played = seconds_played + p_delta
+  where game_id = p_game_id
+    and on_court = true
+    and exists (select 1 from games g where g.id = p_game_id and is_team_member(g.team_id));
+$$;
+
+grant execute on function increment_lineup_seconds(uuid, int) to authenticated;
 
 -- ============================================================
 -- 5. チーム作成・参加 の RPC 関数
@@ -265,6 +425,7 @@ grant execute on function join_team(text) to authenticated;
 alter publication supabase_realtime add table games;
 alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table stat_events;
+alter publication supabase_realtime add table game_lineups;
 
 -- ============================================================
 -- 7. 選手写真の保存先ストレージバケット

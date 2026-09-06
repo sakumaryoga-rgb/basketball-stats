@@ -61,7 +61,7 @@ export function Games({ teamId }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-heading tracking-wide">GAME</h1>
+        <h1 className="text-2xl font-heading tracking-wide">GAMES</h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button size="sm" />}>
             <Plus className="size-4" />

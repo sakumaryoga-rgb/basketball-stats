@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { formatMadeAttempt } from '@/lib/format'
+import { formatPlusMinus } from '@/lib/stats'
 
 // 試合のボックススコア(選手ごとの成績)を表示する横スクロール可能な表
 export function BoxScoreTable({ rows, linkToPlayers = false }) {
@@ -14,6 +15,7 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
           <tr className="text-xs text-muted-foreground border-b">
             <th className="text-left font-normal py-2 pr-3 sticky left-0 bg-background">選手</th>
             <th className="text-right font-normal py-2 px-2">PTS</th>
+            <th className="text-right font-normal py-2 px-2">+/-</th>
             <th className="text-right font-normal py-2 px-2">REB</th>
             <th className="text-right font-normal py-2 px-2">AST</th>
             <th className="text-right font-normal py-2 px-2">STL</th>
@@ -45,6 +47,7 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
                 )}
               </td>
               <td className="text-right py-2 px-2 tabular-nums font-medium">{row.pts}</td>
+              <td className="text-right py-2 px-2 tabular-nums">{formatPlusMinus(row.plus_minus)}</td>
               <td className="text-right py-2 px-2 tabular-nums">{row.reb}</td>
               <td className="text-right py-2 px-2 tabular-nums">{row.ast}</td>
               <td className="text-right py-2 px-2 tabular-nums">{row.stl}</td>

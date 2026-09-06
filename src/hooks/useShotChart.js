@@ -17,8 +17,9 @@ export function useShotChart(teamId, playerId = null) {
     setLoading(true)
     let query = supabase
       .from('stat_events')
-      .select('shot_x, shot_y, stat_key, games!inner(team_id)')
+      .select('shot_x, shot_y, stat_key, games!inner(team_id), players!inner(guest_game_id)')
       .eq('games.team_id', teamId)
+      .is('players.guest_game_id', null)
       .not('shot_x', 'is', null)
     if (playerId) query = query.eq('player_id', playerId)
 
