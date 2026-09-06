@@ -1,10 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Pencil } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
+import { uploadPlayerPhoto } from '@/lib/uploadPlayerPhoto'
 import { formatAvg, formatPct, pct, perGame } from '@/lib/stats'
 import { formatMadeAttempt, formatDate } from '@/lib/format'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog'
 
 function usePlayerLog(playerId, teamId) {
   const [season, setSeason] = useState(null)
@@ -59,10 +74,124 @@ function StatBlock({ label, value }) {
   )
 }
 
+function EditProfileDialog({ player, updatePlayer, children }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(player.name)
+  const [number, setNumber] = useState(player.number ?? '')
+  const [position, setPosition] = useState(player.position ?? '')
+  const [heightCm, setHeightCm] = useState(player.height_cm ?? '')
+  const [weightKg, setWeightKg] = useState(player.weight_kg ?? '')
+  const [photoFile, setPhotoFile] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(player.photo_url ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  function handleOpenChange(next) {
+    if (next) {
+      setName(player.name)
+      setNumber(player.number ?? '')
+      setPosition(player.position ?? '')
+      setHeightCm(player.height_cm ?? '')
+      setWeightKg(player.weight_kg ?? '')
+      setPhotoFile(null)
+      setPhotoPreview(player.photo_url ?? '')
+      setError('')
+    }
+    setOpen(next)
+  }
+
+  function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      let photoUrl = player.photo_url ?? null
+      if (photoFile) {
+        photoUrl = await uploadPlayerPhoto(player.id, photoFile)
+      }
+      await updatePlayer(player.id, {
+        name,
+        number: number ? Number(number) : null,
+        position: position || null,
+        height_cm: heightCm ? Number(heightCm) : null,
+        weight_kg: weightKg ? Number(weightKg) : null,
+        photo_url: photoUrl,
+      })
+      setOpen(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger render={children} />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>プロフィールを編集</DialogTitle>
+          <DialogDescription>選手の情報と写真を更新します</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSave} className="flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <Avatar size="lg" className="size-16">
+              <AvatarImage src={photoPreview} alt={name} />
+              <AvatarFallback className="text-base">{number || '-'}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="player-photo">写真</Label>
+              <Input id="player-photo" type="file" accept="image/*" onChange={handlePhotoChange} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-name">名前</Label>
+            <Input id="edit-name" required value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-number">背番号</Label>
+              <Input id="edit-number" type="number" value={number} onChange={(e) => setNumber(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-position">ポジション</Label>
+              <Input id="edit-position" value={position} onChange={(e) => setPosition(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-height">身長 (cm)</Label>
+              <Input id="edit-height" type="number" step="0.1" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} placeholder="例: 180" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-weight">体重 (kg)</Label>
+              <Input id="edit-weight" type="number" step="0.1" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} placeholder="例: 75" />
+            </div>
+          </div>
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
+            <Button type="submit" disabled={saving}>
+              {saving ? '保存中...' : '保存する'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function PlayerDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { players } = usePlayers(teamId)
+  const { players, updatePlayer } = usePlayers(teamId)
   const { season, gameLog } = usePlayerLog(id, teamId)
 
   const player = players.find((p) => p.id === id)
@@ -95,13 +224,23 @@ export function PlayerDetail({ teamId }) {
       </button>
 
       <div className="flex items-center gap-3">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-medium tabular-nums">
-          {player.number ?? '-'}
-        </div>
-        <div>
+        <Avatar size="lg" className="size-12 text-lg font-medium">
+          <AvatarImage src={player.photo_url} alt={player.name} />
+          <AvatarFallback className="text-lg tabular-nums">{player.number ?? '-'}</AvatarFallback>
+        </Avatar>
+        <div className="flex-1 min-w-0">
           <p className="text-lg font-medium">{player.name}</p>
-          {player.position && <p className="text-xs text-muted-foreground">{player.position}</p>}
+          <p className="text-xs text-muted-foreground">
+            {[player.position, player.height_cm ? `${player.height_cm}cm` : null, player.weight_kg ? `${player.weight_kg}kg` : null]
+              .filter(Boolean)
+              .join(' ・ ')}
+          </p>
         </div>
+        <EditProfileDialog player={player} updatePlayer={updatePlayer}>
+          <Button variant="outline" size="icon-sm" aria-label="編集">
+            <Pencil className="size-4" />
+          </Button>
+        </EditProfileDialog>
       </div>
 
       {season && season.games_played > 0 ? (

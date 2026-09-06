@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +20,8 @@ export function Onboarding({ onTeamChanged }) {
   const [joinCode, setJoinCode] = useState(initialCode)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // 招待リンクを踏んだ場合は確認なしで自動的に参加させる(手動操作でのつまずきをなくす)
+  const [autoJoining, setAutoJoining] = useState(!!initialCode)
 
   useEffect(() => {
     if (initialCode) {
@@ -27,6 +30,30 @@ export function Onboarding({ onTeamChanged }) {
     // 初回マウント時のみ実行
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!initialCode) return
+    let cancelled = false
+    performJoin(initialCode).then((ok) => {
+      if (!cancelled && !ok) setAutoJoining(false)
+    })
+    return () => {
+      cancelled = true
+    }
+    // 初回マウント時のみ実行
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function performJoin(code) {
+    const { error: rpcError } = await supabase.rpc('join_team', { join_code: code })
+    if (rpcError) {
+      setError(rpcError.message)
+      return false
+    }
+    await onTeamChanged()
+    navigate('/games', { replace: true })
+    return true
+  }
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -46,14 +73,17 @@ export function Onboarding({ onTeamChanged }) {
     e.preventDefault()
     setSaving(true)
     setError('')
-    const { error: rpcError } = await supabase.rpc('join_team', { join_code: joinCode })
+    const ok = await performJoin(joinCode)
     setSaving(false)
-    if (rpcError) {
-      setError(rpcError.message)
-      return
-    }
-    await onTeamChanged()
-    navigate('/games', { replace: true })
+    if (!ok) return
+  }
+
+  if (autoJoining) {
+    return (
+      <div className="min-h-svh flex items-center justify-center">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   return (

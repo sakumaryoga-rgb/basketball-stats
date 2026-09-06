@@ -28,6 +28,9 @@ create table if not exists players (
   name text not null,
   number int,
   position text,
+  height_cm numeric,
+  weight_kg numeric,
+  photo_url text,
   active boolean not null default true,
   sort_order int not null default 0,
   created_at timestamptz not null default now()
@@ -206,6 +209,9 @@ begin
 end;
 $$;
 
+-- 招待コードでの参加。既に(別の)チームに所属している場合はエラーにせず、
+-- 参加先のチームに切り替える。これにより、招待リンクにアクセスした人は
+-- 端末の状態によらず必ず同じチームのデータを見られるようにしている。
 create or replace function join_team(join_code text)
 returns teams
 language plpgsql
@@ -214,18 +220,21 @@ set search_path = public
 as $$
 declare
   target_team teams;
+  current_team_id uuid;
 begin
-  if exists (select 1 from team_members where user_id = auth.uid()) then
-    raise exception 'すでにチームに所属しています';
-  end if;
-
   select * into target_team from teams where invite_code = upper(join_code);
 
   if not found then
     raise exception '招待コードが見つかりません';
   end if;
 
-  insert into team_members (team_id, user_id) values (target_team.id, auth.uid());
+  select team_id into current_team_id from team_members where user_id = auth.uid();
+
+  if current_team_id is null then
+    insert into team_members (team_id, user_id) values (target_team.id, auth.uid());
+  elsif current_team_id <> target_team.id then
+    update team_members set team_id = target_team.id, joined_at = now() where user_id = auth.uid();
+  end if;
 
   return target_team;
 end;
@@ -241,3 +250,23 @@ grant execute on function join_team(text) to authenticated;
 alter publication supabase_realtime add table games;
 alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table stat_events;
+
+-- ============================================================
+-- 7. 選手写真の保存先ストレージバケット
+-- ============================================================
+
+insert into storage.buckets (id, name, public)
+values ('player-photos', 'player-photos', true)
+on conflict (id) do nothing;
+
+create policy "player photos public read" on storage.objects
+  for select using (bucket_id = 'player-photos');
+
+create policy "player photos write" on storage.objects
+  for insert to authenticated with check (bucket_id = 'player-photos');
+
+create policy "player photos update" on storage.objects
+  for update to authenticated using (bucket_id = 'player-photos');
+
+create policy "player photos delete" on storage.objects
+  for delete to authenticated using (bucket_id = 'player-photos');

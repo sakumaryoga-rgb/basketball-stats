@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Trash2 } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -103,9 +104,10 @@ export function Players({ teamId }) {
         <ul className="flex flex-col gap-2">
           {players.map((player) => (
             <li key={player.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium tabular-nums">
-                {player.number ?? '-'}
-              </div>
+              <Avatar className="size-9 shrink-0 text-sm font-medium">
+                <AvatarImage src={player.photo_url} alt={player.name} />
+                <AvatarFallback className="tabular-nums">{player.number ?? '-'}</AvatarFallback>
+              </Avatar>
               <Link to={`/players/${player.id}`} className="flex-1 min-w-0">
                 <p className="font-medium truncate">{player.name}</p>
                 {player.position && <p className="text-xs text-muted-foreground">{player.position}</p>}
