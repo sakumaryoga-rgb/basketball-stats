@@ -29,7 +29,7 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
           {rows.map((row) => (
             <tr key={row.id} className="border-b last:border-0">
               <td className="py-2 pr-3 font-medium whitespace-nowrap sticky left-0 bg-background">
-                {linkToPlayers ? (
+                {linkToPlayers && !row.isGuest ? (
                   <Link to={`/players/${row.id}`} className="hover:underline">
                     {row.number != null ? `#${row.number} ` : ''}
                     {row.name}
@@ -39,6 +39,9 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
                     {row.number != null ? `#${row.number} ` : ''}
                     {row.name}
                   </>
+                )}
+                {row.isGuest && (
+                  <span className="ml-1 rounded bg-muted-foreground/20 px-1 text-[10px] leading-4 align-middle">ゲスト</span>
                 )}
               </td>
               <td className="text-right py-2 px-2 tabular-nums font-medium">{row.pts}</td>

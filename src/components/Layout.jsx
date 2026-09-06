@@ -12,7 +12,7 @@ const NAV_ITEMS = [
 export function Layout({ teamName, teamIconUrl, teams = [] }) {
   return (
     <div className="min-h-svh flex flex-col bg-background">
-      <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-10">
+      <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)]">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
             <Avatar className="size-7 shrink-0">
@@ -27,11 +27,11 @@ export function Layout({ teamName, teamIconUrl, teams = [] }) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg w-full mx-auto px-4 py-4 pb-24">
+      <main className="flex-1 max-w-lg w-full mx-auto px-4 py-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <Outlet />
       </main>
 
-      <nav className="border-t bg-background/80 backdrop-blur fixed bottom-0 inset-x-0 z-10">
+      <nav className="border-t bg-background/80 backdrop-blur fixed bottom-0 inset-x-0 z-10 pb-[env(safe-area-inset-bottom)]">
         <div className="max-w-lg mx-auto grid grid-cols-4">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
             <NavLink

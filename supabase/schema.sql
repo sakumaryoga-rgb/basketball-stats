@@ -78,6 +78,11 @@ create table if not exists stat_events (
 create index if not exists idx_stat_events_game on stat_events(game_id);
 create index if not exists idx_stat_events_player on stat_events(player_id);
 
+-- ゲスト選手(その試合限定で参加する助っ人)。guest_game_id が設定されている場合、
+-- 通常のロスターやシーズン成績・リーダーボードには含めず、その試合のみに登場する。
+alter table players add column if not exists guest_game_id uuid references games(id) on delete cascade;
+create index if not exists idx_players_guest_game_id on players(guest_game_id);
+
 -- ============================================================
 -- 2. 「自分がそのチームのメンバーか」を判定するヘルパー関数
 --    (1端末が複数チームに所属できるため、単一チームIDを返す方式ではなく
@@ -150,6 +155,7 @@ select
   coalesce(sum(pgs.pf), 0)::int     as pf
 from players p
 left join player_game_stats pgs on pgs.player_id = p.id
+where p.guest_game_id is null
 group by p.id, p.team_id;
 
 -- ============================================================

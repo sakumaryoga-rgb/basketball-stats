@@ -80,7 +80,7 @@ export function Games({ teamId }) {
                   required
                   value={opponentName}
                   onChange={(e) => setOpponentName(e.target.value)}
-                  placeholder="例: 〇〇中学校"
+                  placeholder="例: 〇〇バスケットボールクラブ"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">

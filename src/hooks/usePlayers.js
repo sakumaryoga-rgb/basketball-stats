@@ -36,7 +36,7 @@ export function usePlayers(teamId) {
     return () => supabase.removeChannel(channel)
   }, [teamId, refresh])
 
-  async function addPlayer({ name, number, position, heightCm, weightKg, photoUrl }) {
+  async function addPlayer({ name, number, position, heightCm, weightKg, photoUrl, guestGameId }) {
     const { data, error } = await supabase
       .from('players')
       .insert({
@@ -47,6 +47,7 @@ export function usePlayers(teamId) {
         height_cm: heightCm || null,
         weight_kg: weightKg || null,
         photo_url: photoUrl || null,
+        guest_game_id: guestGameId || null,
       })
       .select()
       .single()

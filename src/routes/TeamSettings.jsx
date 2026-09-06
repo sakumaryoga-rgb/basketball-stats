@@ -174,7 +174,8 @@ function StatBlock({ label, value }) {
 }
 
 export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) {
-  const { players } = usePlayers(team.id)
+  const { players: allPlayers } = usePlayers(team.id)
+  const players = allPlayers.filter((p) => !p.guest_game_id)
   const { games } = useGames(team.id)
   const { totals } = useTeamSeasonStats(team.id)
   const { shots } = useShotChart(team.id)

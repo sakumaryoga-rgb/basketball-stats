@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Undo2, ChevronLeft, Minus, Plus, Play, Pause } from 'lucide-react'
+import { Undo2, ChevronLeft, Minus, Plus, Play, Pause, UserPlus, Check } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
@@ -8,8 +8,20 @@ import { STAT_CATEGORIES, STAT_KEY_LABEL, formatClock, formatQuarter } from '@/l
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { BoxScoreTable } from '@/components/BoxScoreTable'
 import { CourtDiagram } from '@/components/CourtDiagram'
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -21,6 +33,67 @@ import {
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 
+function AddGuestDialog({ addPlayer, gameId, onAdded }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [number, setNumber] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleAdd(e) {
+    e.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const guest = await addPlayer({ name, number: number ? Number(number) : null, guestGameId: gameId })
+      setName('')
+      setNumber('')
+      setOpen(false)
+      onAdded?.(guest)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setError('') }}>
+      <DialogTrigger
+        render={
+          <button className="flex items-center gap-1.5 rounded-full border border-dashed px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted" />
+        }
+      >
+        <UserPlus className="size-3.5" />
+        ゲストを追加
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>ゲストを追加</DialogTitle>
+          <DialogDescription>この試合だけ参加する選手です。ロスターやシーズン成績には反映されません</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleAdd} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="guest-name">名前</Label>
+            <Input id="guest-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 山田太郎" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="guest-number">背番号</Label>
+            <Input id="guest-number" type="number" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="任意" />
+          </div>
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
+            <Button type="submit" disabled={saving}>
+              {saving ? '追加中...' : '追加する'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 const STATUS_LABEL = { scheduled: '予定', in_progress: '試合中', final: '終了' }
 
 const EMPTY_STATS = {
@@ -31,7 +104,7 @@ const EMPTY_STATS = {
 export function GameDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { players } = usePlayers(teamId)
+  const { players, addPlayer } = usePlayers(teamId)
   const { games, updateGame, deleteGame } = useGames(teamId)
   const { events, boxScore, recordStat, undoLast } = useGameStats(id)
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
@@ -42,9 +115,26 @@ export function GameDetail({ teamId }) {
   const [clockRunning, setClockRunning] = useState(false)
   const [statsTab, setStatsTab] = useState('basic')
   const [shotChartPlayerId, setShotChartPlayerId] = useState('all')
+  const [recordedFlash, setRecordedFlash] = useState(null)
+  const flashTimerRef = useRef(null)
 
   const game = games.find((g) => g.id === id)
   const activeCategory = STAT_CATEGORIES.find((c) => c.key === activeCategoryKey)
+
+  // この試合のロスター: 通常の選手全員 + この試合限定のゲスト(他の試合のゲストは含めない)
+  const gamePlayers = useMemo(
+    () => players.filter((p) => !p.guest_game_id || p.guest_game_id === game?.id),
+    [players, game]
+  )
+
+  function showRecordedFlash(playerId, statKey) {
+    const playerName = gamePlayers.find((p) => p.id === playerId)?.name ?? '?'
+    clearTimeout(flashTimerRef.current)
+    setRecordedFlash(`${playerName}: ${STAT_KEY_LABEL[statKey]} を記録しました`)
+    flashTimerRef.current = setTimeout(() => setRecordedFlash(null), 1600)
+  }
+
+  useEffect(() => () => clearTimeout(flashTimerRef.current), [])
 
   useEffect(() => {
     if (!clockRunning) return
@@ -61,11 +151,11 @@ export function GameDetail({ teamId }) {
   }, [boxScore])
 
   const rows = useMemo(() => {
-    return players
+    return gamePlayers
       .filter((p) => boxByPlayer.has(p.id))
-      .map((p) => ({ id: p.id, name: p.name, number: p.number, ...EMPTY_STATS, ...boxByPlayer.get(p.id) }))
+      .map((p) => ({ id: p.id, name: p.name, number: p.number, isGuest: !!p.guest_game_id, ...EMPTY_STATS, ...boxByPlayer.get(p.id) }))
       .sort((a, b) => b.pts - a.pts)
-  }, [players, boxByPlayer])
+  }, [gamePlayers, boxByPlayer])
 
   const teamScore = rows.reduce((sum, r) => sum + r.pts, 0)
 
@@ -83,7 +173,7 @@ export function GameDetail({ teamId }) {
   }, [events, shotChartPlayerId])
 
   const lastEvent = events[events.length - 1]
-  const lastEventPlayer = lastEvent ? players.find((p) => p.id === lastEvent.player_id) : null
+  const lastEventPlayer = lastEvent ? gamePlayers.find((p) => p.id === lastEvent.player_id) : null
   const lastEventLabel = lastEvent ? STAT_KEY_LABEL[lastEvent.stat_key] : null
 
   if (!game) {
@@ -133,30 +223,36 @@ export function GameDetail({ teamId }) {
     setPendingOutcome(null)
   }
 
-  function handleShotOutcome(outcome) {
+  async function handleShotOutcome(outcome) {
     if (!selectedPlayerId) return
     const statKey = outcome === 'make' ? activeCategory.make : activeCategory.miss
     if (activeCategory.kind === 'ft') {
-      recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
+      const ok = await recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
+      if (ok) showRecordedFlash(selectedPlayerId, statKey)
     } else {
       setPendingOutcome({ statKey })
     }
   }
 
-  function handleCourtTap({ x, y }) {
+  async function handleCourtTap({ x, y }) {
     if (!pendingOutcome || !selectedPlayerId) return
-    recordStat(selectedPlayerId, pendingOutcome.statKey, { quarter: game.quarter, shotX: x, shotY: y })
+    const statKey = pendingOutcome.statKey
     setPendingOutcome(null)
+    const ok = await recordStat(selectedPlayerId, statKey, { quarter: game.quarter, shotX: x, shotY: y })
+    if (ok) showRecordedFlash(selectedPlayerId, statKey)
   }
 
-  function handlePairClick(statKey) {
+  async function handlePairClick(statKey) {
     if (!selectedPlayerId) return
-    recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
+    const ok = await recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
+    if (ok) showRecordedFlash(selectedPlayerId, statKey)
   }
 
-  function handleSingleClick() {
+  async function handleSingleClick() {
     if (!selectedPlayerId) return
-    recordStat(selectedPlayerId, activeCategory.stat, { quarter: game.quarter })
+    const statKey = activeCategory.stat
+    const ok = await recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
+    if (ok) showRecordedFlash(selectedPlayerId, statKey)
   }
 
   async function handleConfirmDelete() {
@@ -304,12 +400,15 @@ export function GameDetail({ teamId }) {
 
       {game.status === 'in_progress' && (
         <div className="flex flex-col gap-3 rounded-lg border p-4">
-          <p className="text-sm font-medium">選手を選択</p>
-          {players.length === 0 ? (
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">選手を選択</p>
+            <AddGuestDialog addPlayer={addPlayer} gameId={game.id} onAdded={(guest) => guest && setSelectedPlayerId(guest.id)} />
+          </div>
+          {gamePlayers.length === 0 ? (
             <p className="text-sm text-muted-foreground">先に選手を登録してください</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {players.map((p) => (
+              {gamePlayers.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setSelectedPlayerId(p.id)}
@@ -322,6 +421,9 @@ export function GameDetail({ teamId }) {
                 >
                   {p.number != null ? `#${p.number} ` : ''}
                   {p.name}
+                  {p.guest_game_id && (
+                    <span className="rounded bg-muted-foreground/20 px-1 text-[10px] leading-4">ゲスト</span>
+                  )}
                   <span className="opacity-70 tabular-nums">{playerPtsById.get(p.id) ?? 0}</span>
                 </button>
               ))}
@@ -390,10 +492,21 @@ export function GameDetail({ teamId }) {
             </>
           )}
 
-          <Button variant="ghost" size="sm" className="self-start text-muted-foreground" disabled={!lastEvent} onClick={undoLast}>
-            <Undo2 className="size-3.5" />
-            {lastEvent ? `取り消す(${lastEventPlayer?.name ?? '?'} ・ ${lastEventLabel})` : '取り消す'}
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button variant="ghost" size="sm" className="self-start text-muted-foreground" disabled={!lastEvent} onClick={undoLast}>
+              <Undo2 className="size-3.5" />
+              {lastEvent ? `取り消す(${lastEventPlayer?.name ?? '?'} ・ ${lastEventLabel})` : '取り消す'}
+            </Button>
+            {recordedFlash && (
+              <p
+                key={recordedFlash}
+                className="flex items-center gap-1 text-xs text-primary animate-in fade-in-0 slide-in-from-bottom-1"
+              >
+                <Check className="size-3.5 shrink-0" />
+                {recordedFlash}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -433,7 +546,7 @@ export function GameDetail({ teamId }) {
               >
                 全体
               </button>
-              {players.map((p) => (
+              {gamePlayers.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setShotChartPlayerId(p.id)}

@@ -22,6 +22,7 @@ export function useOtherTeamPlayers(teams, excludeTeamId) {
       .from('players')
       .select('*, teams(name)')
       .in('team_id', otherTeamIds)
+      .is('guest_game_id', null)
       .order('name')
       .then(({ data, error }) => {
         if (cancelled) return

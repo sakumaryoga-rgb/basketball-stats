@@ -178,7 +178,8 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
 }
 
 export function Players({ teamId, teams = [] }) {
-  const { players, addPlayer, removePlayer } = usePlayers(teamId)
+  const { players: allPlayers, addPlayer, removePlayer } = usePlayers(teamId)
+  const players = allPlayers.filter((p) => !p.guest_game_id)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
   async function handleConfirmDelete() {

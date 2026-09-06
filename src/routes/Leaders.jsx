@@ -21,7 +21,8 @@ export function Leaders({ teamId }) {
   const activeCategory = LEADER_CATEGORIES.find((c) => c.key === category)
 
   const ranking = useMemo(() => {
-    const playersById = new Map(players.map((p) => [p.id, p]))
+    // ゲスト選手(その試合限定の助っ人)はリーダーボードには出さない
+    const playersById = new Map(players.filter((p) => !p.guest_game_id).map((p) => [p.id, p]))
     const list = periodStats
       .filter((s) => s.games_played > 0)
       .map((s) => {

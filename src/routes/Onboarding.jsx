@@ -142,7 +142,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
                   required
                   value={teamName}
                   onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="例: 〇〇高校バスケ部"
+                  placeholder="例: 〇〇バスケットボールクラブ"
                 />
               </div>
               {error && <p className="text-destructive text-sm">{error}</p>}

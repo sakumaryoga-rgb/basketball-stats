@@ -53,14 +53,26 @@ export function useGameStats(gameId) {
       shot_y: shotY,
       created_by: userData?.user?.id ?? null,
     })
-    if (error) console.error('スタッツの記録に失敗しました', error)
+    if (error) {
+      console.error('スタッツの記録に失敗しました', error)
+      return false
+    }
+    // DELETEと違い本来はrealtime通知で自動的に反映されるが、体感速度のため即時にも反映する
+    refresh()
+    return true
   }
 
   async function undoLast() {
     if (events.length === 0) return
     const last = events[events.length - 1]
     const { error } = await supabase.from('stat_events').delete().eq('id', last.id)
-    if (error) console.error('取り消しに失敗しました', error)
+    if (error) {
+      console.error('取り消しに失敗しました', error)
+      return
+    }
+    // DELETEイベントはreplica identityの都合でgame_idフィルタのrealtime通知が
+    // 届かないことがあるため、削除した本人はここで明示的に再取得する
+    refresh()
   }
 
   return { events, boxScore, loading, recordStat, undoLast }
