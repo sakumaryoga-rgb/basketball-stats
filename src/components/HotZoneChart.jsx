@@ -93,9 +93,16 @@ function dividerLine(angleDeg, r1, r2) {
 }
 
 const MID_RANGE_RADIUS = (RESTRICTED_RADIUS_UNITS + THREE_POINT_RADIUS_UNITS) / 2
-const ABOVE_BREAK_RADIUS = THREE_POINT_RADIUS_UNITS + 10
+const ABOVE_BREAK_CENTER_RADIUS = THREE_POINT_RADIUS_UNITS + 10
+// 「アーク3(左/右)」ラベルはコート端に寄りすぎて画面からはみ出るため、
+// 実際の判定角度(30°より外側)は保ちつつ、中心寄りの角度・半径に置く。
+const ABOVE_BREAK_SIDE_ANGLE = 48
+const ABOVE_BREAK_SIDE_RADIUS = 50
+// コーナー3は幅が狭く中央寄せだとテキストが画面外にはみ出るため、
+// 外側の縁を基準に内側へ向けて文字を伸ばす(align: 'left'/'right')。
+const CORNER_LABEL_INSET = 1.5
 
-// ゾーンラベルの表示位置(各ゾーンのおおよその重心)
+// ゾーンラベルの表示位置(各ゾーンのおおよその重心)。align省略時は中央揃え。
 const ZONE_LABEL_POS = {
   restricted_area: polarPoint(0, RESTRICTED_RADIUS_UNITS * 0.55),
   paint: { x: 50, y: (RESTRICTED_RADIUS_UNITS + HOOP.y + PAINT_MAX_Y) / 2 },
@@ -104,19 +111,21 @@ const ZONE_LABEL_POS = {
   mid_range_center: polarPoint(0, MID_RANGE_RADIUS),
   mid_range_right_center: polarPoint(36, MID_RANGE_RADIUS),
   mid_range_right: polarPoint(70, MID_RANGE_RADIUS),
-  left_corner_3: { x: CORNER_X_INSET / 2, y: CORNER_Y_LIMIT * 0.55 },
-  right_corner_3: { x: 100 - CORNER_X_INSET / 2, y: CORNER_Y_LIMIT * 0.55 },
-  above_break_3_left: polarPoint(-60, ABOVE_BREAK_RADIUS),
-  above_break_3_center: polarPoint(0, ABOVE_BREAK_RADIUS),
-  above_break_3_right: polarPoint(60, ABOVE_BREAK_RADIUS),
+  left_corner_3: { x: CORNER_LABEL_INSET, y: CORNER_Y_LIMIT * 0.55, align: 'left' },
+  right_corner_3: { x: 100 - CORNER_LABEL_INSET, y: CORNER_Y_LIMIT * 0.55, align: 'right' },
+  above_break_3_left: polarPoint(-ABOVE_BREAK_SIDE_ANGLE, ABOVE_BREAK_SIDE_RADIUS),
+  above_break_3_center: polarPoint(0, ABOVE_BREAK_CENTER_RADIUS),
+  above_break_3_right: polarPoint(ABOVE_BREAK_SIDE_ANGLE, ABOVE_BREAK_SIDE_RADIUS),
 }
 
-// ミッドレンジ(5分割)・アーク3(3分割)の境界線。実際の判定角度(hotZones.js)と揃えてある。
+// ミッドレンジ(5分割)の境界線はアークの内側だけの区切りなので3Pラインで止める
+// (100まで伸ばすと「アーク3」側にまで無関係な線が入り込んでしまっていた)。
+// アーク3(3分割)の境界線はアークの外側の区切りなのでコート端まで伸ばす。
 const ZONE_DIVIDER_LINES = [
-  dividerLine(-54, RESTRICTED_RADIUS_UNITS, 100),
-  dividerLine(-18, RESTRICTED_RADIUS_UNITS, 100),
-  dividerLine(18, RESTRICTED_RADIUS_UNITS, 100),
-  dividerLine(54, RESTRICTED_RADIUS_UNITS, 100),
+  dividerLine(-54, RESTRICTED_RADIUS_UNITS, THREE_POINT_RADIUS_UNITS),
+  dividerLine(-18, RESTRICTED_RADIUS_UNITS, THREE_POINT_RADIUS_UNITS),
+  dividerLine(18, RESTRICTED_RADIUS_UNITS, THREE_POINT_RADIUS_UNITS),
+  dividerLine(54, RESTRICTED_RADIUS_UNITS, THREE_POINT_RADIUS_UNITS),
   dividerLine(-30, THREE_POINT_RADIUS_UNITS, 100),
   dividerLine(30, THREE_POINT_RADIUS_UNITS, 100),
 ]
@@ -179,11 +188,18 @@ export function HotZoneChart({ hotZones }) {
         {ZONE_ORDER.map((key) => {
           const z = hotZones[key]
           const pos = ZONE_LABEL_POS[key]
+          const align = pos.align ?? 'center'
+          const translateX = align === 'left' ? '0%' : align === 'right' ? '-100%' : '-50%'
           return (
             <div
               key={key}
-              className="absolute -translate-x-1/2 -translate-y-1/2 text-center leading-tight"
-              style={{ left: `${pos.x}%`, top: `${(pos.y / 94) * 100}%` }}
+              className="absolute leading-tight whitespace-nowrap"
+              style={{
+                left: `${pos.x}%`,
+                top: `${(pos.y / 94) * 100}%`,
+                transform: `translate(${translateX}, -50%)`,
+                textAlign: align,
+              }}
             >
               <p className="text-[9px] font-bold text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">
                 {z.attempts > 0 ? formatPct(z.pct) : '-'}
