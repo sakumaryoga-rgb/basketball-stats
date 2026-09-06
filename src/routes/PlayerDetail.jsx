@@ -5,7 +5,7 @@ import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadPlayerPhoto, deletePlayerPhoto } from '@/lib/uploadPlayerPhoto'
-import { formatAvg, formatPct, formatPlusMinus, formatPositions, pct, perGame } from '@/lib/stats'
+import { formatAvg, formatClock, formatPct, formatPlusMinus, formatPositions, pct, perGame } from '@/lib/stats'
 import { formatMadeAttempt, formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -235,6 +235,9 @@ export function PlayerDetail({ teamId }) {
     return gameLog.reduce((best, row) => (best === null || row.pts > best.pts ? row : best), null)
   }, [gameLog])
 
+  // 「試合ごとの成績」に表示するのは直近5試合分のみ(gameLogは日付降順ソート済み)
+  const recentGames = useMemo(() => gameLog.slice(0, 5), [gameLog])
+
   const averages = useMemo(() => {
     if (!season) return null
     const g = season.games_played
@@ -320,41 +323,53 @@ export function PlayerDetail({ teamId }) {
               <StatBlock label="STL" value={season.stl} />
               <StatBlock label="BLK" value={season.blk} />
               <StatBlock label="TO" value={season.tov} />
-              <StatBlock label="+/-" value={formatPlusMinus(season.plus_minus)} />
+              <StatBlock label={<span className="font-latin">+/-</span>} value={<span className="font-latin">{formatPlusMinus(season.plus_minus)}</span>} />
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium">試合ごとの成績</p>
+            <p className="text-sm font-medium">直近5試合</p>
             <div className="overflow-x-auto -mx-4 px-4">
               <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="text-xs text-muted-foreground border-b">
-                    <th className="text-left font-normal py-2 pr-3 sticky left-0 bg-background">試合</th>
+                    <th className="text-left font-normal py-2 pr-3">試合</th>
+                    <th className="text-right font-normal py-2 px-2">MIN</th>
                     <th className="text-right font-normal py-2 px-2">PTS</th>
-                    <th className="text-right font-normal py-2 px-2">+/-</th>
                     <th className="text-right font-normal py-2 px-2">REB</th>
                     <th className="text-right font-normal py-2 px-2">AST</th>
+                    <th className="text-right font-normal py-2 px-2">STL</th>
+                    <th className="text-right font-normal py-2 px-2">BLK</th>
+                    <th className="text-right font-normal py-2 px-2">TO</th>
+                    <th className="text-right font-normal py-2 px-2">PF</th>
                     <th className="text-right font-normal py-2 px-2">FG</th>
                     <th className="text-right font-normal py-2 px-2">3P</th>
-                    <th className="text-right font-normal py-2 pl-2">FT</th>
+                    <th className="text-right font-normal py-2 px-2">FT</th>
+                    <th className="text-right font-normal py-2 pl-2 font-latin">+/-</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {gameLog.map((row) => (
+                  {recentGames.map((row) => (
                     <tr key={row.game_id} className="border-b last:border-0">
-                      <td className="py-2 pr-3 whitespace-nowrap sticky left-0 bg-background">
+                      <td className="py-2 pr-3 whitespace-nowrap">
                         <Link to={`/games/${row.game_id}`} className="hover:underline">
                           {formatDate(row.game.game_date)} vs {row.game.opponent_name}
                         </Link>
                       </td>
+                      <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap text-muted-foreground">
+                        {formatClock(row.seconds_played ?? 0)}
+                      </td>
                       <td className="text-right py-2 px-2 tabular-nums font-medium">{row.pts}</td>
-                      <td className="text-right py-2 px-2 tabular-nums">{formatPlusMinus(row.plus_minus)}</td>
                       <td className="text-right py-2 px-2 tabular-nums">{row.reb}</td>
                       <td className="text-right py-2 px-2 tabular-nums">{row.ast}</td>
+                      <td className="text-right py-2 px-2 tabular-nums">{row.stl}</td>
+                      <td className="text-right py-2 px-2 tabular-nums">{row.blk}</td>
+                      <td className="text-right py-2 px-2 tabular-nums">{row.tov}</td>
+                      <td className="text-right py-2 px-2 tabular-nums">{row.pf}</td>
                       <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">{formatMadeAttempt(row.fgm, row.fga)}</td>
                       <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">{formatMadeAttempt(row.tpm, row.tpa)}</td>
-                      <td className="text-right py-2 pl-2 tabular-nums whitespace-nowrap">{formatMadeAttempt(row.ftm, row.fta)}</td>
+                      <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">{formatMadeAttempt(row.ftm, row.fta)}</td>
+                      <td className="text-right py-2 pl-2 tabular-nums font-latin">{formatPlusMinus(row.plus_minus)}</td>
                     </tr>
                   ))}
                 </tbody>

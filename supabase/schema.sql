@@ -146,7 +146,11 @@ select
   coalesce((
     select gl.plus_minus from game_lineups gl
     where gl.game_id = stat_events.game_id and gl.player_id = stat_events.player_id
-  ), 0)::int as plus_minus
+  ), 0)::int as plus_minus,
+  coalesce((
+    select gl.seconds_played from game_lineups gl
+    where gl.game_id = stat_events.game_id and gl.player_id = stat_events.player_id
+  ), 0)::int as seconds_played
 from stat_events
 group by game_id, player_id;
 

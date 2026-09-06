@@ -7,7 +7,7 @@ import { useGames } from '@/hooks/useGames'
 import { useTeamSeasonStats } from '@/hooks/useTeamSeasonStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
-import { formatAvg, formatPct, formatPlusMinus, formatPositions, pct, perGame, POSITIONS } from '@/lib/stats'
+import { formatAvg, formatPct, formatPositions, pct, perGame, POSITIONS } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -408,7 +408,6 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
               <StatBlock label="STL" value={totals.stl} />
               <StatBlock label="BLK" value={totals.blk} />
               <StatBlock label="TO" value={totals.tov} />
-              <StatBlock label="+/-" value={formatPlusMinus(totals.plus_minus)} />
             </div>
           </div>
 

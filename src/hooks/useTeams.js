@@ -15,8 +15,11 @@ export function useTeams(session) {
 
   const refresh = useCallback(async () => {
     if (!session?.user) {
+      // セッション確立前の状態。ここでloadingをfalseにすると、セッションが
+      // 確立した直後の再レンダリングで一瞬「チーム0件」と誤認され、
+      // App側の判定が意図せず/onboardingや/gamesへ飛んでしまうバグになるため、
+      // ロード中のまま(loading=true)にしておく。
       setTeams([])
-      setLoading(false)
       return
     }
 

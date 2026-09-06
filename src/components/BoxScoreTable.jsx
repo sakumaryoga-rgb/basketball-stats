@@ -25,7 +25,7 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
             <th className="text-right font-normal py-2 px-2">FG</th>
             <th className="text-right font-normal py-2 px-2">3P</th>
             <th className="text-right font-normal py-2 px-2">FT</th>
-            <th className="text-right font-normal py-2 pl-2">+/-</th>
+            <th className="text-right font-normal py-2 pl-2 font-latin">+/-</th>
           </tr>
         </thead>
         <tbody>
@@ -66,7 +66,7 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
               <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">
                 {formatMadeAttempt(row.ftm, row.fta)}
               </td>
-              <td className="text-right py-2 pl-2 tabular-nums">{formatPlusMinus(row.plus_minus)}</td>
+              <td className="text-right py-2 pl-2 tabular-nums font-latin">{formatPlusMinus(row.plus_minus)}</td>
             </tr>
           ))}
         </tbody>
