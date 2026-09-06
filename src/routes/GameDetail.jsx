@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Undo2, ChevronLeft, Minus } from 'lucide-react'
+import { Undo2, ChevronLeft, Minus, Plus, Play, Pause } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
-import { STAT_BUTTONS } from '@/lib/stats'
+import { STAT_CATEGORIES, STAT_KEY_LABEL, formatClock, formatQuarter } from '@/lib/stats'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { BoxScoreTable } from '@/components/BoxScoreTable'
+import { CourtDiagram } from '@/components/CourtDiagram'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -35,8 +36,23 @@ export function GameDetail({ teamId }) {
   const { events, boxScore, recordStat, undoLast } = useGameStats(id)
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [activeCategoryKey, setActiveCategoryKey] = useState('fg2')
+  const [pendingOutcome, setPendingOutcome] = useState(null)
+  const [secondsLeft, setSecondsLeft] = useState(600)
+  const [clockRunning, setClockRunning] = useState(false)
+  const [statsTab, setStatsTab] = useState('basic')
+  const [shotChartPlayerId, setShotChartPlayerId] = useState('all')
 
   const game = games.find((g) => g.id === id)
+  const activeCategory = STAT_CATEGORIES.find((c) => c.key === activeCategoryKey)
+
+  useEffect(() => {
+    if (!clockRunning) return
+    const timer = setInterval(() => {
+      setSecondsLeft((s) => Math.max(0, s - 1))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [clockRunning])
 
   const boxByPlayer = useMemo(() => {
     const map = new Map()
@@ -53,9 +69,22 @@ export function GameDetail({ teamId }) {
 
   const teamScore = rows.reduce((sum, r) => sum + r.pts, 0)
 
+  const playerPtsById = useMemo(() => {
+    const map = new Map()
+    for (const row of rows) map.set(row.id, row.pts)
+    return map
+  }, [rows])
+
+  const shots = useMemo(() => {
+    return events
+      .filter((e) => e.shot_x != null && e.shot_y != null)
+      .filter((e) => shotChartPlayerId === 'all' || e.player_id === shotChartPlayerId)
+      .map((e) => ({ id: e.id, x: Number(e.shot_x), y: Number(e.shot_y), made: e.stat_key.endsWith('_make') }))
+  }, [events, shotChartPlayerId])
+
   const lastEvent = events[events.length - 1]
   const lastEventPlayer = lastEvent ? players.find((p) => p.id === lastEvent.player_id) : null
-  const lastEventLabel = lastEvent ? STAT_BUTTONS.find((b) => b.key === lastEvent.stat_key)?.label : null
+  const lastEventLabel = lastEvent ? STAT_KEY_LABEL[lastEvent.stat_key] : null
 
   if (!game) {
     return <p className="text-sm text-muted-foreground py-8 text-center">読み込み中...</p>
@@ -66,6 +95,7 @@ export function GameDetail({ teamId }) {
   }
 
   async function handleFinish() {
+    setClockRunning(false)
     await updateGame(game.id, { status: 'final' })
   }
 
@@ -75,6 +105,58 @@ export function GameDetail({ teamId }) {
 
   async function adjustOpponentScore(delta) {
     await updateGame(game.id, { opponent_score: Math.max(0, game.opponent_score + delta) })
+  }
+
+  async function adjustTimeouts(side, delta) {
+    const field = side === 'home' ? 'home_timeouts_remaining' : 'away_timeouts_remaining'
+    await updateGame(game.id, { [field]: Math.max(0, game[field] + delta) })
+  }
+
+  async function adjustFouls(side, delta) {
+    const field = side === 'home' ? 'home_fouls' : 'away_fouls'
+    await updateGame(game.id, { [field]: Math.max(0, game[field] + delta) })
+  }
+
+  async function advanceQuarter() {
+    const next = game.quarter >= 5 ? 1 : game.quarter + 1
+    setSecondsLeft(600)
+    setClockRunning(false)
+    await updateGame(game.id, { quarter: next, home_fouls: 0, away_fouls: 0 })
+  }
+
+  function adjustClock(delta) {
+    setSecondsLeft((s) => Math.max(0, s + delta))
+  }
+
+  function handleCategorySelect(key) {
+    setActiveCategoryKey(key)
+    setPendingOutcome(null)
+  }
+
+  function handleShotOutcome(outcome) {
+    if (!selectedPlayerId) return
+    const statKey = outcome === 'make' ? activeCategory.make : activeCategory.miss
+    if (activeCategory.kind === 'ft') {
+      recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
+    } else {
+      setPendingOutcome({ statKey })
+    }
+  }
+
+  function handleCourtTap({ x, y }) {
+    if (!pendingOutcome || !selectedPlayerId) return
+    recordStat(selectedPlayerId, pendingOutcome.statKey, { quarter: game.quarter, shotX: x, shotY: y })
+    setPendingOutcome(null)
+  }
+
+  function handlePairClick(statKey) {
+    if (!selectedPlayerId) return
+    recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
+  }
+
+  function handleSingleClick() {
+    if (!selectedPlayerId) return
+    recordStat(selectedPlayerId, activeCategory.stat, { quarter: game.quarter })
   }
 
   async function handleConfirmDelete() {
@@ -89,25 +171,93 @@ export function GameDetail({ teamId }) {
         試合一覧
       </button>
 
-      <div className="flex flex-col gap-2 rounded-lg border p-4">
+      <div className="flex flex-col gap-3 rounded-lg border p-4">
         <div className="flex items-center justify-between">
           <p className="font-medium">vs {game.opponent_name}</p>
           <Badge variant={game.status === 'in_progress' ? 'default' : 'secondary'}>{STATUS_LABEL[game.status]}</Badge>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground -mt-2">
           {formatDate(game.game_date)}
           {game.location ? ` ・ ${game.location}` : ''}
         </p>
 
-        <div className="flex items-center justify-center gap-6 py-3">
-          <div className="text-center">
-            <p className="text-3xl font-bold tabular-nums">{teamScore}</p>
-            <p className="text-xs text-muted-foreground">自チーム</p>
-          </div>
+        {game.status !== 'scheduled' && (
+          <button
+            onClick={advanceQuarter}
+            className="self-center rounded-full border px-3 py-1 text-sm font-medium text-primary hover:bg-muted"
+          >
+            {formatQuarter(game.quarter)} ⇅
+          </button>
+        )}
+
+        <div className="flex items-center justify-center gap-3">
+          <Button variant="outline" size="icon-sm" onClick={() => adjustClock(-1)}>
+            <Minus className="size-3.5" />
+          </Button>
+          <button
+            onClick={() => setClockRunning((r) => !r)}
+            className="flex items-center gap-2 text-3xl font-bold tabular-nums"
+          >
+            {clockRunning ? <Pause className="size-5 text-primary" /> : <Play className="size-5 text-primary" />}
+            {formatClock(secondsLeft)}
+          </button>
+          <Button variant="outline" size="icon-sm" onClick={() => adjustClock(1)}>
+            <Plus className="size-3.5" />
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-center gap-6">
+          <p className="text-3xl font-bold tabular-nums">{teamScore}</p>
           <span className="text-muted-foreground">-</span>
-          <div className="text-center">
-            <p className="text-3xl font-bold tabular-nums">{game.opponent_score}</p>
-            <p className="text-xs text-muted-foreground">{game.opponent_name}</p>
+          <p className="text-3xl font-bold tabular-nums">{game.opponent_score}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3">
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-xs text-muted-foreground truncate max-w-full">自チーム</p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon-xs" onClick={() => adjustTimeouts('home', -1)}>
+                <Minus className="size-3" />
+              </Button>
+              <span className="text-xs tabular-nums">TO 残り{game.home_timeouts_remaining}</span>
+              <Button variant="outline" size="icon-xs" onClick={() => adjustTimeouts('home', 1)}>
+                <Plus className="size-3" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon-xs" onClick={() => adjustFouls('home', -1)}>
+                <Minus className="size-3" />
+              </Button>
+              <span className={cn('text-xs tabular-nums', game.home_fouls >= 5 && 'font-bold text-destructive')}>
+                チームF {game.home_fouls}
+              </span>
+              <Button variant="outline" size="icon-xs" onClick={() => adjustFouls('home', 1)}>
+                <Plus className="size-3" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-xs text-muted-foreground truncate max-w-full">{game.opponent_name}</p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon-xs" onClick={() => adjustTimeouts('away', -1)}>
+                <Minus className="size-3" />
+              </Button>
+              <span className="text-xs tabular-nums">TO 残り{game.away_timeouts_remaining}</span>
+              <Button variant="outline" size="icon-xs" onClick={() => adjustTimeouts('away', 1)}>
+                <Plus className="size-3" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon-xs" onClick={() => adjustFouls('away', -1)}>
+                <Minus className="size-3" />
+              </Button>
+              <span className={cn('text-xs tabular-nums', game.away_fouls >= 5 && 'font-bold text-destructive')}>
+                チームF {game.away_fouls}
+              </span>
+              <Button variant="outline" size="icon-xs" onClick={() => adjustFouls('away', 1)}>
+                <Plus className="size-3" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -164,7 +314,7 @@ export function GameDetail({ teamId }) {
                   key={p.id}
                   onClick={() => setSelectedPlayerId(p.id)}
                   className={cn(
-                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                    'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors',
                     selectedPlayerId === p.id
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'bg-background hover:bg-muted'
@@ -172,23 +322,73 @@ export function GameDetail({ teamId }) {
                 >
                   {p.number != null ? `#${p.number} ` : ''}
                   {p.name}
+                  <span className="opacity-70 tabular-nums">{playerPtsById.get(p.id) ?? 0}</span>
                 </button>
               ))}
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-2 pt-2">
-            {STAT_BUTTONS.map((btn) => (
-              <Button
-                key={btn.key}
-                variant="outline"
-                disabled={!selectedPlayerId}
-                onClick={() => recordStat(selectedPlayerId, btn.key)}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {STAT_CATEGORIES.map((cat) => (
+              <button
+                key={cat.key}
+                onClick={() => handleCategorySelect(cat.key)}
+                className={cn(
+                  'shrink-0 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                  activeCategoryKey === cat.key
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted'
+                )}
               >
-                {btn.label}
-              </Button>
+                {cat.label}
+              </button>
             ))}
           </div>
+
+          {(activeCategory.kind === 'shot' || activeCategory.kind === 'ft') && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={pendingOutcome?.statKey === activeCategory.miss ? 'default' : 'outline'}
+                disabled={!selectedPlayerId}
+                onClick={() => handleShotOutcome('miss')}
+              >
+                失敗
+              </Button>
+              <Button
+                variant={pendingOutcome?.statKey === activeCategory.make ? 'default' : 'outline'}
+                disabled={!selectedPlayerId}
+                onClick={() => handleShotOutcome('make')}
+              >
+                成功
+              </Button>
+            </div>
+          )}
+
+          {activeCategory.kind === 'pair' && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" disabled={!selectedPlayerId} onClick={() => handlePairClick(activeCategory.left.key)}>
+                {activeCategory.left.label}
+              </Button>
+              <Button variant="outline" disabled={!selectedPlayerId} onClick={() => handlePairClick(activeCategory.right.key)}>
+                {activeCategory.right.label}
+              </Button>
+            </div>
+          )}
+
+          {activeCategory.kind === 'single' && (
+            <Button variant="outline" disabled={!selectedPlayerId} onClick={handleSingleClick}>
+              {activeCategory.label}を記録
+            </Button>
+          )}
+
+          {activeCategory.kind === 'shot' && (
+            <>
+              <p className="text-xs text-muted-foreground text-center">
+                {pendingOutcome ? 'コートをタップして位置を記録' : '成功・失敗を選ぶとコートが有効になります'}
+              </p>
+              <CourtDiagram active={!!pendingOutcome} onTap={handleCourtTap} />
+            </>
+          )}
 
           <Button variant="ghost" size="sm" className="self-start text-muted-foreground" disabled={!lastEvent} onClick={undoLast}>
             <Undo2 className="size-3.5" />
@@ -198,8 +398,59 @@ export function GameDetail({ teamId }) {
       )}
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">ボックススコア</p>
-        <BoxScoreTable rows={rows} linkToPlayers />
+        <div className="flex gap-4 border-b">
+          <button
+            onClick={() => setStatsTab('basic')}
+            className={cn(
+              'pb-2 text-sm font-medium border-b-2 -mb-px',
+              statsTab === 'basic' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+            )}
+          >
+            ベーシック
+          </button>
+          <button
+            onClick={() => setStatsTab('shoot')}
+            className={cn(
+              'pb-2 text-sm font-medium border-b-2 -mb-px',
+              statsTab === 'shoot' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+            )}
+          >
+            シュート
+          </button>
+        </div>
+
+        {statsTab === 'basic' ? (
+          <BoxScoreTable rows={rows} linkToPlayers />
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setShotChartPlayerId('all')}
+                className={cn(
+                  'shrink-0 rounded-full border px-3 py-1 text-xs',
+                  shotChartPlayerId === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'bg-background'
+                )}
+              >
+                全体
+              </button>
+              {players.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setShotChartPlayerId(p.id)}
+                  className={cn(
+                    'shrink-0 rounded-full border px-3 py-1 text-xs',
+                    shotChartPlayerId === p.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-background'
+                  )}
+                >
+                  {p.number != null ? `#${p.number} ` : ''}
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <CourtDiagram shots={shots} />
+            <p className="text-xs text-muted-foreground text-center">青丸=成功 ・ 赤×=失敗</p>
+          </div>
+        )}
       </div>
     </div>
   )

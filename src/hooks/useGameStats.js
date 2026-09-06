@@ -42,12 +42,15 @@ export function useGameStats(gameId) {
     return () => supabase.removeChannel(channel)
   }, [gameId, refresh])
 
-  async function recordStat(playerId, statKey) {
+  async function recordStat(playerId, statKey, { quarter = 1, shotX = null, shotY = null } = {}) {
     const { data: userData } = await supabase.auth.getUser()
     const { error } = await supabase.from('stat_events').insert({
       game_id: gameId,
       player_id: playerId,
       stat_key: statKey,
+      quarter,
+      shot_x: shotX,
+      shot_y: shotY,
       created_by: userData?.user?.id ?? null,
     })
     if (error) console.error('スタッツの記録に失敗しました', error)

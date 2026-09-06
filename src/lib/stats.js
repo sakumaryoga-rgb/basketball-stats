@@ -1,19 +1,29 @@
-// スタッツ入力ボタンの定義(ライブ入力画面で表示する順番)
-export const STAT_BUTTONS = [
-  { key: 'fg2_make', label: '2P成功', group: 'shot' },
-  { key: 'fg2_miss', label: '2P失敗', group: 'shot' },
-  { key: 'fg3_make', label: '3P成功', group: 'shot' },
-  { key: 'fg3_miss', label: '3P失敗', group: 'shot' },
-  { key: 'ft_make', label: 'FT成功', group: 'shot' },
-  { key: 'ft_miss', label: 'FT失敗', group: 'shot' },
-  { key: 'oreb', label: 'OREB', group: 'other' },
-  { key: 'dreb', label: 'DREB', group: 'other' },
-  { key: 'ast', label: 'AST', group: 'other' },
-  { key: 'stl', label: 'STL', group: 'other' },
-  { key: 'blk', label: 'BLK', group: 'other' },
-  { key: 'tov', label: 'TO', group: 'other' },
-  { key: 'pf', label: 'PF', group: 'other' },
+// ライブ入力画面のスタッツカテゴリ(カテゴリを選び、対応する結果ボタンをタップして記録する)
+export const STAT_CATEGORIES = [
+  { key: 'fg2', label: '2ポイント', kind: 'shot', make: 'fg2_make', miss: 'fg2_miss' },
+  { key: 'fg3', label: '3ポイント', kind: 'shot', make: 'fg3_make', miss: 'fg3_miss' },
+  { key: 'ft', label: 'フリースロー', kind: 'ft', make: 'ft_make', miss: 'ft_miss' },
+  {
+    key: 'reb',
+    label: 'リバウンド',
+    kind: 'pair',
+    left: { key: 'oreb', label: 'オフェンス' },
+    right: { key: 'dreb', label: 'ディフェンス' },
+  },
+  { key: 'ast', label: 'アシスト', kind: 'single', stat: 'ast' },
+  { key: 'stl', label: 'スティール', kind: 'single', stat: 'stl' },
+  { key: 'blk', label: 'ブロック', kind: 'single', stat: 'blk' },
+  { key: 'tov', label: 'ターンオーバー', kind: 'single', stat: 'tov' },
+  { key: 'pf', label: 'ファウル', kind: 'single', stat: 'pf' },
 ]
+
+export const STAT_KEY_LABEL = {
+  fg2_make: '2P成功', fg2_miss: '2P失敗',
+  fg3_make: '3P成功', fg3_miss: '3P失敗',
+  ft_make: 'FT成功', ft_miss: 'FT失敗',
+  oreb: 'OREB', dreb: 'DREB',
+  ast: 'AST', stl: 'STL', blk: 'BLK', tov: 'TO', pf: 'PF',
+}
 
 // ボックススコア / 個人ページの表で使う集計スタッツの並び
 export const BOX_SCORE_COLUMNS = [
@@ -60,4 +70,15 @@ export function formatAvg(value) {
 export function perGame(total, games) {
   if (!games) return null
   return total / games
+}
+
+export function formatClock(totalSeconds) {
+  const s = Math.max(0, totalSeconds)
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+}
+
+export function formatQuarter(quarter) {
+  return quarter <= 4 ? `${quarter}Q` : `OT${quarter - 4}`
 }

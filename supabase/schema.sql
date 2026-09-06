@@ -41,6 +41,11 @@ create table if not exists games (
   location text,
   status text not null default 'scheduled' check (status in ('scheduled', 'in_progress', 'final')),
   opponent_score int not null default 0,
+  quarter int not null default 1,
+  home_timeouts_remaining int not null default 5,
+  away_timeouts_remaining int not null default 5,
+  home_fouls int not null default 0,
+  away_fouls int not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -56,6 +61,9 @@ create table if not exists stat_events (
     'fg2_make', 'fg2_miss', 'fg3_make', 'fg3_miss', 'ft_make', 'ft_miss',
     'oreb', 'dreb', 'ast', 'stl', 'blk', 'tov', 'pf'
   )),
+  quarter int not null default 1,
+  shot_x numeric,
+  shot_y numeric,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id)
 );
