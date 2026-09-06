@@ -82,3 +82,26 @@ export function formatClock(totalSeconds) {
 export function formatQuarter(quarter) {
   return quarter <= 4 ? `${quarter}Q` : `OT${quarter - 4}`
 }
+
+// スタッツリーダーの集計期間
+export const LEADER_PERIODS = [
+  { key: 'last5', label: '直近5試合' },
+  { key: 'last3m', label: '直近3ヶ月' },
+  { key: 'season', label: '今シーズン' },
+  { key: 'all', label: '全期間' },
+]
+
+// 指定した期間に含める試合を絞り込む(date は 'YYYY-MM-DD' 形式の game_date)
+export function filterGamesByPeriod(games, period, now = new Date()) {
+  if (period === 'last5') {
+    return games.slice(0, 5)
+  }
+  if (period === 'last3m' || period === 'season') {
+    const cutoff = new Date(now)
+    if (period === 'last3m') cutoff.setMonth(cutoff.getMonth() - 3)
+    else cutoff.setFullYear(cutoff.getFullYear() - 1)
+    const cutoffStr = cutoff.toISOString().slice(0, 10)
+    return games.filter((g) => g.game_date >= cutoffStr)
+  }
+  return games
+}

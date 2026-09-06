@@ -12,14 +12,18 @@ create table if not exists teams (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   invite_code text unique not null,
+  icon_url text,
   created_at timestamptz not null default now()
 );
 
+-- 1つの端末(匿名ユーザー)が複数のチームに所属できるよう、
+-- user_id 単独ではなく (team_id, user_id) の組み合わせでユニークにする
 create table if not exists team_members (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references teams(id) on delete cascade,
-  user_id uuid not null unique references auth.users(id) on delete cascade,
-  joined_at timestamptz not null default now()
+  user_id uuid not null references auth.users(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  unique (team_id, user_id)
 );
 
 create table if not exists players (
@@ -75,17 +79,21 @@ create index if not exists idx_stat_events_game on stat_events(game_id);
 create index if not exists idx_stat_events_player on stat_events(player_id);
 
 -- ============================================================
--- 2. 「自分の所属チームID」を取得するヘルパー関数
+-- 2. 「自分がそのチームのメンバーか」を判定するヘルパー関数
+--    (1端末が複数チームに所属できるため、単一チームIDを返す方式ではなく
+--    exists判定にしている)
 -- ============================================================
 
-create or replace function my_team_id()
-returns uuid
+create or replace function is_team_member(check_team_id uuid)
+returns boolean
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select team_id from team_members where user_id = auth.uid();
+  select exists (
+    select 1 from team_members where team_id = check_team_id and user_id = auth.uid()
+  );
 $$;
 
 -- ============================================================
@@ -156,34 +164,38 @@ alter table games enable row level security;
 alter table stat_events enable row level security;
 
 create policy "select own team" on teams
-  for select using (id = my_team_id());
+  for select using (is_team_member(id));
+
+create policy "update own team" on teams
+  for update using (is_team_member(id)) with check (is_team_member(id));
 
 create policy "select own team members" on team_members
-  for select using (team_id = my_team_id());
+  for select using (is_team_member(team_id));
 
 create policy "manage own team players" on players
   for all
-  using (team_id = my_team_id())
-  with check (team_id = my_team_id());
+  using (is_team_member(team_id))
+  with check (is_team_member(team_id));
 
 create policy "manage own team games" on games
   for all
-  using (team_id = my_team_id())
-  with check (team_id = my_team_id());
+  using (is_team_member(team_id))
+  with check (is_team_member(team_id));
 
 create policy "manage own team stat_events" on stat_events
   for all
   using (
-    exists (select 1 from games g where g.id = stat_events.game_id and g.team_id = my_team_id())
+    exists (select 1 from games g where g.id = stat_events.game_id and is_team_member(g.team_id))
   )
   with check (
-    exists (select 1 from games g where g.id = stat_events.game_id and g.team_id = my_team_id())
+    exists (select 1 from games g where g.id = stat_events.game_id and is_team_member(g.team_id))
   );
 
 -- ============================================================
 -- 5. チーム作成・参加 の RPC 関数
 -- ============================================================
 
+-- チーム作成。1端末が複数チームを作成・所属できる。
 create or replace function create_team(team_name text)
 returns teams
 language plpgsql
@@ -194,10 +206,6 @@ declare
   new_team teams;
   code text;
 begin
-  if exists (select 1 from team_members where user_id = auth.uid()) then
-    raise exception 'すでにチームに所属しています';
-  end if;
-
   code := upper(substr(md5(random()::text || clock_timestamp()::text), 1, 8));
 
   insert into teams (name, invite_code) values (team_name, code)
@@ -209,9 +217,8 @@ begin
 end;
 $$;
 
--- 招待コードでの参加。既に(別の)チームに所属している場合はエラーにせず、
--- 参加先のチームに切り替える。これにより、招待リンクにアクセスした人は
--- 端末の状態によらず必ず同じチームのデータを見られるようにしている。
+-- 招待コードでの参加。1端末が複数チームに所属できるため、既存チームからの
+-- 切り替えはせず単純にそのチームへの参加を追加する(参加済みなら何もしない)。
 create or replace function join_team(join_code text)
 returns teams
 language plpgsql
@@ -220,7 +227,6 @@ set search_path = public
 as $$
 declare
   target_team teams;
-  current_team_id uuid;
 begin
   select * into target_team from teams where invite_code = upper(join_code);
 
@@ -228,13 +234,9 @@ begin
     raise exception '招待コードが見つかりません';
   end if;
 
-  select team_id into current_team_id from team_members where user_id = auth.uid();
-
-  if current_team_id is null then
-    insert into team_members (team_id, user_id) values (target_team.id, auth.uid());
-  elsif current_team_id <> target_team.id then
-    update team_members set team_id = target_team.id, joined_at = now() where user_id = auth.uid();
-  end if;
+  insert into team_members (team_id, user_id)
+  values (target_team.id, auth.uid())
+  on conflict (team_id, user_id) do nothing;
 
   return target_team;
 end;
@@ -270,3 +272,23 @@ create policy "player photos update" on storage.objects
 
 create policy "player photos delete" on storage.objects
   for delete to authenticated using (bucket_id = 'player-photos');
+
+-- ============================================================
+-- 8. チームアイコンの保存先ストレージバケット
+-- ============================================================
+
+insert into storage.buckets (id, name, public)
+values ('team-icons', 'team-icons', true)
+on conflict (id) do nothing;
+
+create policy "team icons public read" on storage.objects
+  for select using (bucket_id = 'team-icons');
+
+create policy "team icons write" on storage.objects
+  for insert to authenticated with check (bucket_id = 'team-icons');
+
+create policy "team icons update" on storage.objects
+  for update to authenticated using (bucket_id = 'team-icons');
+
+create policy "team icons delete" on storage.objects
+  for delete to authenticated using (bucket_id = 'team-icons');

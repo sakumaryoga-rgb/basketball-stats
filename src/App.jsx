@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useSession } from '@/hooks/useSession'
-import { useTeam } from '@/hooks/useTeam'
+import { useTeams } from '@/hooks/useTeams'
 import { Onboarding } from '@/routes/Onboarding'
 import { Games } from '@/routes/Games'
 import { GameDetail } from '@/routes/GameDetail'
@@ -22,7 +22,7 @@ function FullScreenLoader() {
 
 export default function App() {
   const { session, loading: sessionLoading } = useSession()
-  const { team, loading: teamLoading, refresh: refreshTeam } = useTeam(session)
+  const { teams, activeTeam, loading: teamsLoading, refresh: refreshTeams, switchTeam } = useTeams(session)
   const location = useLocation()
 
   // 招待リンク (?code=XXXX) を踏んだ場合、匿名セッション発行前でも後で使えるようコードを覚えておく
@@ -33,26 +33,47 @@ export default function App() {
     }
   }, [location.search])
 
-  if (sessionLoading || !session) return <FullScreenLoader />
+  async function handleTeamJoined(teamId) {
+    await refreshTeams()
+    switchTeam(teamId)
+  }
+
+  if (sessionLoading || !session || teamsLoading) return <FullScreenLoader />
 
   return (
     <Routes>
-      {teamLoading ? (
-        <Route path="*" element={<FullScreenLoader />} />
-      ) : !team ? (
-        <>
-          <Route path="/onboarding" element={<Onboarding onTeamChanged={refreshTeam} />} />
-          <Route path="*" element={<Navigate to="/onboarding" replace />} />
-        </>
+      <Route path="/onboarding" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
+      {!activeTeam ? (
+        <Route path="*" element={<Navigate to="/onboarding" replace />} />
       ) : (
-        <Route element={<Layout teamName={team.name} />}>
+        <Route
+          element={
+            <Layout
+              teamName={activeTeam.name}
+              teamIconUrl={activeTeam.icon_url}
+              teams={teams}
+              activeTeamId={activeTeam.id}
+              onSwitchTeam={switchTeam}
+            />
+          }
+        >
           <Route index element={<Navigate to="/games" replace />} />
-          <Route path="/games" element={<Games teamId={team.id} />} />
-          <Route path="/games/:id" element={<GameDetail teamId={team.id} />} />
-          <Route path="/players" element={<Players teamId={team.id} />} />
-          <Route path="/players/:id" element={<PlayerDetail teamId={team.id} />} />
-          <Route path="/leaders" element={<Leaders teamId={team.id} />} />
-          <Route path="/team" element={<TeamSettings team={team} />} />
+          <Route path="/games" element={<Games teamId={activeTeam.id} />} />
+          <Route path="/games/:id" element={<GameDetail teamId={activeTeam.id} />} />
+          <Route path="/players" element={<Players teamId={activeTeam.id} teams={teams} />} />
+          <Route path="/players/:id" element={<PlayerDetail teamId={activeTeam.id} />} />
+          <Route path="/leaders" element={<Leaders teamId={activeTeam.id} />} />
+          <Route
+            path="/team"
+            element={
+              <TeamSettings
+                team={activeTeam}
+                teams={teams}
+                onSwitchTeam={switchTeam}
+                onTeamUpdated={refreshTeams}
+              />
+            }
+          />
           <Route path="*" element={<Navigate to="/games" replace />} />
         </Route>
       )}

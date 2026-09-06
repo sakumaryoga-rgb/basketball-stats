@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Loader2 } from 'lucide-react'
+import { ChevronLeft, Loader2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 
-export function Onboarding({ onTeamChanged }) {
+export function Onboarding({ onTeamJoined, hasTeam }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
   const codeFromUrl = searchParams.get('code')
   const codeFromStorage = typeof window !== 'undefined' ? localStorage.getItem('pendingInviteCode') : null
   const initialCode = (codeFromUrl || codeFromStorage || '').toUpperCase()
+  const isDeliberateAdd = searchParams.get('add') === '1'
 
   const [mode, setMode] = useState(initialCode ? 'join' : 'create')
   const [teamName, setTeamName] = useState('')
@@ -45,12 +46,12 @@ export function Onboarding({ onTeamChanged }) {
   }, [])
 
   async function performJoin(code) {
-    const { error: rpcError } = await supabase.rpc('join_team', { join_code: code })
+    const { data, error: rpcError } = await supabase.rpc('join_team', { join_code: code })
     if (rpcError) {
       setError(rpcError.message)
       return false
     }
-    await onTeamChanged()
+    await onTeamJoined(data.id)
     navigate('/games', { replace: true })
     return true
   }
@@ -59,13 +60,13 @@ export function Onboarding({ onTeamChanged }) {
     e.preventDefault()
     setSaving(true)
     setError('')
-    const { error: rpcError } = await supabase.rpc('create_team', { team_name: teamName })
+    const { data, error: rpcError } = await supabase.rpc('create_team', { team_name: teamName })
     setSaving(false)
     if (rpcError) {
       setError(rpcError.message)
       return
     }
-    await onTeamChanged()
+    await onTeamJoined(data.id)
     navigate('/games', { replace: true })
   }
 
@@ -78,7 +79,17 @@ export function Onboarding({ onTeamChanged }) {
     if (!ok) return
   }
 
-  if (autoJoining) {
+  // 招待コードも「別のチームを追加」の意図もなく、既にチームを持った状態で
+  // ここに来た場合は、読み込みタイミングのズレによる意図しない遷移とみなして
+  // 試合一覧に戻す(そうしないとチームのデータが見えなくなってしまう)
+  useEffect(() => {
+    if (hasTeam && !initialCode && !isDeliberateAdd) {
+      navigate('/games', { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTeam])
+
+  if (autoJoining || (hasTeam && !initialCode && !isDeliberateAdd)) {
     return (
       <div className="min-h-svh flex items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -90,6 +101,15 @@ export function Onboarding({ onTeamChanged }) {
     <div className="min-h-svh flex items-center justify-center px-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
+          {hasTeam && (
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-1 text-sm text-muted-foreground -mt-1 mb-1 self-start"
+            >
+              <ChevronLeft className="size-4" />
+              戻る
+            </button>
+          )}
           <CardTitle>チームを作成 / 参加</CardTitle>
           <CardDescription>スタッツを共有するチームを設定します</CardDescription>
         </CardHeader>

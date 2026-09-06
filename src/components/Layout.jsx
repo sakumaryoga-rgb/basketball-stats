@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarDays, Users, Trophy, Settings } from 'lucide-react'
+import { Link, NavLink, Outlet } from 'react-router-dom'
+import { CalendarDays, ChevronDown, Users, Trophy, Settings } from 'lucide-react'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 
 const NAV_ITEMS = [
   { to: '/games', label: '試合', icon: CalendarDays },
@@ -8,12 +9,21 @@ const NAV_ITEMS = [
   { to: '/team', label: 'チーム', icon: Settings },
 ]
 
-export function Layout({ teamName }) {
+export function Layout({ teamName, teamIconUrl, teams = [] }) {
   return (
     <div className="min-h-svh flex flex-col bg-background">
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-10">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center">
-          <span className="font-medium text-sm truncate">{teamName ?? 'バスケスタッツ'}</span>
+          <Link to="/team" className="flex items-center gap-2 min-w-0">
+            <Avatar className="size-7 shrink-0">
+              <AvatarImage src={teamIconUrl} alt={teamName} />
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+                {teamName?.[0] ?? 'B'}
+              </AvatarFallback>
+            </Avatar>
+            <span className="font-medium text-sm truncate">{teamName ?? 'バスケスタッツ'}</span>
+            {teams.length > 1 && <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />}
+          </Link>
         </div>
       </header>
 
@@ -29,7 +39,7 @@ export function Layout({ teamName }) {
               to={to}
               className={({ isActive }) =>
                 `flex flex-col items-center gap-1 py-2.5 text-xs ${
-                  isActive ? 'text-foreground' : 'text-muted-foreground'
+                  isActive ? 'text-primary' : 'text-muted-foreground'
                 }`
               }
             >

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ChevronLeft, Pencil } from 'lucide-react'
+import { ChevronLeft, Pencil, X } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
-import { uploadPlayerPhoto } from '@/lib/uploadPlayerPhoto'
+import { uploadPlayerPhoto, deletePlayerPhoto } from '@/lib/uploadPlayerPhoto'
 import { formatAvg, formatPct, pct, perGame } from '@/lib/stats'
 import { formatMadeAttempt, formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -83,6 +83,7 @@ function EditProfileDialog({ player, updatePlayer, children }) {
   const [weightKg, setWeightKg] = useState(player.weight_kg ?? '')
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(player.photo_url ?? '')
+  const [removePhoto, setRemovePhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -95,6 +96,7 @@ function EditProfileDialog({ player, updatePlayer, children }) {
       setWeightKg(player.weight_kg ?? '')
       setPhotoFile(null)
       setPhotoPreview(player.photo_url ?? '')
+      setRemovePhoto(false)
       setError('')
     }
     setOpen(next)
@@ -105,6 +107,13 @@ function EditProfileDialog({ player, updatePlayer, children }) {
     if (!file) return
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
+    setRemovePhoto(false)
+  }
+
+  function handleRemovePhoto() {
+    setPhotoFile(null)
+    setPhotoPreview('')
+    setRemovePhoto(true)
   }
 
   async function handleSave(e) {
@@ -115,6 +124,10 @@ function EditProfileDialog({ player, updatePlayer, children }) {
       let photoUrl = player.photo_url ?? null
       if (photoFile) {
         photoUrl = await uploadPlayerPhoto(player.id, photoFile)
+        if (player.photo_url) await deletePlayerPhoto(player.photo_url)
+      } else if (removePhoto) {
+        if (player.photo_url) await deletePlayerPhoto(player.photo_url)
+        photoUrl = null
       }
       await updatePlayer(player.id, {
         name,
@@ -149,6 +162,16 @@ function EditProfileDialog({ player, updatePlayer, children }) {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="player-photo">写真</Label>
               <Input id="player-photo" type="file" accept="image/*" onChange={handlePhotoChange} />
+              {photoPreview && (
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  className="flex items-center gap-1 text-xs text-destructive self-start"
+                >
+                  <X className="size-3" />
+                  写真を削除
+                </button>
+              )}
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
