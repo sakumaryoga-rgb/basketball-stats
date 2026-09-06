@@ -13,8 +13,8 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
       <table className="w-full text-sm min-w-max">
         <thead>
           <tr className="text-xs text-muted-foreground border-b">
-            <th className="text-right font-normal py-2 pr-3">MIN</th>
-            <th className="text-left font-normal py-2 px-2">選手</th>
+            <th className="text-left font-normal py-2 pr-3">選手</th>
+            <th className="text-right font-normal py-2 px-2">MIN</th>
             <th className="text-right font-normal py-2 px-2">PTS</th>
             <th className="text-right font-normal py-2 px-2">REB</th>
             <th className="text-right font-normal py-2 px-2">AST</th>
@@ -31,10 +31,7 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.id} className="border-b last:border-0">
-              <td className="text-right py-2 pr-3 tabular-nums whitespace-nowrap text-muted-foreground">
-                {formatClock(row.seconds_played ?? 0)}
-              </td>
-              <td className="py-2 px-2 font-medium whitespace-nowrap">
+              <td className="py-2 pr-3 font-medium whitespace-nowrap">
                 {linkToPlayers && !row.isGuest ? (
                   <Link to={`/players/${row.id}`} className="hover:underline">
                     {row.number != null ? `#${row.number} ` : ''}
@@ -49,6 +46,9 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
                 {row.isGuest && (
                   <span className="ml-1 rounded bg-muted-foreground/20 px-1 text-[10px] leading-4 align-middle">ゲスト</span>
                 )}
+              </td>
+              <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap text-muted-foreground">
+                {formatClock(row.seconds_played ?? 0)}
               </td>
               <td className="text-right py-2 px-2 tabular-nums font-medium">{row.pts}</td>
               <td className="text-right py-2 px-2 tabular-nums">{row.reb}</td>
