@@ -190,7 +190,7 @@ export function Players({ teamId, teams = [] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-medium">選手</h1>
+        <h1 className="text-2xl font-heading tracking-wide">PLAYER</h1>
         <AddPlayerDialog teamId={teamId} teams={teams} addPlayer={addPlayer} />
       </div>
 

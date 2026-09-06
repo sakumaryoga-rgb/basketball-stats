@@ -42,7 +42,7 @@ export function Leaders({ teamId }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-medium">スタッツリーダー</h1>
+      <h1 className="text-2xl font-heading tracking-wide">LEADERS</h1>
 
       <div className="flex flex-wrap gap-2">
         {LEADER_PERIODS.map((p) => (

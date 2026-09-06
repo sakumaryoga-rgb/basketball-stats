@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ChevronLeft, Pencil, X } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
+import { useShotChart } from '@/hooks/useShotChart'
 import { uploadPlayerPhoto, deletePlayerPhoto } from '@/lib/uploadPlayerPhoto'
 import { formatAvg, formatPct, pct, perGame } from '@/lib/stats'
 import { formatMadeAttempt, formatDate } from '@/lib/format'
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { HotZoneSection } from '@/components/HotZoneSection'
 import {
   Dialog,
   DialogTrigger,
@@ -216,6 +218,7 @@ export function PlayerDetail({ teamId }) {
   const navigate = useNavigate()
   const { players, updatePlayer } = usePlayers(teamId)
   const { season, gameLog } = usePlayerLog(id, teamId)
+  const { shots } = useShotChart(teamId, id)
 
   const player = players.find((p) => p.id === id)
 
@@ -288,6 +291,8 @@ export function PlayerDetail({ teamId }) {
               <StatBlock label="FT%" value={formatPct(averages.ftPct)} />
             </div>
           </div>
+
+          <HotZoneSection shots={shots} />
 
           <div className="rounded-lg border p-4">
             <p className="text-xs text-muted-foreground mb-3">シーズン合計</p>

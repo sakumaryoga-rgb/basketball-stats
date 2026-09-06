@@ -1,14 +1,19 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Copy, Check, Pencil, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
+import { useGames } from '@/hooks/useGames'
+import { useTeamSeasonStats } from '@/hooks/useTeamSeasonStats'
+import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
+import { formatAvg, formatPct, pct, perGame } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { HotZoneSection } from '@/components/HotZoneSection'
 import {
   Dialog,
   DialogTrigger,
@@ -37,6 +42,8 @@ function EditTeamDialog({ team, onTeamUpdated, children }) {
   const [iconPreview, setIconPreview] = useState(team.icon_url ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   function handleOpenChange(next) {
     if (next) {
@@ -78,6 +85,19 @@ function EditTeamDialog({ team, onTeamUpdated, children }) {
     }
   }
 
+  async function handleDeleteTeam() {
+    setDeleting(true)
+    const { error: deleteError } = await supabase.from('teams').delete().eq('id', team.id)
+    setDeleting(false)
+    if (deleteError) {
+      console.error('チームの削除に失敗しました', deleteError)
+      return
+    }
+    setConfirmDelete(false)
+    setOpen(false)
+    await onTeamUpdated()
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={children} />
@@ -111,17 +131,72 @@ function EditTeamDialog({ team, onTeamUpdated, children }) {
             </Button>
           </DialogFooter>
         </form>
+        <div className="border-t pt-4">
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full text-destructive hover:text-destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <Trash2 className="size-4" />
+            このチームを削除する
+          </Button>
+        </div>
       </DialogContent>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>本当に削除しますか?</AlertDialogTitle>
+            <AlertDialogDescription>
+              「{team.name}」を削除します。選手・試合・スタッツの記録もすべて削除され、元に戻せません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>キャンセル</AlertDialogClose>
+            <Button variant="destructive" disabled={deleting} onClick={handleDeleteTeam}>
+              {deleting ? '削除中...' : '削除する'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
+  )
+}
+
+function StatBlock({ label, value }) {
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <p className="text-xl font-bold tabular-nums">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
   )
 }
 
 export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) {
   const { players } = usePlayers(team.id)
+  const { games } = useGames(team.id)
+  const { totals } = useTeamSeasonStats(team.id)
+  const { shots } = useShotChart(team.id)
   const [copied, setCopied] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const inviteUrl = `${window.location.origin}/onboarding?code=${team.invite_code}`
+
+  const gamesPlayed = games.filter((g) => g.status !== 'scheduled').length
+
+  const averages = useMemo(() => {
+    if (!totals) return null
+    return {
+      pts: perGame(totals.pts, gamesPlayed),
+      reb: perGame(totals.reb, gamesPlayed),
+      ast: perGame(totals.ast, gamesPlayed),
+      stl: perGame(totals.stl, gamesPlayed),
+      blk: perGame(totals.blk, gamesPlayed),
+      tov: perGame(totals.tov, gamesPlayed),
+      fgPct: pct(totals.fgm, totals.fga),
+      tpPct: pct(totals.tpm, totals.tpa),
+      ftPct: pct(totals.ftm, totals.fta),
+    }
+  }, [totals, gamesPlayed])
 
   async function handleCopy() {
     await navigator.clipboard.writeText(inviteUrl)
@@ -129,21 +204,9 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
     setTimeout(() => setCopied(false), 2000)
   }
 
-  async function handleDeleteTeam() {
-    setDeleting(true)
-    const { error } = await supabase.from('teams').delete().eq('id', team.id)
-    setDeleting(false)
-    if (error) {
-      console.error('チームの削除に失敗しました', error)
-      return
-    }
-    setConfirmDelete(false)
-    await onTeamUpdated()
-  }
-
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-medium">チーム</h1>
+      <h1 className="text-2xl font-heading tracking-wide">TEAM</h1>
 
       <Card>
         <CardContent className="flex items-center gap-4">
@@ -193,6 +256,45 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
         </CardContent>
       </Card>
 
+      {gamesPlayed > 0 && totals && (
+        <>
+          <div className="rounded-lg border p-4">
+            <p className="text-xs text-muted-foreground mb-3">チーム1試合平均 ({gamesPlayed}試合)</p>
+            <div className="grid grid-cols-3 gap-y-4">
+              <StatBlock label="PPG" value={formatAvg(averages.pts)} />
+              <StatBlock label="RPG" value={formatAvg(averages.reb)} />
+              <StatBlock label="APG" value={formatAvg(averages.ast)} />
+              <StatBlock label="SPG" value={formatAvg(averages.stl)} />
+              <StatBlock label="BPG" value={formatAvg(averages.blk)} />
+              <StatBlock label="TOPG" value={formatAvg(averages.tov)} />
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-4">
+            <p className="text-xs text-muted-foreground mb-3">チームシュート成功率</p>
+            <div className="grid grid-cols-3 gap-y-4">
+              <StatBlock label="FG%" value={formatPct(averages.fgPct)} />
+              <StatBlock label="3P%" value={formatPct(averages.tpPct)} />
+              <StatBlock label="FT%" value={formatPct(averages.ftPct)} />
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-4">
+            <p className="text-xs text-muted-foreground mb-3">チームシーズン合計</p>
+            <div className="grid grid-cols-3 gap-y-4">
+              <StatBlock label="PTS" value={totals.pts} />
+              <StatBlock label="REB" value={totals.reb} />
+              <StatBlock label="AST" value={totals.ast} />
+              <StatBlock label="STL" value={totals.stl} />
+              <StatBlock label="BLK" value={totals.blk} />
+              <StatBlock label="TO" value={totals.tov} />
+            </div>
+          </div>
+
+          <HotZoneSection shots={shots} />
+        </>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>招待</CardTitle>
@@ -241,36 +343,6 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
           </Link>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>危険な操作</CardTitle>
-          <CardDescription>選手・試合・スタッツもすべて削除されます</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="destructive" className="w-full" onClick={() => setConfirmDelete(true)}>
-            <Trash2 className="size-4" />
-            このチームを削除する
-          </Button>
-        </CardContent>
-      </Card>
-
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>本当に削除しますか?</AlertDialogTitle>
-            <AlertDialogDescription>
-              「{team.name}」を削除します。選手・試合・スタッツの記録もすべて削除され、元に戻せません。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>キャンセル</AlertDialogClose>
-            <Button variant="destructive" disabled={deleting} onClick={handleDeleteTeam}>
-              {deleting ? '削除中...' : '削除する'}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

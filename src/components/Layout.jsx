@@ -3,10 +3,10 @@ import { CalendarDays, ChevronDown, Users, Trophy, Settings } from 'lucide-react
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 
 const NAV_ITEMS = [
-  { to: '/games', label: '試合', icon: CalendarDays },
-  { to: '/players', label: '選手', icon: Users },
-  { to: '/leaders', label: 'リーダー', icon: Trophy },
-  { to: '/team', label: 'チーム', icon: Settings },
+  { to: '/games', label: 'GAME', icon: CalendarDays },
+  { to: '/players', label: 'PLAYER', icon: Users },
+  { to: '/leaders', label: 'LEADERS', icon: Trophy },
+  { to: '/team', label: 'TEAM', icon: Settings },
 ]
 
 export function Layout({ teamName, teamIconUrl, teams = [] }) {
@@ -38,7 +38,7 @@ export function Layout({ teamName, teamIconUrl, teams = [] }) {
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 py-2.5 text-xs ${
+                `flex flex-col items-center gap-1 py-2.5 text-xs font-heading tracking-wide ${
                   isActive ? 'text-primary' : 'text-muted-foreground'
                 }`
               }
