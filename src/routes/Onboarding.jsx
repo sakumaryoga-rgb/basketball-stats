@@ -7,6 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 
+function BasketballIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v18M3 12h18M5.6 5.6c1.9 1.9 2.9 4.1 2.9 6.4s-1 4.5-2.9 6.4M18.4 5.6c-1.9 1.9-2.9 4.1-2.9 6.4s1 4.5 2.9 6.4" />
+    </svg>
+  )
+}
+
 export function Onboarding({ onTeamJoined, hasTeam }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -98,8 +107,21 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   }
 
   return (
-    <div className="min-h-svh flex items-center justify-center px-4">
-      <Card className="w-full max-w-sm">
+    <div className="min-h-svh relative flex flex-col items-center justify-center gap-8 overflow-hidden px-4 py-10">
+      <div className="pointer-events-none absolute -top-24 -right-24 size-72 rounded-full bg-primary/10 blur-3xl" aria-hidden />
+      <div className="pointer-events-none absolute -bottom-24 -left-24 size-72 rounded-full bg-secondary/40 blur-3xl" aria-hidden />
+
+      <div className="relative flex flex-col items-center gap-3">
+        <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30">
+          <BasketballIcon className="size-9" />
+        </div>
+        <div className="text-center">
+          <p className="font-heading text-4xl tracking-wide text-primary">BASKETBALL STATS</p>
+          <p className="text-sm text-muted-foreground mt-1">バスケスタッツ</p>
+        </div>
+      </div>
+
+      <Card className="relative w-full max-w-sm">
         <CardHeader>
           {hasTeam && (
             <button

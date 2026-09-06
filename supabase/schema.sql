@@ -181,6 +181,10 @@ create policy "delete own team" on teams
 create policy "select own team members" on team_members
   for select using (is_team_member(team_id));
 
+-- チーム退出。自分自身の team_members 行だけを削除できる(他のメンバーやチーム自体には影響しない)
+create policy "leave team" on team_members
+  for delete using (user_id = auth.uid());
+
 create policy "manage own team players" on players
   for all
   using (is_team_member(team_id))

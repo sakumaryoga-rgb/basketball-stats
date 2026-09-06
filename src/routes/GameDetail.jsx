@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Undo2, ChevronLeft, Minus, Plus, Play, Pause, UserPlus, Check } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
-import { STAT_CATEGORIES, STAT_KEY_LABEL, formatClock, formatQuarter } from '@/lib/stats'
+import { STAT_CATEGORIES, STAT_KEY_LABEL, QUARTER_OPTIONS, formatClock, formatQuarter } from '@/lib/stats'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BoxScoreTable } from '@/components/BoxScoreTable'
 import { CourtDiagram } from '@/components/CourtDiagram'
+import { WheelPicker } from '@/components/WheelPicker'
 import {
   Dialog,
   DialogTrigger,
@@ -94,6 +95,56 @@ function AddGuestDialog({ addPlayer, gameId, onAdded }) {
   )
 }
 
+const MINUTES = Array.from({ length: 21 }, (_, i) => i)
+const SECONDS = Array.from({ length: 60 }, (_, i) => i)
+
+function TimePickerDialog({ open, onOpenChange, secondsLeft, onApply }) {
+  const [minutes, setMinutes] = useState(0)
+  const [seconds, setSeconds] = useState(0)
+  const openCountRef = useRef(0)
+
+  // openがtrueになった瞬間の secondsLeft でホイールの位置を初期化する。
+  // ダイアログを開くのが親からの直接のprop変更(onOpenChange経由ではない)でも
+  // 確実に効くようにopenを監視し、WheelPickerをkeyで強制的に作り直すことで
+  // 前回開いたときのスクロール位置が残ってしまう問題を避ける。
+  useLayoutEffect(() => {
+    if (open) {
+      openCountRef.current += 1
+      setMinutes(Math.floor(secondsLeft / 60))
+      setSeconds(secondsLeft % 60)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  function handleApply() {
+    onApply(minutes * 60 + seconds)
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>タイマーを設定</DialogTitle>
+          <DialogDescription>スライドして時間を調整します</DialogDescription>
+        </DialogHeader>
+        <div className="relative flex items-center justify-center gap-3 py-2">
+          <WheelPicker key={`m-${openCountRef.current}`} values={MINUTES} value={minutes} onChange={setMinutes} />
+          <span className="text-xl font-bold text-muted-foreground">:</span>
+          <WheelPicker key={`s-${openCountRef.current}`} values={SECONDS} value={seconds} onChange={setSeconds} />
+          <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 h-9 rounded-md border-y bg-muted/30" />
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
+          <Button type="button" onClick={handleApply}>
+            設定する
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 const STATUS_LABEL = { scheduled: '予定', in_progress: '試合中', final: '終了' }
 
 const EMPTY_STATS = {
@@ -117,6 +168,7 @@ export function GameDetail({ teamId }) {
   const [shotChartPlayerId, setShotChartPlayerId] = useState('all')
   const [recordedFlash, setRecordedFlash] = useState(null)
   const flashTimerRef = useRef(null)
+  const [timePickerOpen, setTimePickerOpen] = useState(false)
 
   const game = games.find((g) => g.id === id)
   const activeCategory = STAT_CATEGORIES.find((c) => c.key === activeCategoryKey)
@@ -182,6 +234,14 @@ export function GameDetail({ teamId }) {
 
   async function handleStart() {
     await updateGame(game.id, { status: 'in_progress' })
+    setClockRunning(true)
+  }
+
+  async function toggleClock() {
+    if (game.status === 'scheduled') {
+      await updateGame(game.id, { status: 'in_progress' })
+    }
+    setClockRunning((r) => !r)
   }
 
   async function handleFinish() {
@@ -207,8 +267,7 @@ export function GameDetail({ teamId }) {
     await updateGame(game.id, { [field]: Math.max(0, game[field] + delta) })
   }
 
-  async function advanceQuarter() {
-    const next = game.quarter >= 5 ? 1 : game.quarter + 1
+  async function handleQuarterChange(next) {
     setSecondsLeft(600)
     setClockRunning(false)
     await updateGame(game.id, { quarter: next, home_fouls: 0, away_fouls: 0 })
@@ -277,30 +336,47 @@ export function GameDetail({ teamId }) {
           {game.location ? ` ・ ${game.location}` : ''}
         </p>
 
-        {game.status !== 'scheduled' && (
-          <button
-            onClick={advanceQuarter}
-            className="self-center rounded-full border px-3 py-1 text-sm font-medium text-primary hover:bg-muted"
+        {game.status !== 'final' && (
+          <select
+            value={game.quarter}
+            onChange={(e) => handleQuarterChange(Number(e.target.value))}
+            className="self-center rounded-full border px-3 py-1 text-sm font-medium text-primary bg-background hover:bg-muted"
           >
-            {formatQuarter(game.quarter)} ⇅
-          </button>
+            {QUARTER_OPTIONS.map((q) => (
+              <option key={q} value={q}>
+                {formatQuarter(q)}
+              </option>
+            ))}
+          </select>
         )}
 
         <div className="flex items-center justify-center gap-3">
           <Button variant="outline" size="icon-sm" onClick={() => adjustClock(-1)}>
             <Minus className="size-3.5" />
           </Button>
-          <button
-            onClick={() => setClockRunning((r) => !r)}
-            className="flex items-center gap-2 text-3xl font-bold tabular-nums"
-          >
+          <button onClick={toggleClock} aria-label={clockRunning ? '一時停止' : '開始'} className="shrink-0">
             {clockRunning ? <Pause className="size-5 text-primary" /> : <Play className="size-5 text-primary" />}
+          </button>
+          <button
+            onClick={() => {
+              setClockRunning(false)
+              setTimePickerOpen(true)
+            }}
+            className="text-3xl font-bold tabular-nums"
+          >
             {formatClock(secondsLeft)}
           </button>
           <Button variant="outline" size="icon-sm" onClick={() => adjustClock(1)}>
             <Plus className="size-3.5" />
           </Button>
         </div>
+
+        <TimePickerDialog
+          open={timePickerOpen}
+          onOpenChange={setTimePickerOpen}
+          secondsLeft={secondsLeft}
+          onApply={setSecondsLeft}
+        />
 
         <div className="flex items-center justify-center gap-6">
           <p className="text-3xl font-bold tabular-nums">{teamScore}</p>
@@ -398,7 +474,7 @@ export function GameDetail({ teamId }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {game.status === 'in_progress' && (
+      {game.status !== 'final' && (
         <div className="flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium">選手を選択</p>

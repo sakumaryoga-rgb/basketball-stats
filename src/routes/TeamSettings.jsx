@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Copy, Check, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Copy, Check, Pencil, Plus, RefreshCw, LogOut, Trash2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
@@ -174,12 +174,18 @@ function StatBlock({ label, value }) {
 }
 
 export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) {
+  const navigate = useNavigate()
   const { players: allPlayers } = usePlayers(team.id)
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const { games } = useGames(team.id)
   const { totals } = useTeamSeasonStats(team.id)
   const { shots } = useShotChart(team.id)
-  const [copied, setCopied] = useState(false)
+  const [copiedUrl, setCopiedUrl] = useState(false)
+  const [copiedCode, setCopiedCode] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const inviteUrl = `${window.location.origin}/onboarding?code=${team.invite_code}`
 
   const gamesPlayed = games.filter((g) => g.status !== 'scheduled').length
@@ -199,10 +205,47 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
     }
   }, [totals, gamesPlayed])
 
-  async function handleCopy() {
+  async function handleCopyUrl() {
     await navigator.clipboard.writeText(inviteUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setCopiedUrl(true)
+    setTimeout(() => setCopiedUrl(false), 2000)
+  }
+
+  async function handleCopyCode() {
+    await navigator.clipboard.writeText(team.invite_code)
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 2000)
+  }
+
+  async function handleRegenerateCode() {
+    setRegenerating(true)
+    const newCode = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
+    const { error } = await supabase.from('teams').update({ invite_code: newCode }).eq('id', team.id)
+    setRegenerating(false)
+    setConfirmRegenerate(false)
+    if (error) {
+      console.error('招待コードの再発行に失敗しました', error)
+      return
+    }
+    await onTeamUpdated()
+  }
+
+  async function handleLeaveTeam() {
+    setLeaving(true)
+    const { data: userData } = await supabase.auth.getUser()
+    const { error } = await supabase
+      .from('team_members')
+      .delete()
+      .eq('team_id', team.id)
+      .eq('user_id', userData?.user?.id)
+    setLeaving(false)
+    if (error) {
+      console.error('チームの退出に失敗しました', error)
+      return
+    }
+    setConfirmLeave(false)
+    await onTeamUpdated()
+    navigate('/games')
   }
 
   return (
@@ -299,16 +342,51 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
       <Card>
         <CardHeader>
           <CardTitle>招待</CardTitle>
-          <CardDescription>このリンクを共有すると、コーチ・マネージャーがチームに参加できます</CardDescription>
+          <CardDescription>このURLまたはコードを共有すると、コーチ・マネージャーがチームに参加できます</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="text-sm bg-muted rounded-md px-3 py-2 break-all">{inviteUrl}</div>
-          <Button variant="outline" onClick={handleCopy}>
-            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-            {copied ? 'コピーしました' : 'リンクをコピー'}
-          </Button>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label>招待URL</Label>
+            <div className="text-sm bg-muted rounded-md px-3 py-2 break-all">{inviteUrl}</div>
+            <Button variant="outline" onClick={handleCopyUrl}>
+              {copiedUrl ? <Check className="size-4" /> : <Copy className="size-4" />}
+              {copiedUrl ? 'コピーしました' : 'URLをコピー'}
+            </Button>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>招待コード</Label>
+            <div className="text-lg font-bold tabular-nums tracking-[0.2em] text-center bg-muted rounded-md px-3 py-2">
+              {team.invite_code}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleCopyCode}>
+                {copiedCode ? <Check className="size-4" /> : <Copy className="size-4" />}
+                {copiedCode ? 'コピーしました' : 'コードをコピー'}
+              </Button>
+              <Button variant="outline" size="icon" aria-label="コードを再発行" onClick={() => setConfirmRegenerate(true)}>
+                <RefreshCw className="size-4" />
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={confirmRegenerate} onOpenChange={setConfirmRegenerate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>招待コードを再発行しますか?</AlertDialogTitle>
+            <AlertDialogDescription>
+              新しいURL・コードが発行され、これまでのものは使えなくなります。すでに共有した相手は参加できなくなります。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>キャンセル</AlertDialogClose>
+            <Button disabled={regenerating} onClick={handleRegenerateCode}>
+              {regenerating ? '再発行中...' : '再発行する'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Card>
         <CardHeader>
@@ -344,6 +422,28 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
           </Link>
         </CardContent>
       </Card>
+
+      <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmLeave(true)}>
+        <LogOut className="size-4" />
+        このチームを退出する
+      </Button>
+
+      <AlertDialog open={confirmLeave} onOpenChange={setConfirmLeave}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>本当に退出しますか?</AlertDialogTitle>
+            <AlertDialogDescription>
+              「{team.name}」から退出します。チーム自体や他のメンバー・所属している他のチームには影響しません。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>キャンセル</AlertDialogClose>
+            <Button variant="destructive" disabled={leaving} onClick={handleLeaveTeam}>
+              {leaving ? '退出中...' : '退出する'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

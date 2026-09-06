@@ -83,6 +83,9 @@ export function formatQuarter(quarter) {
   return quarter <= 4 ? `${quarter}Q` : `OT${quarter - 4}`
 }
 
+// 選択可能なクォーター(1〜4Q、OT1・OT2)
+export const QUARTER_OPTIONS = [1, 2, 3, 4, 5, 6]
+
 // スタッツリーダーの集計期間
 export const LEADER_PERIODS = [
   { key: 'last5', label: '直近5試合' },
