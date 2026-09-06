@@ -1,7 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarDays, Users, Trophy, Settings, LogOut } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { supabase } from '@/supabaseClient'
+import { CalendarDays, Users, Trophy, Settings } from 'lucide-react'
 
 const NAV_ITEMS = [
   { to: '/games', label: '試合', icon: CalendarDays },
@@ -11,18 +9,11 @@ const NAV_ITEMS = [
 ]
 
 export function Layout({ teamName }) {
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-  }
-
   return (
     <div className="min-h-svh flex flex-col bg-background">
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-10">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center">
           <span className="font-medium text-sm truncate">{teamName ?? 'バスケスタッツ'}</span>
-          <Button variant="ghost" size="icon" onClick={handleSignOut} aria-label="サインアウト">
-            <LogOut className="size-4" />
-          </Button>
         </div>
       </header>
 

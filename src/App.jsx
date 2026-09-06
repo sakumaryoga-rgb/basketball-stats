@@ -3,8 +3,6 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useSession } from '@/hooks/useSession'
 import { useTeam } from '@/hooks/useTeam'
-import { Login } from '@/routes/Login'
-import { AuthCallback } from '@/routes/AuthCallback'
 import { Onboarding } from '@/routes/Onboarding'
 import { Games } from '@/routes/Games'
 import { GameDetail } from '@/routes/GameDetail'
@@ -27,7 +25,7 @@ export default function App() {
   const { team, loading: teamLoading, refresh: refreshTeam } = useTeam(session)
   const location = useLocation()
 
-  // 招待リンク (?code=XXXX) を踏んだ場合、未ログインでも後で使えるようコードを覚えておく
+  // 招待リンク (?code=XXXX) を踏んだ場合、匿名セッション発行前でも後で使えるようコードを覚えておく
   useEffect(() => {
     const code = new URLSearchParams(location.search).get('code')
     if (code) {
@@ -35,16 +33,11 @@ export default function App() {
     }
   }, [location.search])
 
-  if (sessionLoading) return <FullScreenLoader />
+  if (sessionLoading || !session) return <FullScreenLoader />
 
   return (
     <Routes>
-      <Route path="/auth/callback" element={<AuthCallback />} />
-      <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
-
-      {!session ? (
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      ) : teamLoading ? (
+      {teamLoading ? (
         <Route path="*" element={<FullScreenLoader />} />
       ) : !team ? (
         <>
