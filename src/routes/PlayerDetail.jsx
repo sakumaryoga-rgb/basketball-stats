@@ -222,6 +222,11 @@ export function PlayerDetail({ teamId }) {
 
   const player = players.find((p) => p.id === id)
 
+  const careerHigh = useMemo(() => {
+    if (gameLog.length === 0) return null
+    return gameLog.reduce((best, row) => (best === null || row.pts > best.pts ? row : best), null)
+  }, [gameLog])
+
   const averages = useMemo(() => {
     if (!season) return null
     const g = season.games_played
@@ -341,6 +346,28 @@ export function PlayerDetail({ teamId }) {
               </table>
             </div>
           </div>
+
+          {careerHigh && (
+            <div className="rounded-lg border p-4">
+              <p className="text-xs text-muted-foreground mb-1">キャリアハイ (PTS)</p>
+              <Link to={`/games/${careerHigh.game_id}`} className="text-sm font-medium hover:underline">
+                {formatDate(careerHigh.game.game_date)} vs {careerHigh.game.opponent_name}
+              </Link>
+              <div className="grid grid-cols-3 gap-y-4 mt-3">
+                <StatBlock label="PTS" value={careerHigh.pts} />
+                <StatBlock label="REB" value={careerHigh.reb} />
+                <StatBlock label="AST" value={careerHigh.ast} />
+                <StatBlock label="STL" value={careerHigh.stl} />
+                <StatBlock label="BLK" value={careerHigh.blk} />
+                <StatBlock label="TO" value={careerHigh.tov} />
+              </div>
+              <div className="grid grid-cols-3 gap-y-4 mt-4 pt-4 border-t">
+                <StatBlock label="FG" value={formatMadeAttempt(careerHigh.fgm, careerHigh.fga)} />
+                <StatBlock label="3P" value={formatMadeAttempt(careerHigh.tpm, careerHigh.tpa)} />
+                <StatBlock label="FT" value={formatMadeAttempt(careerHigh.ftm, careerHigh.fta)} />
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <p className="text-sm text-muted-foreground py-8 text-center">まだ試合の記録がありません</p>
