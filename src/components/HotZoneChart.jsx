@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   HOOP,
   CORNER_X_INSET,
@@ -46,15 +46,15 @@ function zoneColorCss(pct) {
   return `rgb(${r} ${g} ${b})`
 }
 
-const CANVAS_WIDTH = 320
-const CANVAS_HEIGHT = Math.round((CANVAS_WIDTH * 94) / 100)
+// 表示サイズ(devicePixelRatio込み)に合わせてラスタライズする。固定の低解像度だと
+// 拡大時にゾーン境界がギザギザになり、上に重ねた滑らかなSVGの線とズレて見えてしまうため。
+const MAX_CANVAS_WIDTH = 900
 
 // ゾーンの塗り分けは classifyCourtPoint をそのままラスタライズして描く。
 // SVGパスでゾーン境界を手計算すると実際の判定ロジックとズレる(以前のバグの原因)ため、
 // 「判定関数=描画」を一致させて不整合が起きないようにする。
-function drawZones(canvas, hotZones) {
+function drawZones(canvas, width, height, hotZones) {
   const ctx = canvas.getContext('2d')
-  const { width, height } = canvas
   const image = ctx.createImageData(width, height)
   const data = image.data
   const colorByZone = new Map(ZONE_ORDER.map((key) => [key, zoneColorRGB(hotZones[key].pct)]))
@@ -125,11 +125,27 @@ const RESTRICTED_AREA_PATH = `M ${HOOP.x - RESTRICTED_RADIUS_UNITS} 0 L ${HOOP.x
 const THREE_POINT_LINE_PATH = `M ${CORNER_X_INSET} 0 L ${CORNER_X_INSET} ${CORNER_Y_LIMIT} A ${THREE_POINT_RADIUS_UNITS} ${THREE_POINT_RADIUS_UNITS} 0 0 0 ${100 - CORNER_X_INSET} ${CORNER_Y_LIMIT} L ${100 - CORNER_X_INSET} 0`
 
 export function HotZoneChart({ hotZones }) {
+  const containerRef = useRef(null)
   const canvasRef = useRef(null)
+  const [pixelWidth, setPixelWidth] = useState(320)
+
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const dpr = window.devicePixelRatio || 1
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (width) setPixelWidth(Math.min(MAX_CANVAS_WIDTH, Math.round(width * dpr)))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  const pixelHeight = Math.round((pixelWidth * 94) / 100)
 
   useEffect(() => {
-    if (canvasRef.current) drawZones(canvasRef.current, hotZones)
-  }, [hotZones])
+    if (canvasRef.current) drawZones(canvasRef.current, pixelWidth, pixelHeight, hotZones)
+  }, [hotZones, pixelWidth, pixelHeight])
 
   const legendColors = useMemo(
     () => Object.fromEntries(ZONE_ORDER.map((key) => [key, zoneColorCss(hotZones[key].pct)])),
@@ -138,13 +154,12 @@ export function HotZoneChart({ hotZones }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative aspect-[100/94] w-full overflow-hidden rounded-lg bg-muted/20">
+      <div ref={containerRef} className="relative aspect-[100/94] w-full overflow-hidden rounded-lg bg-muted/20">
         <canvas
           ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
+          width={pixelWidth}
+          height={pixelHeight}
           className="absolute inset-0 size-full"
-          style={{ imageRendering: 'pixelated' }}
         />
         <svg viewBox="0 0 100 94" className="absolute inset-0 size-full" preserveAspectRatio="none">
           <g fill="none" stroke="white" strokeOpacity="0.55" strokeWidth="0.35">
