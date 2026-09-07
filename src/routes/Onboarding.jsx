@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Loader2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
+import { cn } from '@/lib/utils'
+import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import {
   AlertDialog,
@@ -15,7 +18,21 @@ import {
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog'
 
-const TERMS_AGREEMENT_STORAGE_KEY = 'agreedToTermsAndPrivacyAt'
+// 旧フラグ(agreedToTermsAndPrivacyAt)からキー名を変更し、チェックボックス必須の
+// より厳密な同意フローに変わったことを機に、既存利用者にも再同意を求める。
+const CONSENT_STORAGE_KEY = 'termsAndPrivacyConsent'
+
+function hasCurrentConsent() {
+  if (typeof window === 'undefined') return false
+  try {
+    const raw = localStorage.getItem(CONSENT_STORAGE_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw)
+    return parsed.termsVersion === TERMS_VERSION && parsed.privacyVersion === PRIVACY_VERSION
+  } catch {
+    return false
+  }
+}
 
 function BasketballIcon(props) {
   return (
@@ -43,13 +60,36 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   // 招待リンクを踏んだ場合は確認なしで自動的に参加させる(手動操作でのつまずきをなくす)
   const [autoJoining, setAutoJoining] = useState(!!initialCode)
   // 初回アクセス時のみ、利用規約・プライバシーポリシーへの同意ポップアップを表示する
-  const [showConsent, setShowConsent] = useState(
-    () => typeof window !== 'undefined' && !localStorage.getItem(TERMS_AGREEMENT_STORAGE_KEY)
+  const [showConsent, setShowConsent] = useState(() => !hasCurrentConsent())
+  const [agreeChecked, setAgreeChecked] = useState(false)
+  const [viewedTerms, setViewedTerms] = useState(
+    () => typeof window !== 'undefined' && sessionStorage.getItem('viewedTermsVersion') === TERMS_VERSION
   )
+  const [viewedPrivacy, setViewedPrivacy] = useState(
+    () => typeof window !== 'undefined' && sessionStorage.getItem('viewedPrivacyVersion') === PRIVACY_VERSION
+  )
+  const canAgree = viewedTerms && viewedPrivacy
 
-  function handleAgree() {
-    localStorage.setItem(TERMS_AGREEMENT_STORAGE_KEY, new Date().toISOString())
+  async function handleAgree() {
+    localStorage.setItem(
+      CONSENT_STORAGE_KEY,
+      JSON.stringify({ termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION, agreedAt: new Date().toISOString() })
+    )
     setShowConsent(false)
+    // 端末のlocalStorageが消えても後から確認できるよう、サーバー側にも同意記録を残す
+    // (失敗しても同意自体はローカルに記録済みなので、利用をブロックしない)
+    try {
+      const { data: userData } = await supabase.auth.getUser()
+      if (userData?.user?.id) {
+        await supabase.from('user_consents').insert({
+          user_id: userData.user.id,
+          terms_version: TERMS_VERSION,
+          privacy_version: PRIVACY_VERSION,
+        })
+      }
+    } catch (err) {
+      console.error('同意記録のサーバー保存に失敗しました(端末には記録済みです)', err)
+    }
   }
 
   useEffect(() => {
@@ -213,23 +253,64 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
       </Card>
 
       <AlertDialog open={showConsent}>
-        <AlertDialogContent>
+        <AlertDialogContent className="gap-5 p-6 sm:max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>利用規約・プライバシーポリシーへの同意</AlertDialogTitle>
-            <AlertDialogDescription>
-              本サービスのご利用には、利用規約およびプライバシーポリシーへの同意が必要です。内容をご確認のうえ、同意して利用を開始してください。
+            <AlertDialogTitle className="text-xl">利用規約・プライバシーポリシーへの同意</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              本サービスのご利用には、以下2つの内容をご確認のうえ、同意していただく必要があります。
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex flex-col gap-1.5 text-sm">
-            <Link to="/terms" className="text-primary hover:underline">
-              利用規約を確認する
+
+          <div className="flex flex-col gap-2">
+            <Link
+              to="/terms"
+              className="flex items-center justify-between gap-3 rounded-lg border px-3.5 py-3 hover:bg-muted/50 transition-colors"
+            >
+              <span className="flex items-center gap-2 text-sm font-medium">
+                {viewedTerms ? (
+                  <CheckCircle2 className="size-4 text-primary shrink-0" />
+                ) : (
+                  <Circle className="size-4 text-muted-foreground shrink-0" />
+                )}
+                利用規約を確認する
+              </span>
+              <ChevronRight className="size-4 text-muted-foreground shrink-0" />
             </Link>
-            <Link to="/privacy-policy" className="text-primary hover:underline">
-              プライバシーポリシーを確認する
+            <Link
+              to="/privacy-policy"
+              className="flex items-center justify-between gap-3 rounded-lg border px-3.5 py-3 hover:bg-muted/50 transition-colors"
+            >
+              <span className="flex items-center gap-2 text-sm font-medium">
+                {viewedPrivacy ? (
+                  <CheckCircle2 className="size-4 text-primary shrink-0" />
+                ) : (
+                  <Circle className="size-4 text-muted-foreground shrink-0" />
+                )}
+                プライバシーポリシーを確認する
+              </span>
+              <ChevronRight className="size-4 text-muted-foreground shrink-0" />
             </Link>
           </div>
+
+          <label
+            className={cn(
+              'flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm leading-relaxed transition-opacity',
+              !canAgree && 'opacity-50'
+            )}
+          >
+            <Checkbox
+              checked={agreeChecked}
+              onCheckedChange={(checked) => setAgreeChecked(checked === true)}
+              disabled={!canAgree}
+              className="mt-0.5"
+            />
+            私は利用規約およびプライバシーポリシーの内容を確認し、同意します。
+          </label>
+
           <AlertDialogFooter>
-            <Button onClick={handleAgree}>同意して利用を開始する</Button>
+            <Button onClick={handleAgree} disabled={!agreeChecked} className="w-full">
+              同意して利用を開始する
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

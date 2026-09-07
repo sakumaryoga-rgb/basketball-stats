@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
+import { PRIVACY_VERSION } from '@/lib/legal'
 
 const CONTACT_EMAIL = 'sakumaryoga@gmail.com'
 
@@ -14,6 +16,11 @@ function Section({ title, children }) {
 
 export function PrivacyPolicy() {
   const navigate = useNavigate()
+
+  // オンボーディングの同意ポップアップで「確認済み」と判定するための既読マーク
+  useEffect(() => {
+    sessionStorage.setItem('viewedPrivacyVersion', PRIVACY_VERSION)
+  }, [])
 
   return (
     <div className="flex flex-col gap-5">
