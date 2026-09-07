@@ -3,10 +3,13 @@
 // Anthropic APIの従量課金がスパムや大量送信で増大しないよう、以下の順でチェックする。
 //   1. ユーザー単位のレート制限(1時間3件 / 1日10件)
 //   2. bot(Cloudflare Turnstile・ハニーポット・送信間隔)・重複・文字数のチェック
-//   3. アプリ全体の日次AI分類上限(100件/日, JST)
-//   4. アプリ全体の月次AI分類上限(2,000件/月, JST)
+//   3・4. アプリ全体の日次(100件/日)・月次(2,000件/月)AI利用枠(JST)を、
+//         Anthropic APIを呼び出す直前にPostgres関数(contact_try_consume_ai_quota)で
+//         アトミックに確認・消費する。同時リクエストがあっても行ロックにより上限を超えない。
 // すべて満たした場合のみAnthropic APIを呼ぶ。1〜4のいずれかで超過していても、
 // bot判定・重複でない限り問い合わせ自体は必ずNotionへ保存し、AI分類のみスキップする。
+// 上限は「Anthropic APIへの呼び出し試行件数」を基準とし、成功・失敗・パース失敗を問わず
+// 呼び出した時点で1件消費済みとして扱う(分類の成否は`ai_classified`で別途集計する)。
 // AI分類は1リクエストにつき最大1回のみ試行し、自動リトライは行わない
 // (失敗時は即座に「未分類(AI失敗)」としてNotionへ保存する。課金抑制を優先するため)。
 //
@@ -19,8 +22,9 @@ import {
   APP_MONTHLY_AI_LIMIT,
   supabaseRequest,
   supabaseCount,
-  jstDayStartUtcIso,
-  jstMonthStartUtcIso,
+  supabaseRpc,
+  jstDateKey,
+  jstMonthKey,
 } from './_lib/contact-shared.js'
 
 const NOTION_VERSION = '2022-06-28'
@@ -267,30 +271,42 @@ export default async function handler(req, res) {
       return
     }
 
-    // --- 3・4. アプリ全体の日次・月次AI分類上限(JST暦日・暦月) ---
-    const [dailyAiCount, monthlyAiCount] = await Promise.all([
-      supabaseCount(`ai_classified=eq.true&created_at=gte.${jstDayStartUtcIso()}`),
-      supabaseCount(`ai_classified=eq.true&created_at=gte.${jstMonthStartUtcIso()}`),
-    ])
-    const appCapReached = dailyAiCount >= APP_DAILY_AI_LIMIT || monthlyAiCount >= APP_MONTHLY_AI_LIMIT
-
     const ipHash = hashIp(clientIp)
-    const skipAi = userLimited || appCapReached
 
     let classification = null
     let aiStatus
     let aiClassified = false
 
-    if (skipAi) {
-      aiStatus = userLimited ? AI_STATUS.USER_LIMITED : AI_STATUS.APP_CAP_REACHED
+    if (userLimited) {
+      aiStatus = AI_STATUS.USER_LIMITED
     } else {
+      // --- 3・4. アプリ全体の日次・月次AI利用枠(JST暦日・暦月)をアトミックに確認+消費 ---
+      // Anthropic APIを呼び出す「直前」に枠を1件消費する。成功・失敗を問わず、
+      // 呼び出した時点でこの枠は戻さない(呼び出し試行件数そのものが課金上限の基準のため)。
+      let quotaAvailable = false
       try {
-        classification = await classifyInquiry(trimmed)
-        aiStatus = AI_STATUS.CLASSIFIED
-        aiClassified = true
+        quotaAvailable = await supabaseRpc('contact_try_consume_ai_quota', {
+          p_daily_key: jstDateKey(),
+          p_daily_limit: APP_DAILY_AI_LIMIT,
+          p_monthly_key: jstMonthKey(),
+          p_monthly_limit: APP_MONTHLY_AI_LIMIT,
+        })
       } catch (err) {
-        console.error('Anthropic分類に失敗しましたが、Notionへの保存は継続します', err)
-        aiStatus = AI_STATUS.AI_FAILED
+        console.error('AI利用枠の確保に失敗したため、AI分類をスキップします', err)
+        quotaAvailable = false
+      }
+
+      if (!quotaAvailable) {
+        aiStatus = AI_STATUS.APP_CAP_REACHED
+      } else {
+        try {
+          classification = await classifyInquiry(trimmed)
+          aiStatus = AI_STATUS.CLASSIFIED
+          aiClassified = true
+        } catch (err) {
+          console.error('Anthropic分類に失敗しましたが、Notionへの保存は継続します', err)
+          aiStatus = AI_STATUS.AI_FAILED
+        }
       }
     }
 
