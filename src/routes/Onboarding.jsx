@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Loader2 } from 'lucide-react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Copy, Check, Loader2, Share2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { cn } from '@/lib/utils'
 import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legal'
-import { DEVICE_CATEGORIES } from '@/lib/team'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,16 +17,6 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog'
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from '@/components/ui/dialog'
 
 // 旧フラグ(agreedToTermsAndPrivacyAt)からキー名を変更し、チェックボックス必須の
 // より厳密な同意フローに変わったことを機に、既存利用者にも再同意を求める。
@@ -45,86 +34,12 @@ function hasCurrentConsent() {
   }
 }
 
-// 管理者復旧コード(招待コード+復旧コード)で、この端末をチームの追加管理者として登録する。
-// redeem_admin_recovery_codeは想定される失敗(コード誤り・試行超過)を例外ではなく
-// {success, message, out_team_id, out_team_name}として返す設計のため、例外だけでなくsuccessも見る。
-function RecoveryCodeDialog({ onRecovered }) {
-  const [open, setOpen] = useState(false)
-  const [inviteCode, setInviteCode] = useState('')
-  const [recoveryCode, setRecoveryCode] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-
-  function handleOpenChange(next) {
-    if (next) {
-      setInviteCode('')
-      setRecoveryCode('')
-      setError('')
-    }
-    setOpen(next)
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setSubmitting(true)
-    setError('')
-    const { data, error: rpcError } = await supabase.rpc('redeem_admin_recovery_code', {
-      p_invite_code: inviteCode,
-      p_recovery_code: recoveryCode,
-    })
-    setSubmitting(false)
-    const result = Array.isArray(data) ? data[0] : data
-    if (rpcError || !result?.success) {
-      setError(result?.message || rpcError?.message || '復旧に失敗しました')
-      return
-    }
-    setOpen(false)
-    onRecovered(result.out_team_id)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger
-        render={<button type="button" className="text-xs text-muted-foreground underline underline-offset-2" />}
-      >
-        管理者復旧コードをお持ちですか?
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>管理者として復旧する</DialogTitle>
-          <DialogDescription>チームの招待コードと、発行済みの管理者復旧コードを入力してください</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="recovery-invite-code">招待コード</Label>
-            <Input
-              id="recovery-invite-code"
-              required
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-              placeholder="例: ABCD1234"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="recovery-code">管理者復旧コード</Label>
-            <Input
-              id="recovery-code"
-              required
-              value={recoveryCode}
-              onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
-            />
-          </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? '確認中...' : '復旧する'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
+// 共有URL全体が貼られた場合はトークン部分だけを取り出し、トークンそのものが貼られた場合は
+// そのまま使う(どちらでも参加できるようにする)
+function extractShareToken(input) {
+  const trimmed = input.trim()
+  const match = trimmed.match(/\/t\/([^/?#]+)/)
+  return match ? match[1] : trimmed
 }
 
 function BasketballIcon(props) {
@@ -137,24 +52,22 @@ function BasketballIcon(props) {
 }
 
 export function Onboarding({ onTeamJoined, hasTeam }) {
+  const { token: tokenFromPath } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
 
-  const codeFromUrl = searchParams.get('code')
-  const codeFromStorage = typeof window !== 'undefined' ? localStorage.getItem('pendingInviteCode') : null
-  const initialCode = (codeFromUrl || codeFromStorage || '').toUpperCase()
   const isDeliberateAdd = searchParams.get('add') === '1'
 
-  const [mode, setMode] = useState(initialCode ? 'join' : 'create')
+  const [mode, setMode] = useState('create')
   const [teamName, setTeamName] = useState('')
-  const [joinCode, setJoinCode] = useState(initialCode)
+  const [joinInput, setJoinInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  // 招待リンクを踏んだ場合は確認なしで自動的に参加させる(手動操作でのつまずきをなくす)
-  const [autoJoining, setAutoJoining] = useState(!!initialCode)
-  // 参加/作成が完了したチームID。この後、端末の用途区分を選ぶステップに進む。
-  const [pendingTeamId, setPendingTeamId] = useState(null)
-  const [categorySaving, setCategorySaving] = useState(false)
+  // 共有URLを踏んだ場合は確認なしで自動的に参加させる(手動操作でのつまずきをなくす)
+  const [autoJoining, setAutoJoining] = useState(!!tokenFromPath)
+  // チーム作成直後だけ、発行された共有URLを一度きり表示するための状態
+  const [pendingShareReveal, setPendingShareReveal] = useState(null)
+  const [copied, setCopied] = useState(false)
   // 初回アクセス時のみ、利用規約・プライバシーポリシーへの同意ポップアップを表示する
   const [showConsent, setShowConsent] = useState(() => !hasCurrentConsent())
   const [agreeChecked, setAgreeChecked] = useState(false)
@@ -188,38 +101,32 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     }
   }
 
-  useEffect(() => {
-    if (initialCode) {
-      localStorage.removeItem('pendingInviteCode')
-    }
-    // 初回マウント時のみ実行
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  async function finishJoin(teamId) {
+    await onTeamJoined(teamId)
+    navigate('/games', { replace: true })
+  }
 
+  // 共有URL(/t/:token)を踏んだ場合、自動でチームに参加する
   useEffect(() => {
-    if (!initialCode) return
+    if (!tokenFromPath) return
     let cancelled = false
-    performJoin(initialCode).then(() => {
-      if (!cancelled) setAutoJoining(false)
-    })
+    ;(async () => {
+      const { data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: tokenFromPath })
+      const result = Array.isArray(data) ? data[0] : data
+      if (cancelled) return
+      if (rpcError || !result?.success) {
+        setError(result?.message || rpcError?.message || 'このリンクは無効です')
+        setAutoJoining(false)
+        return
+      }
+      await finishJoin(result.out_team_id)
+    })()
     return () => {
       cancelled = true
     }
     // 初回マウント時のみ実行
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // 参加/作成の直後は即座に画面遷移せず、端末の用途区分(device_category)を
-  // 選んでもらうステップを挟む(pendingTeamIdをセットするとその画面に切り替わる)
-  async function performJoin(code) {
-    const { data, error: rpcError } = await supabase.rpc('join_team', { join_code: code })
-    if (rpcError) {
-      setError(rpcError.message)
-      return false
-    }
-    setPendingTeamId(data.id)
-    return true
-  }
 
   async function handleCreate(e) {
     e.preventDefault()
@@ -231,53 +138,56 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
       setError(rpcError.message)
       return
     }
-    setPendingTeamId(data.id)
+    const team = Array.isArray(data) ? data[0] : data
+    setPendingShareReveal({
+      teamId: team.id,
+      teamName: team.name,
+      shareUrl: `${window.location.origin}/t/${team.share_token}`,
+    })
   }
 
   async function handleJoin(e) {
     e.preventDefault()
     setSaving(true)
     setError('')
-    const ok = await performJoin(joinCode)
+    const token = extractShareToken(joinInput)
+    const { data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: token })
     setSaving(false)
-    if (!ok) return
-  }
-
-  async function finishJoin(teamId) {
-    await onTeamJoined(teamId)
-    navigate('/games', { replace: true })
-  }
-
-  async function handleSelectCategory(category) {
-    if (!pendingTeamId) return
-    setCategorySaving(true)
-    const { error: rpcError } = await supabase.rpc('set_device_category', {
-      p_team_id: pendingTeamId,
-      p_category: category,
-    })
-    setCategorySaving(false)
-    if (rpcError) {
-      // 保存に失敗しても参加/作成自体は完了しているため、ブロックせず先に進める
-      console.error('端末区分の保存に失敗しました', rpcError)
+    const result = Array.isArray(data) ? data[0] : data
+    if (rpcError || !result?.success) {
+      setError(result?.message || rpcError?.message || '参加に失敗しました')
+      return
     }
-    await finishJoin(pendingTeamId)
+    await finishJoin(result.out_team_id)
   }
 
-  async function handleRecovered(teamId) {
-    await finishJoin(teamId)
+  async function handleCopyShareUrl() {
+    if (!pendingShareReveal) return
+    await navigator.clipboard.writeText(pendingShareReveal.shareUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
-  // 招待コードも「別のチームを追加」の意図もなく、既にチームを持った状態で
+  async function handleShareShareUrl() {
+    if (!pendingShareReveal) return
+    try {
+      await navigator.share({ title: pendingShareReveal.teamName, url: pendingShareReveal.shareUrl })
+    } catch {
+      // ユーザーがシェアをキャンセルした場合等は何もしない
+    }
+  }
+
+  // 共有URLも「別のチームを追加」の意図もなく、既にチームを持った状態で
   // ここに来た場合は、読み込みタイミングのズレによる意図しない遷移とみなして
   // 試合一覧に戻す(そうしないとチームのデータが見えなくなってしまう)
   useEffect(() => {
-    if (hasTeam && !initialCode && !isDeliberateAdd) {
+    if (hasTeam && !tokenFromPath && !isDeliberateAdd) {
       navigate('/games', { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasTeam])
 
-  if (autoJoining || (hasTeam && !initialCode && !isDeliberateAdd)) {
+  if (autoJoining || (hasTeam && !tokenFromPath && !isDeliberateAdd)) {
     return (
       <div className="min-h-svh flex items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -300,110 +210,103 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
         </div>
       </div>
 
-      {pendingTeamId ? (
+      {pendingShareReveal ? (
         <Card className="relative w-full max-w-sm">
           <CardHeader>
-            <CardTitle>端末の用途を選択</CardTitle>
-            <CardDescription>この端末を主にどのように使いますか?(あとで変更できます)</CardDescription>
+            <CardTitle>共有URLを保存してください</CardTitle>
+            <CardDescription>
+              このURLを知っている人は誰でも「{pendingShareReveal.teamName}」にアクセスして記録・編集できます。
+              このURLは今だけ表示されます。忘れずに保存・共有してください。
+            </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {DEVICE_CATEGORIES.map((c) => (
-              <Button
-                key={c.value}
-                type="button"
-                variant="outline"
-                className="justify-start"
-                disabled={categorySaving}
-                onClick={() => handleSelectCategory(c.value)}
-              >
-                {c.label}
+          <CardContent className="flex flex-col gap-4">
+            <div className="text-sm bg-muted rounded-md px-3 py-2 break-all">{pendingShareReveal.shareUrl}</div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleCopyShareUrl}>
+                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                {copied ? 'コピーしました' : 'URLをコピー'}
               </Button>
-            ))}
-            <button
-              type="button"
-              className="text-xs text-muted-foreground underline underline-offset-2 self-center mt-2 disabled:opacity-50"
-              disabled={categorySaving}
-              onClick={() => finishJoin(pendingTeamId)}
-            >
-              あとで設定する
-            </button>
+              {typeof navigator !== 'undefined' && navigator.share && (
+                <Button variant="outline" size="icon" aria-label="共有" onClick={handleShareShareUrl}>
+                  <Share2 className="size-4" />
+                </Button>
+              )}
+            </div>
+            <Button onClick={() => finishJoin(pendingShareReveal.teamId)}>保存しました。続ける</Button>
           </CardContent>
         </Card>
       ) : (
-        <>
-          <Card className="relative w-full max-w-sm">
-            <CardHeader>
-              {hasTeam && (
-                <button
-                  onClick={() => navigate(-1)}
-                  className="flex items-center gap-1 text-sm text-muted-foreground -mt-1 mb-1 self-start"
-                >
-                  <ChevronLeft className="size-4" />
-                  戻る
-                </button>
-              )}
-              <CardTitle>チームを作成 / 参加</CardTitle>
-              <CardDescription>スタッツを共有するチームを設定します</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={mode === 'create' ? 'default' : 'outline'}
-                  className="flex-1"
-                  onClick={() => setMode('create')}
-                >
-                  CREATE TEAM
-                </Button>
-                <Button
-                  type="button"
-                  variant={mode === 'join' ? 'default' : 'outline'}
-                  className="flex-1"
-                  onClick={() => setMode('join')}
-                >
-                  JOIN TEAM
-                </Button>
-              </div>
+        <Card className="relative w-full max-w-sm">
+          <CardHeader>
+            {hasTeam && (
+              <button
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-1 text-sm text-muted-foreground -mt-1 mb-1 self-start"
+              >
+                <ChevronLeft className="size-4" />
+                戻る
+              </button>
+            )}
+            <CardTitle>チームを作成 / 参加</CardTitle>
+            <CardDescription>スタッツを共有するチームを設定します</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={mode === 'create' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setMode('create')}
+              >
+                CREATE TEAM
+              </Button>
+              <Button
+                type="button"
+                variant={mode === 'join' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setMode('join')}
+              >
+                JOIN TEAM
+              </Button>
+            </div>
 
-              {mode === 'create' ? (
-                <form onSubmit={handleCreate} className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="team-name">チーム名</Label>
-                    <Input
-                      id="team-name"
-                      required
-                      value={teamName}
-                      onChange={(e) => setTeamName(e.target.value)}
-                      placeholder="ここにチーム名を入力"
-                    />
-                  </div>
-                  {error && <p className="text-destructive text-sm">{error}</p>}
-                  <Button type="submit" disabled={saving}>
-                    {saving ? '作成中...' : 'チームを作成'}
-                  </Button>
-                </form>
-              ) : (
-                <form onSubmit={handleJoin} className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="join-code">招待コード</Label>
-                    <Input
-                      id="join-code"
-                      required
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                      placeholder="例: ABCD1234"
-                    />
-                  </div>
-                  {error && <p className="text-destructive text-sm">{error}</p>}
-                  <Button type="submit" disabled={saving}>
-                    {saving ? '参加中...' : 'チームに参加'}
-                  </Button>
-                </form>
-              )}
-            </CardContent>
-          </Card>
-          <RecoveryCodeDialog onRecovered={handleRecovered} />
-        </>
+            {mode === 'create' ? (
+              <form onSubmit={handleCreate} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="team-name">チーム名</Label>
+                  <Input
+                    id="team-name"
+                    required
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    placeholder="ここにチーム名を入力"
+                  />
+                </div>
+                {error && <p className="text-destructive text-sm">{error}</p>}
+                <Button type="submit" disabled={saving}>
+                  {saving ? '作成中...' : 'チームを作成'}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleJoin} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="join-input">共有URL</Label>
+                  <Input
+                    id="join-input"
+                    required
+                    value={joinInput}
+                    onChange={(e) => setJoinInput(e.target.value)}
+                    placeholder="共有URLを貼り付け"
+                  />
+                </div>
+                {error && <p className="text-destructive text-sm">{error}</p>}
+                <Button type="submit" disabled={saving}>
+                  {saving ? '参加中...' : 'チームに参加'}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <AlertDialog open={showConsent}>

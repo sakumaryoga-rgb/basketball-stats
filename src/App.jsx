@@ -1,5 +1,4 @@
-import { useEffect } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useSession } from '@/hooks/useSession'
 import { useTeams } from '@/hooks/useTeams'
@@ -31,15 +30,6 @@ function FullScreenLoader() {
 export default function App() {
   const { session, loading: sessionLoading } = useSession()
   const { teams, activeTeam, loading: teamsLoading, refresh: refreshTeams, switchTeam } = useTeams(session)
-  const location = useLocation()
-
-  // 招待リンク (?code=XXXX) を踏んだ場合、匿名セッション発行前でも後で使えるようコードを覚えておく
-  useEffect(() => {
-    const code = new URLSearchParams(location.search).get('code')
-    if (code) {
-      localStorage.setItem('pendingInviteCode', code)
-    }
-  }, [location.search])
 
   async function handleTeamJoined(teamId) {
     await refreshTeams()
@@ -60,6 +50,7 @@ export default function App() {
       <InAppBrowserBanner />
       <Routes>
         <Route path="/onboarding" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
+        <Route path="/t/:token" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
         <Route
           element={
             <Layout
@@ -76,7 +67,7 @@ export default function App() {
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/operator" element={<OperatorInfo />} />
-          <Route path="/account" element={<Account teams={teams} />} />
+          <Route path="/account" element={<Account />} />
 
           {activeTeam && (
             <>
