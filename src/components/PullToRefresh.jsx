@@ -10,15 +10,32 @@ const MAX_PULL = 110
 // 通常のブラウザタブではネイティブの挙動を邪魔しないよう、standalone判定の時だけ有効化する。
 export function PullToRefresh({ children }) {
   const [pull, setPull] = useState(0)
+  const [dragging, setDragging] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const startYRef = useRef(null)
   const enabledRef = useRef(false)
+  const pendingPullRef = useRef(0)
+  const rafIdRef = useRef(null)
 
   useEffect(() => {
     enabledRef.current = window.matchMedia('(display-mode: standalone)').matches
   }, [])
 
   useEffect(() => {
+    // touchmoveは1フレームの間に何度も発火するため、指の動きをそのままsetPullすると
+    // CSSトランジションと競合してカクつく。requestAnimationFrameで1フレーム1回に
+    // まとめることで指の動きに滑らかに追従させる。
+    function flushPull() {
+      rafIdRef.current = null
+      setPull(pendingPullRef.current)
+    }
+
+    function scheduleFlush() {
+      if (rafIdRef.current == null) {
+        rafIdRef.current = requestAnimationFrame(flushPull)
+      }
+    }
+
     function handleTouchStart(e) {
       if (!enabledRef.current || refreshing) return
       if (window.scrollY > 0) {
@@ -26,55 +43,61 @@ export function PullToRefresh({ children }) {
         return
       }
       startYRef.current = e.touches[0].clientY
+      setDragging(true)
     }
 
     function handleTouchMove(e) {
       if (startYRef.current == null) return
       const delta = e.touches[0].clientY - startYRef.current
-      if (delta <= 0) {
-        setPull(0)
-        return
-      }
-      setPull(Math.min(MAX_PULL, delta))
+      pendingPullRef.current = delta <= 0 ? 0 : Math.min(MAX_PULL, delta)
+      scheduleFlush()
     }
 
-    function handleTouchEnd() {
+    function endDrag() {
       if (startYRef.current == null) return
       startYRef.current = null
+      setDragging(false)
       setPull((current) => {
         if (current >= PULL_THRESHOLD) {
           setRefreshing(true)
           window.location.reload()
-        } else {
-          return 0
+          return current
         }
-        return current
+        return 0
       })
     }
 
     window.addEventListener('touchstart', handleTouchStart, { passive: true })
     window.addEventListener('touchmove', handleTouchMove, { passive: true })
-    window.addEventListener('touchend', handleTouchEnd, { passive: true })
+    window.addEventListener('touchend', endDrag, { passive: true })
+    window.addEventListener('touchcancel', endDrag, { passive: true })
     return () => {
       window.removeEventListener('touchstart', handleTouchStart)
       window.removeEventListener('touchmove', handleTouchMove)
-      window.removeEventListener('touchend', handleTouchEnd)
+      window.removeEventListener('touchend', endDrag)
+      window.removeEventListener('touchcancel', endDrag)
+      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current)
     }
   }, [refreshing])
 
   const ready = pull >= PULL_THRESHOLD
+  // ドラッグ中はトランジションを切って指に1:1で追従させ、指を離した瞬間(スナップバック
+  // や更新確定)だけスムーズにアニメーションさせる。常時トランジションを掛けていると
+  // touchmoveのたびにアニメーションが割り込みでカクつく原因になっていた。
+  const settleTransition = !dragging && 'transition-[height,transform] duration-200 ease-out'
 
   return (
     <>
       <div
-        className="flex justify-center overflow-hidden transition-[height] duration-150 ease-out"
+        className={cn('flex justify-center overflow-hidden', settleTransition)}
         style={{ height: pull }}
         aria-hidden="true"
       >
         <div className="flex items-end pb-2">
           <RefreshCw
             className={cn(
-              'size-5 text-muted-foreground transition-transform duration-150',
+              'size-5 text-muted-foreground',
+              !dragging && 'transition-transform duration-200',
               refreshing && 'animate-spin',
               ready && 'text-primary'
             )}
@@ -82,10 +105,7 @@ export function PullToRefresh({ children }) {
           />
         </div>
       </div>
-      <div
-        className="transition-transform duration-150 ease-out"
-        style={{ transform: pull ? `translateY(${pull}px)` : undefined }}
-      >
+      <div className={cn(settleTransition)} style={{ transform: pull ? `translateY(${pull}px)` : undefined }}>
         {children}
       </div>
     </>
