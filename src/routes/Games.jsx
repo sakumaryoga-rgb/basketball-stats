@@ -34,7 +34,7 @@ function todayStr() {
 }
 
 export function Games({ teamId }) {
-  const { games, createGame } = useGames(teamId)
+  const { games, createGame } = useGames(teamId, 'official')
   const [open, setOpen] = useState(false)
   const [opponentName, setOpponentName] = useState('')
   const [gameDate, setGameDate] = useState(todayStr())

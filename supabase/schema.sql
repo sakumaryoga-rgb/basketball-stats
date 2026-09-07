@@ -45,7 +45,7 @@ create table if not exists players (
 create table if not exists games (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references teams(id) on delete cascade,
-  opponent_name text not null,
+  opponent_name text,
   game_date date not null default current_date,
   location text,
   status text not null default 'scheduled' check (status in ('scheduled', 'in_progress', 'final')),
@@ -55,7 +55,10 @@ create table if not exists games (
   away_timeouts_remaining int not null default 5,
   home_fouls int not null default 0,
   away_fouls int not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- official=公式試合、practice=スクリメージ(GAME同様にフル記録するが公式スタッツには含めない)、
+  -- shooting=シューティング練習(ゾーン単位のタリーのみ)
+  game_type text not null default 'official' check (game_type in ('official', 'practice', 'shooting'))
 );
 
 -- 試合中にタップされたスタッツ1件ごとのイベントログ。
@@ -97,6 +100,27 @@ create table if not exists game_lineups (
 );
 create index if not exists idx_game_lineups_game on game_lineups(game_id);
 
+-- シューティング練習: ショットの座標ではなく「このゾーンから何本打って何本決めたか」を
+-- ゾーン単位でまとめて記録するメモ的なタリー。1本ごとにイベントを作るstat_eventsとは
+-- 別テーブルにして、公式集計に一切関与しないようにする。
+create table if not exists shooting_entries (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games(id) on delete cascade,
+  player_id uuid not null references players(id) on delete cascade,
+  zone text not null check (zone in (
+    'restricted_area', 'paint',
+    'mid_range_left', 'mid_range_left_center', 'mid_range_center',
+    'mid_range_right_center', 'mid_range_right',
+    'left_corner_3', 'right_corner_3',
+    'above_break_3_left', 'above_break_3_center', 'above_break_3_right'
+  )),
+  attempts int not null default 0,
+  makes int not null default 0,
+  updated_at timestamptz not null default now(),
+  unique (game_id, player_id, zone)
+);
+create index if not exists idx_shooting_entries_game on shooting_entries(game_id);
+
 -- ============================================================
 -- 2. 「自分がそのチームのメンバーか」を判定するヘルパー関数
 --    (1端末が複数チームに所属できるため、単一チームIDを返す方式ではなく
@@ -121,38 +145,78 @@ $$;
 --    そのまま適用させる(ビュー作成者権限で抜け道にならないように)
 -- ============================================================
 
+-- 公式試合(game_type = 'official')のみを集計する。スクリメージ/シューティングの
+-- スタッツがここに混ざると、公式のシーズン成績やリーダーボードを汚してしまうため必須のフィルタ。
 create or replace view player_game_stats
 with (security_invoker = true) as
 select
-  game_id,
-  player_id,
-  count(*) filter (where stat_key in ('fg2_make', 'fg3_make'))                     as fgm,
-  count(*) filter (where stat_key in ('fg2_make', 'fg2_miss', 'fg3_make', 'fg3_miss')) as fga,
-  count(*) filter (where stat_key = 'fg3_make')                                   as tpm,
-  count(*) filter (where stat_key in ('fg3_make', 'fg3_miss'))                    as tpa,
-  count(*) filter (where stat_key = 'ft_make')                                    as ftm,
-  count(*) filter (where stat_key in ('ft_make', 'ft_miss'))                      as fta,
-  count(*) filter (where stat_key = 'oreb')                                       as oreb,
-  count(*) filter (where stat_key = 'dreb')                                       as dreb,
-  count(*) filter (where stat_key in ('oreb', 'dreb'))                            as reb,
-  count(*) filter (where stat_key = 'ast')                                        as ast,
-  count(*) filter (where stat_key = 'stl')                                        as stl,
-  count(*) filter (where stat_key = 'blk')                                        as blk,
-  count(*) filter (where stat_key = 'tov')                                        as tov,
-  count(*) filter (where stat_key = 'pf')                                         as pf,
-  (count(*) filter (where stat_key = 'fg2_make') * 2
-    + count(*) filter (where stat_key = 'fg3_make') * 3
-    + count(*) filter (where stat_key = 'ft_make'))                              as pts,
+  se.game_id,
+  se.player_id,
+  count(*) filter (where se.stat_key in ('fg2_make', 'fg3_make'))                     as fgm,
+  count(*) filter (where se.stat_key in ('fg2_make', 'fg2_miss', 'fg3_make', 'fg3_miss')) as fga,
+  count(*) filter (where se.stat_key = 'fg3_make')                                   as tpm,
+  count(*) filter (where se.stat_key in ('fg3_make', 'fg3_miss'))                    as tpa,
+  count(*) filter (where se.stat_key = 'ft_make')                                    as ftm,
+  count(*) filter (where se.stat_key in ('ft_make', 'ft_miss'))                      as fta,
+  count(*) filter (where se.stat_key = 'oreb')                                       as oreb,
+  count(*) filter (where se.stat_key = 'dreb')                                       as dreb,
+  count(*) filter (where se.stat_key in ('oreb', 'dreb'))                            as reb,
+  count(*) filter (where se.stat_key = 'ast')                                        as ast,
+  count(*) filter (where se.stat_key = 'stl')                                        as stl,
+  count(*) filter (where se.stat_key = 'blk')                                        as blk,
+  count(*) filter (where se.stat_key = 'tov')                                        as tov,
+  count(*) filter (where se.stat_key = 'pf')                                         as pf,
+  (count(*) filter (where se.stat_key = 'fg2_make') * 2
+    + count(*) filter (where se.stat_key = 'fg3_make') * 3
+    + count(*) filter (where se.stat_key = 'ft_make'))                              as pts,
   coalesce((
     select gl.plus_minus from game_lineups gl
-    where gl.game_id = stat_events.game_id and gl.player_id = stat_events.player_id
+    where gl.game_id = se.game_id and gl.player_id = se.player_id
   ), 0)::int as plus_minus,
   coalesce((
     select gl.seconds_played from game_lineups gl
-    where gl.game_id = stat_events.game_id and gl.player_id = stat_events.player_id
+    where gl.game_id = se.game_id and gl.player_id = se.player_id
   ), 0)::int as seconds_played
-from stat_events
-group by game_id, player_id;
+from stat_events se
+join games g on g.id = se.game_id
+where g.game_type = 'official'
+group by se.game_id, se.player_id;
+
+-- スクリメージ(game_type = 'practice')専用のボックススコア集計。列構成はplayer_game_statsと同じ。
+create or replace view player_practice_game_stats
+with (security_invoker = true) as
+select
+  se.game_id,
+  se.player_id,
+  count(*) filter (where se.stat_key in ('fg2_make', 'fg3_make'))                     as fgm,
+  count(*) filter (where se.stat_key in ('fg2_make', 'fg2_miss', 'fg3_make', 'fg3_miss')) as fga,
+  count(*) filter (where se.stat_key = 'fg3_make')                                   as tpm,
+  count(*) filter (where se.stat_key in ('fg3_make', 'fg3_miss'))                    as tpa,
+  count(*) filter (where se.stat_key = 'ft_make')                                    as ftm,
+  count(*) filter (where se.stat_key in ('ft_make', 'ft_miss'))                      as fta,
+  count(*) filter (where se.stat_key = 'oreb')                                       as oreb,
+  count(*) filter (where se.stat_key = 'dreb')                                       as dreb,
+  count(*) filter (where se.stat_key in ('oreb', 'dreb'))                            as reb,
+  count(*) filter (where se.stat_key = 'ast')                                        as ast,
+  count(*) filter (where se.stat_key = 'stl')                                        as stl,
+  count(*) filter (where se.stat_key = 'blk')                                        as blk,
+  count(*) filter (where se.stat_key = 'tov')                                        as tov,
+  count(*) filter (where se.stat_key = 'pf')                                         as pf,
+  (count(*) filter (where se.stat_key = 'fg2_make') * 2
+    + count(*) filter (where se.stat_key = 'fg3_make') * 3
+    + count(*) filter (where se.stat_key = 'ft_make'))                              as pts,
+  coalesce((
+    select gl.plus_minus from game_lineups gl
+    where gl.game_id = se.game_id and gl.player_id = se.player_id
+  ), 0)::int as plus_minus,
+  coalesce((
+    select gl.seconds_played from game_lineups gl
+    where gl.game_id = se.game_id and gl.player_id = se.player_id
+  ), 0)::int as seconds_played
+from stat_events se
+join games g on g.id = se.game_id
+where g.game_type = 'practice'
+group by se.game_id, se.player_id;
 
 create or replace view player_season_stats
 with (security_invoker = true) as
@@ -192,6 +256,7 @@ alter table players enable row level security;
 alter table games enable row level security;
 alter table stat_events enable row level security;
 alter table game_lineups enable row level security;
+alter table shooting_entries enable row level security;
 
 create policy "select own team" on teams
   for select using (is_team_member(id));
@@ -233,6 +298,11 @@ create policy "manage own team game_lineups" on game_lineups
   using (exists (select 1 from games g where g.id = game_lineups.game_id and is_team_member(g.team_id)))
   with check (exists (select 1 from games g where g.id = game_lineups.game_id and is_team_member(g.team_id)));
 
+create policy "manage own team shooting_entries" on shooting_entries
+  for all
+  using (exists (select 1 from games g where g.id = shooting_entries.game_id and is_team_member(g.team_id)))
+  with check (exists (select 1 from games g where g.id = shooting_entries.game_id and is_team_member(g.team_id)));
+
 -- ============================================================
 -- 4b. STARTING FIVE / 出場時間 / プラスマイナスの自動更新
 -- ============================================================
@@ -246,6 +316,10 @@ security definer
 set search_path = public
 as $$
 begin
+  if new.game_type = 'shooting' then
+    return new;
+  end if;
+
   insert into game_lineups (game_id, player_id, on_court)
   select new.id, p.id, p.is_starter
   from players p
@@ -369,6 +443,30 @@ $$;
 
 grant execute on function increment_lineup_seconds(uuid, int) to authenticated;
 
+-- シューティング練習の試投数/成功数の加算(読み取り→書き込みの競合を避けるためDB側でupsert+increment)
+create or replace function increment_shooting_entry(p_game_id uuid, p_player_id uuid, p_zone text, p_attempts int, p_makes int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from games g where g.id = p_game_id and is_team_member(g.team_id)) then
+    raise exception 'permission denied';
+  end if;
+
+  insert into shooting_entries (game_id, player_id, zone, attempts, makes)
+  values (p_game_id, p_player_id, p_zone, p_attempts, p_makes)
+  on conflict (game_id, player_id, zone)
+  do update set
+    attempts = shooting_entries.attempts + excluded.attempts,
+    makes = shooting_entries.makes + excluded.makes,
+    updated_at = now();
+end;
+$$;
+
+grant execute on function increment_shooting_entry(uuid, uuid, text, int, int) to authenticated;
+
 -- ============================================================
 -- 5. チーム作成・参加 の RPC 関数
 -- ============================================================
@@ -431,6 +529,7 @@ alter publication supabase_realtime add table games;
 alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table stat_events;
 alter publication supabase_realtime add table game_lineups;
+alter publication supabase_realtime add table shooting_entries;
 
 -- ============================================================
 -- 7. 選手写真の保存先ストレージバケット

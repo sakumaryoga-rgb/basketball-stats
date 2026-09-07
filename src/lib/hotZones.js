@@ -140,3 +140,45 @@ export function aggregateHotZones(shots) {
   }
   return stats
 }
+
+export const THREE_POINT_ZONES = new Set([
+  'left_corner_3', 'right_corner_3', 'above_break_3_left', 'above_break_3_center', 'above_break_3_right',
+])
+
+export function isThreePointZone(zoneKey) {
+  return THREE_POINT_ZONES.has(zoneKey)
+}
+
+// ゾーン単位の試投数/成功数タリー([{zone, attempts, makes}, ...])からホットゾーンを集計する。
+// シューティング練習(shooting_entries)は座標ではなくゾーン単位で記録するため、
+// aggregateHotZonesとは別に「すでにゾーン別に集計済みの入力」を受け取るバージョンを用意する。
+export function aggregateHotZonesFromTallies(tallies) {
+  const stats = Object.fromEntries(ZONE_ORDER.map((key) => [key, { attempts: 0, makes: 0 }]))
+  for (const tally of tallies) {
+    if (!stats[tally.zone]) continue
+    stats[tally.zone].attempts += tally.attempts
+    stats[tally.zone].makes += tally.makes
+  }
+  for (const key of ZONE_ORDER) {
+    const z = stats[key]
+    z.pct = z.attempts > 0 ? (z.makes / z.attempts) * 100 : null
+  }
+  return stats
+}
+
+// 複数のホットゾーン集計結果(aggregateHotZones系の戻り値)をゾーンごとに合算する
+export function mergeHotZones(...hotZoneSets) {
+  const merged = Object.fromEntries(ZONE_ORDER.map((key) => [key, { attempts: 0, makes: 0 }]))
+  for (const set of hotZoneSets) {
+    if (!set) continue
+    for (const key of ZONE_ORDER) {
+      merged[key].attempts += set[key]?.attempts ?? 0
+      merged[key].makes += set[key]?.makes ?? 0
+    }
+  }
+  for (const key of ZONE_ORDER) {
+    const z = merged[key]
+    z.pct = z.attempts > 0 ? (z.makes / z.attempts) * 100 : null
+  }
+  return merged
+}

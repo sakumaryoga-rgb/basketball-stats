@@ -1,9 +1,11 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { CalendarDays, ChevronDown, Users, Trophy, Settings } from 'lucide-react'
+import { CalendarDays, ChevronDown, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { PullToRefresh } from '@/components/PullToRefresh'
 
 const NAV_ITEMS = [
   { to: '/games', label: 'GAMES', icon: CalendarDays },
+  { to: '/practice', label: 'PRACTICE', icon: Dumbbell },
   { to: '/players', label: 'PLAYERS', icon: Users },
   { to: '/leaders', label: 'LEADERS', icon: Trophy },
   { to: '/team', label: 'TEAM', icon: Settings },
@@ -27,12 +29,16 @@ export function Layout({ teamName, teamIconUrl, teams = [] }) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg w-full mx-auto px-4 py-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <Outlet />
+      <main className="flex-1 max-w-lg w-full mx-auto px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+        <PullToRefresh>
+          <div className="py-4">
+            <Outlet />
+          </div>
+        </PullToRefresh>
       </main>
 
       <nav className="border-t bg-background/80 backdrop-blur fixed bottom-0 inset-x-0 z-10 pb-[env(safe-area-inset-bottom)]">
-        <div className="max-w-lg mx-auto grid grid-cols-4">
+        <div className="max-w-lg mx-auto grid grid-cols-5">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}

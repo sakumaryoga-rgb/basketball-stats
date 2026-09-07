@@ -4,6 +4,7 @@ import { ChevronLeft, Pencil, X } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useShotChart } from '@/hooks/useShotChart'
+import { usePracticeStats } from '@/hooks/usePracticeStats'
 import { uploadPlayerPhoto, deletePlayerPhoto } from '@/lib/uploadPlayerPhoto'
 import { formatAvg, formatClock, formatPct, formatPlusMinus, formatPositions, pct, perGame } from '@/lib/stats'
 import { formatMadeAttempt, formatDate } from '@/lib/format'
@@ -13,6 +14,8 @@ import { Label } from '@/components/ui/label'
 import { PositionSelect } from '@/components/PositionSelect'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { HotZoneSection } from '@/components/HotZoneSection'
+import { HotZoneChart } from '@/components/HotZoneChart'
+import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogTrigger,
@@ -227,6 +230,8 @@ export function PlayerDetail({ teamId }) {
   const { players, updatePlayer } = usePlayers(teamId)
   const { season, gameLog } = usePlayerLog(id, teamId)
   const { shots } = useShotChart(teamId, id)
+  const practiceStats = usePracticeStats(teamId, id)
+  const [statsMode, setStatsMode] = useState('official')
 
   const player = players.find((p) => p.id === id)
 
@@ -289,7 +294,25 @@ export function PlayerDetail({ teamId }) {
         </EditProfileDialog>
       </div>
 
-      {season && season.games_played > 0 ? (
+      <div className="flex rounded-lg border p-1">
+        {[
+          { key: 'official', label: '公式' },
+          { key: 'practice', label: 'PRACTICE' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setStatsMode(tab.key)}
+            className={cn(
+              'flex-1 rounded-md py-1.5 text-sm font-medium transition-colors',
+              statsMode === tab.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {statsMode === 'official' && (season && season.games_played > 0 ? (
         <>
           <div className="rounded-lg border p-4">
             <p className="text-xs text-muted-foreground mb-3">1試合平均 ({season.games_played}試合)</p>
@@ -401,6 +424,96 @@ export function PlayerDetail({ teamId }) {
         </>
       ) : (
         <p className="text-sm text-muted-foreground py-8 text-center">まだ試合の記録がありません</p>
+      ))}
+
+      {statsMode === 'practice' && (
+        practiceStats.summary.fga === 0 && practiceStats.practiceGames.length === 0 && practiceStats.shootingSessions.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-8 text-center">まだPRACTICEの記録がありません</p>
+        ) : (
+          <>
+            <div className="rounded-lg border p-4">
+              <p className="text-xs text-muted-foreground mb-3">シュート成功率 (スクリメージ+シューティング)</p>
+              <div className="grid grid-cols-2 gap-y-4">
+                <StatBlock label="FG%" value={formatPct(practiceStats.summary.fgPct)} />
+                <StatBlock label="3P%" value={formatPct(practiceStats.summary.tpPct)} />
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-4">
+              <p className="text-xs text-muted-foreground mb-3">ホットゾーン(フィールドゴール) ・ PRACTICE</p>
+              {practiceStats.summary.fga === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">まだシュート位置の記録がありません</p>
+              ) : (
+                <HotZoneChart hotZones={practiceStats.hotZones} />
+              )}
+            </div>
+
+            {practiceStats.practiceGames.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium">スクリメージ (直近5試合)</p>
+                <div className="overflow-x-auto -mx-4 px-4">
+                  <table className="w-full text-sm min-w-max">
+                    <thead>
+                      <tr className="text-xs text-muted-foreground border-b">
+                        <th className="text-left font-normal py-2 pr-3">試合</th>
+                        <th className="text-right font-normal py-2 px-2">MIN</th>
+                        <th className="text-right font-normal py-2 px-2">PTS</th>
+                        <th className="text-right font-normal py-2 px-2">REB</th>
+                        <th className="text-right font-normal py-2 px-2">AST</th>
+                        <th className="text-right font-normal py-2 px-2">FG</th>
+                        <th className="text-right font-normal py-2 pl-2 font-latin">+/-</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {practiceStats.practiceGames.slice(0, 5).map((row) => (
+                        <tr key={row.game_id} className="border-b last:border-0">
+                          <td className="py-2 pr-3 whitespace-nowrap">
+                            <Link to={`/games/${row.game_id}`} className="hover:underline">
+                              {formatDate(row.game.game_date)}
+                              {row.game.opponent_name ? ` vs ${row.game.opponent_name}` : ' スクリメージ'}
+                            </Link>
+                          </td>
+                          <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap text-muted-foreground">
+                            {formatClock(row.seconds_played ?? 0)}
+                          </td>
+                          <td className="text-right py-2 px-2 tabular-nums font-medium">{row.pts}</td>
+                          <td className="text-right py-2 px-2 tabular-nums">{row.reb}</td>
+                          <td className="text-right py-2 px-2 tabular-nums">{row.ast}</td>
+                          <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">{formatMadeAttempt(row.fgm, row.fga)}</td>
+                          <td className="text-right py-2 pl-2 tabular-nums font-latin">{formatPlusMinus(row.plus_minus)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {practiceStats.shootingSessions.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium">シューティング</p>
+                <ul className="flex flex-col gap-2">
+                  {practiceStats.shootingSessions.map((session) => (
+                    <li key={session.game.id}>
+                      <Link
+                        to={`/shooting/${session.game.id}`}
+                        className="flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{session.game.opponent_name || 'シューティング'}</p>
+                          <p className="text-xs text-muted-foreground">{formatDate(session.game.game_date)}</p>
+                        </div>
+                        <span className="text-sm tabular-nums text-muted-foreground">
+                          {session.makes}/{session.attempts}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )
       )}
     </div>
   )

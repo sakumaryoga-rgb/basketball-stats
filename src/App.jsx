@@ -6,6 +6,8 @@ import { useTeams } from '@/hooks/useTeams'
 import { Onboarding } from '@/routes/Onboarding'
 import { Games } from '@/routes/Games'
 import { GameDetail } from '@/routes/GameDetail'
+import { Practice } from '@/routes/Practice'
+import { ShootingDetail } from '@/routes/ShootingDetail'
 import { Players } from '@/routes/Players'
 import { PlayerDetail } from '@/routes/PlayerDetail'
 import { Leaders } from '@/routes/Leaders'
@@ -60,6 +62,8 @@ export default function App() {
           <Route index element={<Navigate to="/games" replace />} />
           <Route path="/games" element={<Games teamId={activeTeam.id} />} />
           <Route path="/games/:id" element={<GameDetail teamId={activeTeam.id} />} />
+          <Route path="/practice" element={<Practice teamId={activeTeam.id} />} />
+          <Route path="/shooting/:id" element={<ShootingDetail teamId={activeTeam.id} />} />
           <Route path="/players" element={<Players teamId={activeTeam.id} teams={teams} />} />
           <Route path="/players/:id" element={<PlayerDetail teamId={activeTeam.id} />} />
           <Route path="/leaders" element={<Leaders teamId={activeTeam.id} />} />

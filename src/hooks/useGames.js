@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/supabaseClient'
 
-export function useGames(teamId) {
+// gameType: 'official'(GAMESタブ) | 'practice'(スクリメージ) | 'shooting'(シューティング)。
+// null/未指定の場合は種別を問わず全件取得する(GameDetailがidだけで試合を
+// 特定する際に使う)。
+export function useGames(teamId, gameType = null) {
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -11,17 +14,16 @@ export function useGames(teamId) {
       setLoading(false)
       return
     }
-    const { data, error } = await supabase
-      .from('games')
-      .select('*')
-      .eq('team_id', teamId)
+    let query = supabase.from('games').select('*').eq('team_id', teamId)
+    if (gameType) query = query.eq('game_type', gameType)
+    const { data, error } = await query
       .order('game_date', { ascending: false })
       .order('created_at', { ascending: false })
 
     if (error) console.error('試合一覧の取得に失敗しました', error)
     setGames(data ?? [])
     setLoading(false)
-  }, [teamId])
+  }, [teamId, gameType])
 
   useEffect(() => {
     refresh()
@@ -30,16 +32,22 @@ export function useGames(teamId) {
   useEffect(() => {
     if (!teamId) return
     const channel = supabase
-      .channel(`games-${teamId}-${Math.random().toString(36).slice(2)}`)
+      .channel(`games-${teamId}-${gameType}-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `team_id=eq.${teamId}` }, () => refresh())
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [teamId, refresh])
+  }, [teamId, gameType, refresh])
 
   async function createGame({ opponentName, gameDate, location }) {
     const { data, error } = await supabase
       .from('games')
-      .insert({ team_id: teamId, opponent_name: opponentName, game_date: gameDate, location: location || null })
+      .insert({
+        team_id: teamId,
+        opponent_name: opponentName || null,
+        game_date: gameDate,
+        location: location || null,
+        game_type: gameType || 'official',
+      })
       .select()
       .single()
     if (error) throw error

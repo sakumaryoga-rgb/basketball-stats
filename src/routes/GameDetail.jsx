@@ -392,21 +392,26 @@ export function GameDetail({ teamId }) {
     if (ok) showRecordedFlash(selectedPlayerId, statKey)
   }
 
+  const listPath = game.game_type === 'official' ? '/games' : '/practice'
+
   async function handleConfirmDelete() {
     await deleteGame(game.id)
-    navigate('/games')
+    navigate(listPath)
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <button onClick={() => navigate('/games')} className="flex items-center gap-1 text-sm text-muted-foreground">
+      <button onClick={() => navigate(listPath)} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ChevronLeft className="size-4" />
-        試合一覧
+        {game.game_type === 'official' ? '試合一覧' : 'PRACTICE一覧'}
       </button>
 
       <div className="flex flex-col gap-3 rounded-lg border p-4">
         <div className="flex items-center justify-between">
-          <p className="font-medium">vs {game.opponent_name}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium">{game.opponent_name ? `vs ${game.opponent_name}` : 'スクリメージ'}</p>
+            {game.game_type === 'practice' && <Badge variant="outline">PRACTICE</Badge>}
+          </div>
           <Badge variant={game.status === 'in_progress' ? 'default' : 'secondary'}>{STATUS_LABEL[game.status]}</Badge>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
@@ -741,6 +746,15 @@ export function GameDetail({ teamId }) {
                     ? 'コートをタップして位置を記録'
                     : '成功・失敗を選ぶとコートが有効になります'}
               </p>
+              {recordedFlash && (
+                <p
+                  key={recordedFlash}
+                  className="flex items-center justify-center gap-1 text-xs text-primary animate-in fade-in-0 slide-in-from-bottom-1"
+                >
+                  <Check className="size-3.5 shrink-0" />
+                  {recordedFlash}
+                </p>
+              )}
               <CourtDiagram active={hotZoneEnabled && !!pendingOutcome} onTap={handleCourtTap} />
             </>
           )}
@@ -750,7 +764,7 @@ export function GameDetail({ teamId }) {
               <Undo2 className="size-3.5" />
               {lastEvent ? `取り消す(${lastEventPlayer?.name ?? '?'} ・ ${lastEventLabel})` : '取り消す'}
             </Button>
-            {recordedFlash && (
+            {activeCategory.kind !== 'shot' && recordedFlash && (
               <p
                 key={recordedFlash}
                 className="flex items-center gap-1 text-xs text-primary animate-in fade-in-0 slide-in-from-bottom-1"
