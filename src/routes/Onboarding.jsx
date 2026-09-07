@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Loader2 } from 'lucide
 import { supabase } from '@/supabaseClient'
 import { cn } from '@/lib/utils'
 import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legal'
+import { DEVICE_CATEGORIES } from '@/lib/team'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +18,16 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
 } from '@/components/ui/alert-dialog'
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog'
 
 // 旧フラグ(agreedToTermsAndPrivacyAt)からキー名を変更し、チェックボックス必須の
 // より厳密な同意フローに変わったことを機に、既存利用者にも再同意を求める。
@@ -32,6 +43,88 @@ function hasCurrentConsent() {
   } catch {
     return false
   }
+}
+
+// 管理者復旧コード(招待コード+復旧コード)で、この端末をチームの追加管理者として登録する。
+// redeem_admin_recovery_codeは想定される失敗(コード誤り・試行超過)を例外ではなく
+// {success, message, out_team_id, out_team_name}として返す設計のため、例外だけでなくsuccessも見る。
+function RecoveryCodeDialog({ onRecovered }) {
+  const [open, setOpen] = useState(false)
+  const [inviteCode, setInviteCode] = useState('')
+  const [recoveryCode, setRecoveryCode] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  function handleOpenChange(next) {
+    if (next) {
+      setInviteCode('')
+      setRecoveryCode('')
+      setError('')
+    }
+    setOpen(next)
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSubmitting(true)
+    setError('')
+    const { data, error: rpcError } = await supabase.rpc('redeem_admin_recovery_code', {
+      p_invite_code: inviteCode,
+      p_recovery_code: recoveryCode,
+    })
+    setSubmitting(false)
+    const result = Array.isArray(data) ? data[0] : data
+    if (rpcError || !result?.success) {
+      setError(result?.message || rpcError?.message || '復旧に失敗しました')
+      return
+    }
+    setOpen(false)
+    onRecovered(result.out_team_id)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger
+        render={<button type="button" className="text-xs text-muted-foreground underline underline-offset-2" />}
+      >
+        管理者復旧コードをお持ちですか?
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>管理者として復旧する</DialogTitle>
+          <DialogDescription>チームの招待コードと、発行済みの管理者復旧コードを入力してください</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="recovery-invite-code">招待コード</Label>
+            <Input
+              id="recovery-invite-code"
+              required
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+              placeholder="例: ABCD1234"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="recovery-code">管理者復旧コード</Label>
+            <Input
+              id="recovery-code"
+              required
+              value={recoveryCode}
+              onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+            />
+          </div>
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? '確認中...' : '復旧する'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function BasketballIcon(props) {
@@ -59,6 +152,9 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   const [error, setError] = useState('')
   // 招待リンクを踏んだ場合は確認なしで自動的に参加させる(手動操作でのつまずきをなくす)
   const [autoJoining, setAutoJoining] = useState(!!initialCode)
+  // 参加/作成が完了したチームID。この後、端末の用途区分を選ぶステップに進む。
+  const [pendingTeamId, setPendingTeamId] = useState(null)
+  const [categorySaving, setCategorySaving] = useState(false)
   // 初回アクセス時のみ、利用規約・プライバシーポリシーへの同意ポップアップを表示する
   const [showConsent, setShowConsent] = useState(() => !hasCurrentConsent())
   const [agreeChecked, setAgreeChecked] = useState(false)
@@ -103,8 +199,8 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   useEffect(() => {
     if (!initialCode) return
     let cancelled = false
-    performJoin(initialCode).then((ok) => {
-      if (!cancelled && !ok) setAutoJoining(false)
+    performJoin(initialCode).then(() => {
+      if (!cancelled) setAutoJoining(false)
     })
     return () => {
       cancelled = true
@@ -113,14 +209,15 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 参加/作成の直後は即座に画面遷移せず、端末の用途区分(device_category)を
+  // 選んでもらうステップを挟む(pendingTeamIdをセットするとその画面に切り替わる)
   async function performJoin(code) {
     const { data, error: rpcError } = await supabase.rpc('join_team', { join_code: code })
     if (rpcError) {
       setError(rpcError.message)
       return false
     }
-    await onTeamJoined(data.id)
-    navigate('/games', { replace: true })
+    setPendingTeamId(data.id)
     return true
   }
 
@@ -134,8 +231,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
       setError(rpcError.message)
       return
     }
-    await onTeamJoined(data.id)
-    navigate('/games', { replace: true })
+    setPendingTeamId(data.id)
   }
 
   async function handleJoin(e) {
@@ -145,6 +241,30 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     const ok = await performJoin(joinCode)
     setSaving(false)
     if (!ok) return
+  }
+
+  async function finishJoin(teamId) {
+    await onTeamJoined(teamId)
+    navigate('/games', { replace: true })
+  }
+
+  async function handleSelectCategory(category) {
+    if (!pendingTeamId) return
+    setCategorySaving(true)
+    const { error: rpcError } = await supabase.rpc('set_device_category', {
+      p_team_id: pendingTeamId,
+      p_category: category,
+    })
+    setCategorySaving(false)
+    if (rpcError) {
+      // 保存に失敗しても参加/作成自体は完了しているため、ブロックせず先に進める
+      console.error('端末区分の保存に失敗しました', rpcError)
+    }
+    await finishJoin(pendingTeamId)
+  }
+
+  async function handleRecovered(teamId) {
+    await finishJoin(teamId)
   }
 
   // 招待コードも「別のチームを追加」の意図もなく、既にチームを持った状態で
@@ -180,77 +300,111 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
         </div>
       </div>
 
-      <Card className="relative w-full max-w-sm">
-        <CardHeader>
-          {hasTeam && (
+      {pendingTeamId ? (
+        <Card className="relative w-full max-w-sm">
+          <CardHeader>
+            <CardTitle>端末の用途を選択</CardTitle>
+            <CardDescription>この端末を主にどのように使いますか?(あとで変更できます)</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {DEVICE_CATEGORIES.map((c) => (
+              <Button
+                key={c.value}
+                type="button"
+                variant="outline"
+                className="justify-start"
+                disabled={categorySaving}
+                onClick={() => handleSelectCategory(c.value)}
+              >
+                {c.label}
+              </Button>
+            ))}
             <button
-              onClick={() => navigate(-1)}
-              className="flex items-center gap-1 text-sm text-muted-foreground -mt-1 mb-1 self-start"
+              type="button"
+              className="text-xs text-muted-foreground underline underline-offset-2 self-center mt-2 disabled:opacity-50"
+              disabled={categorySaving}
+              onClick={() => finishJoin(pendingTeamId)}
             >
-              <ChevronLeft className="size-4" />
-              戻る
+              あとで設定する
             </button>
-          )}
-          <CardTitle>チームを作成 / 参加</CardTitle>
-          <CardDescription>スタッツを共有するチームを設定します</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant={mode === 'create' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setMode('create')}
-            >
-              CREATE TEAM
-            </Button>
-            <Button
-              type="button"
-              variant={mode === 'join' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setMode('join')}
-            >
-              JOIN TEAM
-            </Button>
-          </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card className="relative w-full max-w-sm">
+            <CardHeader>
+              {hasTeam && (
+                <button
+                  onClick={() => navigate(-1)}
+                  className="flex items-center gap-1 text-sm text-muted-foreground -mt-1 mb-1 self-start"
+                >
+                  <ChevronLeft className="size-4" />
+                  戻る
+                </button>
+              )}
+              <CardTitle>チームを作成 / 参加</CardTitle>
+              <CardDescription>スタッツを共有するチームを設定します</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={mode === 'create' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setMode('create')}
+                >
+                  CREATE TEAM
+                </Button>
+                <Button
+                  type="button"
+                  variant={mode === 'join' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setMode('join')}
+                >
+                  JOIN TEAM
+                </Button>
+              </div>
 
-          {mode === 'create' ? (
-            <form onSubmit={handleCreate} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="team-name">チーム名</Label>
-                <Input
-                  id="team-name"
-                  required
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="ここにチーム名を入力"
-                />
-              </div>
-              {error && <p className="text-destructive text-sm">{error}</p>}
-              <Button type="submit" disabled={saving}>
-                {saving ? '作成中...' : 'チームを作成'}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleJoin} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="join-code">招待コード</Label>
-                <Input
-                  id="join-code"
-                  required
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  placeholder="例: ABCD1234"
-                />
-              </div>
-              {error && <p className="text-destructive text-sm">{error}</p>}
-              <Button type="submit" disabled={saving}>
-                {saving ? '参加中...' : 'チームに参加'}
-              </Button>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+              {mode === 'create' ? (
+                <form onSubmit={handleCreate} className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="team-name">チーム名</Label>
+                    <Input
+                      id="team-name"
+                      required
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      placeholder="ここにチーム名を入力"
+                    />
+                  </div>
+                  {error && <p className="text-destructive text-sm">{error}</p>}
+                  <Button type="submit" disabled={saving}>
+                    {saving ? '作成中...' : 'チームを作成'}
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleJoin} className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="join-code">招待コード</Label>
+                    <Input
+                      id="join-code"
+                      required
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      placeholder="例: ABCD1234"
+                    />
+                  </div>
+                  {error && <p className="text-destructive text-sm">{error}</p>}
+                  <Button type="submit" disabled={saving}>
+                    {saving ? '参加中...' : 'チームに参加'}
+                  </Button>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+          <RecoveryCodeDialog onRecovered={handleRecovered} />
+        </>
+      )}
 
       <AlertDialog open={showConsent}>
         <AlertDialogContent className="gap-5 p-6 sm:max-w-md">

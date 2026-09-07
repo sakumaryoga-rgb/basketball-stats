@@ -26,7 +26,7 @@ export function useTeams(session) {
     setLoading(true)
     const { data, error } = await supabase
       .from('team_members')
-      .select('joined_at, teams(id, name, invite_code, icon_url)')
+      .select('id, joined_at, role, device_category, teams(id, name, invite_code, icon_url)')
       .eq('user_id', session.user.id)
       .order('joined_at')
 
@@ -34,7 +34,17 @@ export function useTeams(session) {
       console.error('チーム一覧の取得に失敗しました', error)
       setTeams([])
     } else {
-      setTeams((data ?? []).map((row) => row.teams).filter(Boolean))
+      // 自分自身のteam_members行の情報(役割・端末区分)を各チームに付与しておく
+      setTeams(
+        (data ?? [])
+          .filter((row) => row.teams)
+          .map((row) => ({
+            ...row.teams,
+            myMembershipId: row.id,
+            myRole: row.role,
+            myDeviceCategory: row.device_category,
+          }))
+      )
     }
     setLoading(false)
   }, [session])
