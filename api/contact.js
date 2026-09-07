@@ -2,14 +2,16 @@
 //
 // Anthropic APIの従量課金がスパムや大量送信で増大しないよう、以下の順でチェックする。
 //   1. ユーザー単位のレート制限(1時間3件 / 1日10件)
-//   2. bot・重複・文字数のチェック
+//   2. bot(Cloudflare Turnstile・ハニーポット・送信間隔)・重複・文字数のチェック
 //   3. アプリ全体の日次AI分類上限(100件/日, JST)
 //   4. アプリ全体の月次AI分類上限(2,000件/月, JST)
 // すべて満たした場合のみAnthropic APIを呼ぶ。1〜4のいずれかで超過していても、
 // bot判定・重複でない限り問い合わせ自体は必ずNotionへ保存し、AI分類のみスキップする。
+// AI分類は1リクエストにつき最大1回のみ試行し、自動リトライは行わない
+// (失敗時は即座に「未分類(AI失敗)」としてNotionへ保存する。課金抑制を優先するため)。
 //
 // 秘密鍵(ANTHROPIC_API_KEY / NOTION_API_KEY / NOTION_DATABASE_ID / SUPABASE_SERVICE_ROLE_KEY /
-// CONTACT_HASH_SALT)はVercelの環境変数からのみ読み、クライアントには一切渡さない。
+// CONTACT_HASH_SALT / TURNSTILE_SECRET_KEY)はVercelの環境変数からのみ読み、クライアントには一切渡さない。
 
 import { createHash } from 'node:crypto'
 import {
@@ -29,7 +31,6 @@ const USER_HOURLY_LIMIT = 3
 const USER_DAILY_LIMIT = 10
 const DEDUP_WINDOW_MINUTES = 5
 const MIN_ELAPSED_MS = 800 // フォーム表示から送信までがこれより速い場合はbotとみなす
-const ANTHROPIC_MAX_RETRIES = 1 // 追加で最大1回のみリトライ(合計2回まで)
 const CLASSIFY_INPUT_MAX_CHARS = 800 // Anthropicに渡す本文は先頭800文字までに抑える
 
 const AI_STATUS = {
@@ -93,54 +94,67 @@ async function verifySupabaseUser(authHeader) {
   return data?.id || null
 }
 
+// Cloudflare Turnstileでスクリプトによる直接API呼び出し(Supabase匿名アカウントの大量作成等)を防ぐ。
+// TURNSTILE_SECRET_KEY未設定の間は無効化し、既存のフォーム機能をブロックしない(段階的導入)。
+async function verifyTurnstile(token, ip) {
+  if (!process.env.TURNSTILE_SECRET_KEY) return true
+  if (!token) return false
+
+  const params = new URLSearchParams()
+  params.append('secret', process.env.TURNSTILE_SECRET_KEY)
+  params.append('response', token)
+  if (ip) params.append('remoteip', ip)
+
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: params,
+    })
+    if (!response.ok) return false
+    const data = await response.json()
+    return Boolean(data.success)
+  } catch (err) {
+    console.error('Turnstile検証に失敗しました', err)
+    return false
+  }
+}
+
+// AI分類は必須処理ではないため、失敗時は即「未分類(AI失敗)」としてNotionへ保存する方針とし、
+// 自動リトライは行わない(課金抑制を優先し、日次・月次上限の集計もリクエストごとに1対1で単純化するため)。
 async function classifyInquiry(message) {
   const truncated = message.slice(0, CLASSIFY_INPUT_MAX_CHARS)
-  let lastError
-  for (let attempt = 0; attempt <= ANTHROPIC_MAX_RETRIES; attempt++) {
-    try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': process.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      tools: [CLASSIFY_TOOL],
+      tool_choice: { type: 'tool', name: 'classify_inquiry' },
+      messages: [
+        {
+          role: 'user',
+          content:
+            '以下は「BASKETBALL STATS」というバスケットボールのチームスタッツ記録アプリへの問い合わせです。' +
+            `内容を分類してください。\n\n---\n${truncated}\n---`,
         },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 200,
-          tools: [CLASSIFY_TOOL],
-          tool_choice: { type: 'tool', name: 'classify_inquiry' },
-          messages: [
-            {
-              role: 'user',
-              content:
-                '以下は「BASKETBALL STATS」というバスケットボールのチームスタッツ記録アプリへの問い合わせです。' +
-                `内容を分類してください。\n\n---\n${truncated}\n---`,
-            },
-          ],
-        }),
-      })
+      ],
+    }),
+  })
 
-      if (!response.ok) {
-        const retryable = response.status === 429 || response.status >= 500
-        const bodyText = await response.text()
-        if (retryable && attempt < ANTHROPIC_MAX_RETRIES) {
-          lastError = new Error(`Anthropic API error: ${response.status} ${bodyText}`)
-          continue
-        }
-        throw new Error(`Anthropic API error: ${response.status} ${bodyText}`)
-      }
-
-      const data = await response.json()
-      const toolUse = data.content?.find((block) => block.type === 'tool_use')
-      if (!toolUse) throw new Error('分類結果が取得できませんでした')
-      return toolUse.input
-    } catch (err) {
-      lastError = err
-      if (attempt >= ANTHROPIC_MAX_RETRIES) throw lastError
-    }
+  if (!response.ok) {
+    throw new Error(`Anthropic API error: ${response.status} ${await response.text()}`)
   }
-  throw lastError
+
+  const data = await response.json()
+  const toolUse = data.content?.find((block) => block.type === 'tool_use')
+  if (!toolUse) throw new Error('分類結果が取得できませんでした')
+  return toolUse.input
 }
 
 async function createNotionPage({ message, email, classification, aiStatus }) {
@@ -200,7 +214,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const { message, email, website, renderedAt } = req.body ?? {}
+  const { message, email, website, renderedAt, turnstileToken } = req.body ?? {}
   if (typeof message !== 'string') {
     res.status(400).json({ error: 'invalid message' })
     return
@@ -216,6 +230,8 @@ export default async function handler(req, res) {
     return
   }
 
+  const clientIp = getClientIp(req)
+
   try {
     // --- 1. ユーザー単位のレート制限 ---
     const [hourCount, dayCount] = await Promise.all([
@@ -226,7 +242,8 @@ export default async function handler(req, res) {
 
     // --- 2. bot・重複・文字数のチェック ---
     const elapsed = typeof renderedAt === 'number' ? Date.now() - renderedAt : Infinity
-    const isBot = Boolean(website) || elapsed < MIN_ELAPSED_MS
+    const turnstileOk = await verifyTurnstile(turnstileToken, clientIp)
+    const isBot = Boolean(website) || elapsed < MIN_ELAPSED_MS || !turnstileOk
     if (isBot) {
       // botには通常送信と同じ成功レスポンスを返し、検知していることを悟らせない。Notion保存・AI分類は行わない。
       res.status(200).json({ ok: true })
@@ -257,7 +274,7 @@ export default async function handler(req, res) {
     ])
     const appCapReached = dailyAiCount >= APP_DAILY_AI_LIMIT || monthlyAiCount >= APP_MONTHLY_AI_LIMIT
 
-    const ipHash = hashIp(getClientIp(req))
+    const ipHash = hashIp(clientIp)
     const skipAi = userLimited || appCapReached
 
     let classification = null

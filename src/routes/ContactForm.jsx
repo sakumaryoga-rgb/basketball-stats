@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { supabase } from '@/supabaseClient'
 
 const MESSAGE_MIN_LENGTH = 10
 const MESSAGE_MAX_LENGTH = 2000
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY
 
 export function ContactForm() {
   const navigate = useNavigate()
@@ -17,6 +18,35 @@ export function ContactForm() {
   const [website, setWebsite] = useState('') // ハニーポット。人間の利用者には見えないため、値が入っていればbotとみなす
   const [status, setStatus] = useState('idle') // idle | sending | sent | error | duplicate
   const [renderedAt] = useState(() => Date.now())
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const turnstileContainerRef = useRef(null)
+  const turnstileWidgetIdRef = useRef(null)
+
+  // Cloudflare Turnstileでスクリプトによる直接API呼び出し(bot)を防ぐ。サイトキー未設定の間は表示しない。
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return
+
+    function renderWidget() {
+      if (!turnstileContainerRef.current || turnstileWidgetIdRef.current || !window.turnstile) return
+      turnstileWidgetIdRef.current = window.turnstile.render(turnstileContainerRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        callback: (token) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+      })
+    }
+
+    if (window.turnstile) {
+      renderWidget()
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
+    script.async = true
+    script.defer = true
+    script.onload = renderWidget
+    document.head.appendChild(script)
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -37,6 +67,7 @@ export function ContactForm() {
           email: email || undefined,
           website,
           renderedAt,
+          turnstileToken,
         }),
       })
       if (res.status === 429) {
@@ -50,6 +81,12 @@ export function ContactForm() {
     } catch (err) {
       console.error('お問い合わせの送信に失敗しました', err)
       setStatus('error')
+    } finally {
+      // Turnstileトークンは1回限りなので、成否にかかわらずリセットして次回送信に備える
+      if (window.turnstile && turnstileWidgetIdRef.current != null) {
+        window.turnstile.reset(turnstileWidgetIdRef.current)
+      }
+      setTurnstileToken('')
     }
   }
 
@@ -129,7 +166,11 @@ export function ContactForm() {
             同じ内容の問い合わせが直前に送信されています。しばらく時間を置いてから再度お試しください。
           </p>
         )}
-        <Button type="submit" disabled={status === 'sending'}>
+        {TURNSTILE_SITE_KEY && <div ref={turnstileContainerRef} />}
+        <Button
+          type="submit"
+          disabled={status === 'sending' || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
+        >
           {status === 'sending' ? '送信中...' : '送信する'}
         </Button>
       </form>
