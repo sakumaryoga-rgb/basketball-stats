@@ -12,6 +12,9 @@ import { Players } from '@/routes/Players'
 import { PlayerDetail } from '@/routes/PlayerDetail'
 import { Leaders } from '@/routes/Leaders'
 import { TeamSettings } from '@/routes/TeamSettings'
+import { PrivacyPolicy } from '@/routes/PrivacyPolicy'
+import { Terms } from '@/routes/Terms'
+import { OperatorInfo } from '@/routes/OperatorInfo'
 import { Layout } from '@/components/Layout'
 
 function FullScreenLoader() {
@@ -67,6 +70,9 @@ export default function App() {
           <Route path="/players" element={<Players teamId={activeTeam.id} teams={teams} />} />
           <Route path="/players/:id" element={<PlayerDetail teamId={activeTeam.id} />} />
           <Route path="/leaders" element={<Leaders teamId={activeTeam.id} />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/operator" element={<OperatorInfo />} />
           <Route
             path="/team"
             element={
