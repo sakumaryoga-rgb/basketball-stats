@@ -4,8 +4,6 @@ import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetClose 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
-const CONTACT_EMAIL = 'sakumaryoga@gmail.com'
-
 function ComingSoonItem({ icon: Icon, label }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3 text-muted-foreground">
@@ -56,7 +54,7 @@ export function HamburgerMenu() {
         <nav className="flex flex-col gap-1 overflow-y-auto p-2">
           <ComingSoonItem icon={Megaphone} label="BASKETBALL STATSに広告を出す" />
           <ComingSoonItem icon={HelpCircle} label="よくある質問" />
-          <MenuLink icon={Mail} label="お問い合わせ" href={`mailto:${CONTACT_EMAIL}`} />
+          <MenuLink icon={Mail} label="お問い合わせ" to="/contact" />
           <MenuLink icon={Shield} label="プライバシーポリシー" to="/privacy-policy" />
           <MenuLink icon={FileText} label="利用規約" to="/terms" />
           <MenuLink icon={Info} label="運用元情報" to="/operator" />
