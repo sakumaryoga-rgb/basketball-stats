@@ -4,11 +4,15 @@ import { cn } from '@/lib/utils'
 
 const PULL_THRESHOLD = 70
 const MAX_PULL = 110
+const REFRESH_HEIGHT = 50 // 更新中に表示し続ける高さ
+const REFRESH_DURATION_MS = 700 // 更新中インジケーターを表示する最短時間
 
 // ホーム画面に追加した状態(standalone PWA)ではブラウザのpull-to-refreshが
 // 使えなくなるため、最上部から下に引っ張ったら再読み込みする独自実装を提供する。
 // 通常のブラウザタブではネイティブの挙動を邪魔しないよう、standalone判定の時だけ有効化する。
-export function PullToRefresh({ children }) {
+// ブラウザのフルリロード(window.location.reload)は白画面のフラッシュが入り滑らかでないため、
+// onRefreshで呼び出し元に現在画面のソフトな再取得を委ね、インジケーターだけをアニメーションさせる。
+export function PullToRefresh({ children, onRefresh }) {
   const [pull, setPull] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -60,8 +64,8 @@ export function PullToRefresh({ children }) {
       setPull((current) => {
         if (current >= PULL_THRESHOLD) {
           setRefreshing(true)
-          window.location.reload()
-          return current
+          onRefresh?.()
+          return REFRESH_HEIGHT
         }
         return 0
       })
@@ -78,6 +82,15 @@ export function PullToRefresh({ children }) {
       window.removeEventListener('touchcancel', endDrag)
       if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current)
     }
+  }, [refreshing, onRefresh])
+
+  useEffect(() => {
+    if (!refreshing) return
+    const timer = setTimeout(() => {
+      setRefreshing(false)
+      setPull(0)
+    }, REFRESH_DURATION_MS)
+    return () => clearTimeout(timer)
   }, [refreshing])
 
   const ready = pull >= PULL_THRESHOLD

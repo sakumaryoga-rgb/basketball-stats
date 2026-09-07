@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+} from '@/components/ui/alert-dialog'
+
+const TERMS_AGREEMENT_STORAGE_KEY = 'agreedToTermsAndPrivacyAt'
 
 function BasketballIcon(props) {
   return (
@@ -32,6 +42,15 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   const [error, setError] = useState('')
   // 招待リンクを踏んだ場合は確認なしで自動的に参加させる(手動操作でのつまずきをなくす)
   const [autoJoining, setAutoJoining] = useState(!!initialCode)
+  // 初回アクセス時のみ、利用規約・プライバシーポリシーへの同意ポップアップを表示する
+  const [showConsent, setShowConsent] = useState(
+    () => typeof window !== 'undefined' && !localStorage.getItem(TERMS_AGREEMENT_STORAGE_KEY)
+  )
+
+  function handleAgree() {
+    localStorage.setItem(TERMS_AGREEMENT_STORAGE_KEY, new Date().toISOString())
+    setShowConsent(false)
+  }
 
   useEffect(() => {
     if (initialCode) {
@@ -192,6 +211,28 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={showConsent}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>利用規約・プライバシーポリシーへの同意</AlertDialogTitle>
+            <AlertDialogDescription>
+              本サービスのご利用には、利用規約およびプライバシーポリシーへの同意が必要です。内容をご確認のうえ、同意して利用を開始してください。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-1.5 text-sm">
+            <Link to="/terms" className="text-primary hover:underline">
+              利用規約を確認する
+            </Link>
+            <Link to="/privacy-policy" className="text-primary hover:underline">
+              プライバシーポリシーを確認する
+            </Link>
+          </div>
+          <AlertDialogFooter>
+            <Button onClick={handleAgree}>同意して利用を開始する</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

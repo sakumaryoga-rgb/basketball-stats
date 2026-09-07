@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Trash2 } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
-import { formatPositions } from '@/lib/stats'
+import { formatPositions, groupPlayersByPosition } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -186,10 +186,33 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
   )
 }
 
+function PlayerRow({ player, onDelete }) {
+  return (
+    <li className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+      <Avatar className="size-9 shrink-0 text-sm font-medium">
+        <AvatarImage src={player.photo_url} alt={player.name} />
+        <AvatarFallback className="tabular-nums">{player.number ?? '-'}</AvatarFallback>
+      </Avatar>
+      <Link to={`/players/${player.id}`} className="flex-1 min-w-0">
+        <p className="font-medium truncate">{player.name}</p>
+        {player.position && (
+          <p className="text-xs text-muted-foreground">{formatPositions(player.position, player.position2)}</p>
+        )}
+      </Link>
+      <Button variant="ghost" size="icon-sm" aria-label="削除" onClick={() => onDelete(player)}>
+        <Trash2 className="size-4" />
+      </Button>
+    </li>
+  )
+}
+
 export function Players({ teamId, teams = [] }) {
   const { players: allPlayers, addPlayer, removePlayer } = usePlayers(teamId)
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [sortMode, setSortMode] = useState('default') // 'default' | 'position'
+
+  const positionGroups = useMemo(() => groupPlayersByPosition(players), [players])
 
   async function handleConfirmDelete() {
     if (!deleteTarget) return
@@ -204,26 +227,50 @@ export function Players({ teamId, teams = [] }) {
         <AddPlayerDialog teamId={teamId} teams={teams} addPlayer={addPlayer} />
       </div>
 
+      {players.length > 0 && (
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={sortMode === 'default' ? 'default' : 'outline'}
+            className="flex-1"
+            onClick={() => setSortMode('default')}
+          >
+            登録順
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={sortMode === 'position' ? 'default' : 'outline'}
+            className="flex-1"
+            onClick={() => setSortMode('position')}
+          >
+            ポジション順
+          </Button>
+        </div>
+      )}
+
       {players.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">まだ選手が登録されていません</p>
+      ) : sortMode === 'position' ? (
+        <div className="flex flex-col gap-4">
+          {positionGroups.map(({ key, players: groupPlayers }) => (
+            <div key={key} className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                {key} ({groupPlayers.length}人)
+              </p>
+              <ul className="flex flex-col gap-2">
+                {groupPlayers.map((player) => (
+                  <PlayerRow key={player.id} player={player} onDelete={setDeleteTarget} />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       ) : (
         <ul className="flex flex-col gap-2">
           {players.map((player) => (
-            <li key={player.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
-              <Avatar className="size-9 shrink-0 text-sm font-medium">
-                <AvatarImage src={player.photo_url} alt={player.name} />
-                <AvatarFallback className="tabular-nums">{player.number ?? '-'}</AvatarFallback>
-              </Avatar>
-              <Link to={`/players/${player.id}`} className="flex-1 min-w-0">
-                <p className="font-medium truncate">{player.name}</p>
-                {player.position && (
-                  <p className="text-xs text-muted-foreground">{formatPositions(player.position, player.position2)}</p>
-                )}
-              </Link>
-              <Button variant="ghost" size="icon-sm" aria-label="削除" onClick={() => setDeleteTarget(player)}>
-                <Trash2 className="size-4" />
-              </Button>
-            </li>
+            <PlayerRow key={player.id} player={player} onDelete={setDeleteTarget} />
           ))}
         </ul>
       )}

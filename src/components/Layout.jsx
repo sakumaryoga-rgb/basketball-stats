@@ -1,4 +1,5 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { CalendarDays, ChevronDown, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { PullToRefresh } from '@/components/PullToRefresh'
@@ -13,6 +14,12 @@ const NAV_ITEMS = [
 ]
 
 export function Layout({ teamName, teamIconUrl, teams = [] }) {
+  const location = useLocation()
+  // pull-to-refreshで画面のデータを再取得するため、この値を変えて現在の画面を再マウントさせる
+  // (各データフックはマウント時に自動でfetchするため、フルリロードなしでソフトに更新できる)
+  const [refreshNonce, setRefreshNonce] = useState(0)
+  const handleRefresh = useCallback(() => setRefreshNonce((n) => n + 1), [])
+
   return (
     <div className="min-h-svh flex flex-col bg-background">
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)]">
@@ -32,8 +39,10 @@ export function Layout({ teamName, teamIconUrl, teams = [] }) {
       </header>
 
       <main className="flex-1 max-w-lg w-full mx-auto px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-        <PullToRefresh>
-          <div className="py-4">
+        <PullToRefresh onRefresh={handleRefresh}>
+          {/* pathnameとrefreshNonceをkeyにすることで、タブ切り替え時になめらかにフェードインし、
+              pull-to-refresh時は画面を再マウントしてデータを再取得する */}
+          <div key={`${location.pathname}-${refreshNonce}`} className="py-4 animate-in fade-in slide-in-from-bottom-1 duration-200">
             <Outlet />
           </div>
         </PullToRefresh>

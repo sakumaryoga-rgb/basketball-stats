@@ -87,6 +87,30 @@ export function positionSortIndex(position) {
   return index === -1 ? POSITIONS.length : index
 }
 
+// ポジション未設定の選手をまとめるグループのキー
+export const UNSET_POSITION = '未設定'
+
+// ポジションごとに選手をグループ分けする(PG→SG→SF→PF→C→未設定の順)。
+// 第一・第二ポジションの両方を対象に含めるため、両方を持つ選手は該当する
+// 両方のグループに現れる(例: PG/SGの選手はPGグループとSGグループの両方に表示)。
+// 各グループ内は渡された配列の並び順(sort_order/背番号など)を保つ。
+export function groupPlayersByPosition(players) {
+  const buckets = new Map([...POSITIONS, UNSET_POSITION].map((key) => [key, []]))
+  for (const p of players) {
+    const positions = [p.position, p.position2].filter((pos) => POSITIONS.includes(pos))
+    if (positions.length === 0) {
+      buckets.get(UNSET_POSITION).push(p)
+    } else {
+      for (const pos of positions) {
+        buckets.get(pos).push(p)
+      }
+    }
+  }
+  return [...POSITIONS, UNSET_POSITION]
+    .map((key) => ({ key, players: buckets.get(key) }))
+    .filter((g) => g.players.length > 0)
+}
+
 // 第一・第二ポジションをまとめて表示する("PG / SG"のように)
 export function formatPositions(position, position2) {
   return [position, position2].filter(Boolean).join(' / ')
