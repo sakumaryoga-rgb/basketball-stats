@@ -410,10 +410,10 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
               <StatBlock label="TO" value={totals.tov} />
             </div>
           </div>
-
-          <HotZoneSection shots={shots} />
         </>
       )}
+
+      <HotZoneSection shots={shots} />
 
       <Card>
         <CardHeader>

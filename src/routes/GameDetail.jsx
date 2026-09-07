@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { BoxScoreTable } from '@/components/BoxScoreTable'
 import { CourtDiagram } from '@/components/CourtDiagram'
 import { WheelPicker } from '@/components/WheelPicker'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogTrigger,
@@ -147,6 +148,7 @@ function TimePickerDialog({ open, onOpenChange, secondsLeft, onApply }) {
 }
 
 const STATUS_LABEL = { scheduled: '予定', in_progress: '試合中', final: '終了' }
+const HOT_ZONE_ENABLED_KEY = 'hotZoneEnabled'
 
 const EMPTY_STATS = {
   pts: 0, reb: 0, oreb: 0, dreb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0,
@@ -168,6 +170,9 @@ export function GameDetail({ teamId }) {
   const [clockRunning, setClockRunning] = useState(false)
   const [statsTab, setStatsTab] = useState('basic')
   const [shotChartPlayerId, setShotChartPlayerId] = useState('all')
+  const [hotZoneEnabled, setHotZoneEnabled] = useState(
+    () => localStorage.getItem(HOT_ZONE_ENABLED_KEY) !== 'false'
+  )
   const [recordedFlash, setRecordedFlash] = useState(null)
   const flashTimerRef = useRef(null)
   const [timePickerOpen, setTimePickerOpen] = useState(false)
@@ -349,10 +354,16 @@ export function GameDetail({ teamId }) {
     setPendingOutcome(null)
   }
 
+  function handleHotZoneToggle(next) {
+    setHotZoneEnabled(next)
+    localStorage.setItem(HOT_ZONE_ENABLED_KEY, String(next))
+    setPendingOutcome(null)
+  }
+
   async function handleShotOutcome(outcome) {
     if (!selectedPlayerId) return
     const statKey = outcome === 'make' ? activeCategory.make : activeCategory.miss
-    if (activeCategory.kind === 'ft') {
+    if (activeCategory.kind === 'ft' || !hotZoneEnabled) {
       const ok = await recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
       if (ok) showRecordedFlash(selectedPlayerId, statKey)
     } else {
@@ -714,10 +725,23 @@ export function GameDetail({ teamId }) {
 
           {activeCategory.kind === 'shot' && (
             <>
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">ホットゾーンを記録</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    オフにするとシュート位置の記録をスキップします
+                  </span>
+                </div>
+                <Switch checked={hotZoneEnabled} onCheckedChange={handleHotZoneToggle} />
+              </div>
               <p className="text-xs text-muted-foreground text-center">
-                {pendingOutcome ? 'コートをタップして位置を記録' : '成功・失敗を選ぶとコートが有効になります'}
+                {!hotZoneEnabled
+                  ? '成功・失敗を選ぶとすぐに記録されます'
+                  : pendingOutcome
+                    ? 'コートをタップして位置を記録'
+                    : '成功・失敗を選ぶとコートが有効になります'}
               </p>
-              <CourtDiagram active={!!pendingOutcome} onTap={handleCourtTap} />
+              <CourtDiagram active={hotZoneEnabled && !!pendingOutcome} onTap={handleCourtTap} />
             </>
           )}
 
