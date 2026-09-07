@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/supabaseClient'
 
-// 1試合分のスタッツイベントとボックススコア(player_game_stats)を取得・購読する
-export function useGameStats(gameId) {
+// 1試合分のスタッツイベントとボックススコアを取得・購読する。
+// player_game_statsは公式試合(game_type='official')のみを集計するビューなので、
+// スクリメージ(practice)の場合はplayer_practice_game_statsから取得する。
+export function useGameStats(gameId, gameType = 'official') {
   const [events, setEvents] = useState([])
   const [boxScore, setBoxScore] = useState([])
   const [loading, setLoading] = useState(true)
+  const boxScoreTable = gameType === 'practice' ? 'player_practice_game_stats' : 'player_game_stats'
 
   const refresh = useCallback(async () => {
     if (!gameId) {
@@ -16,14 +19,14 @@ export function useGameStats(gameId) {
     }
     const [eventsRes, boxRes] = await Promise.all([
       supabase.from('stat_events').select('*').eq('game_id', gameId).order('created_at'),
-      supabase.from('player_game_stats').select('*').eq('game_id', gameId),
+      supabase.from(boxScoreTable).select('*').eq('game_id', gameId),
     ])
     if (eventsRes.error) console.error('スタッツイベントの取得に失敗しました', eventsRes.error)
     if (boxRes.error) console.error('ボックススコアの取得に失敗しました', boxRes.error)
     setEvents(eventsRes.data ?? [])
     setBoxScore(boxRes.data ?? [])
     setLoading(false)
-  }, [gameId])
+  }, [gameId, boxScoreTable])
 
   useEffect(() => {
     refresh()

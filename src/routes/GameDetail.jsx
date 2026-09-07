@@ -160,7 +160,8 @@ export function GameDetail({ teamId }) {
   const navigate = useNavigate()
   const { players, addPlayer } = usePlayers(teamId)
   const { games, updateGame, deleteGame } = useGames(teamId)
-  const { events, boxScore, recordStat, undoLast } = useGameStats(id)
+  const game = games.find((g) => g.id === id)
+  const { events, boxScore, recordStat, undoLast } = useGameStats(id, game?.game_type)
   const { lineups, substitute, incrementSeconds } = useGameLineups(id)
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -182,7 +183,6 @@ export function GameDetail({ teamId }) {
   const longPressTimerRef = useRef(null)
   const longPressFiredRef = useRef(false)
 
-  const game = games.find((g) => g.id === id)
   const activeCategory = STAT_CATEGORIES.find((c) => c.key === activeCategoryKey)
 
   // この試合のロスター: 通常の選手全員 + この試合限定のゲスト(他の試合のゲストは含めない)
