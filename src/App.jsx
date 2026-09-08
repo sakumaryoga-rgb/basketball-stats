@@ -12,7 +12,6 @@ import { Players } from '@/routes/Players'
 import { PlayerDetail } from '@/routes/PlayerDetail'
 import { Leaders } from '@/routes/Leaders'
 import { TeamSettings } from '@/routes/TeamSettings'
-import { Account } from '@/routes/Account'
 import { ContactForm } from '@/routes/ContactForm'
 import { PrivacyPolicy } from '@/routes/PrivacyPolicy'
 import { Terms } from '@/routes/Terms'
@@ -60,7 +59,6 @@ export default function App() {
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/operator" element={<OperatorInfo />} />
-          <Route path="/account" element={<Account />} />
 
           {activeTeam && (
             <>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Copy, Check, ChevronDown, Pencil, Plus, RefreshCw, LogOut, Trash2, Share2 } from 'lucide-react'
+import { Copy, Check, ChevronDown, Pencil, RefreshCw, LogOut, Trash2, Share2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
@@ -38,6 +38,7 @@ import {
 import { cn } from '@/lib/utils'
 
 function EditTeamDialog({ team, onTeamUpdated, children }) {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(team.name)
   const [iconFile, setIconFile] = useState(null)
@@ -89,6 +90,10 @@ function EditTeamDialog({ team, onTeamUpdated, children }) {
 
   async function handleDeleteTeam() {
     setDeleting(true)
+    // 削除によりactiveTeamが一時的にnullになる前に、まずURLから共有URLのトークンを外しておく。
+    // そうしないと、キャッチオールのリダイレクトがトークン付きのまま/onboardingへ遷移させてしまい、
+    // (このチーム自体は消えているため実害はないが)不要な「このリンクは無効です」表示が出てしまう。
+    navigate('/onboarding?add=1', { replace: true })
     const { error: deleteError } = await supabase.from('teams').delete().eq('id', team.id)
     setDeleting(false)
     if (deleteError) {
@@ -333,6 +338,14 @@ export function TeamSettings({ team, onTeamUpdated }) {
   // 自分のteam_members行を削除するだけのシンプルな操作。
   async function handleLeaveTeam() {
     setLeaving(true)
+    // activeTeamが一時的にnullになる前に、まずURLから共有URLのトークンを外しておく。
+    // 退出後にトークン付きのURL(例: /team?t=...)がそのまま残っていると、activeTeamがnullになった
+    // 瞬間にキャッチオールのリダイレクトがそのトークンを引き継いだまま/onboardingへ遷移させてしまい、
+    // Onboarding側の自動参加処理がそのトークンを検知してこの端末を即座に再参加させてしまう
+    // (退出操作そのものが無効化されてしまう)。先に遷移してから削除することでこれを防ぐ。
+    // ?add=1 は「hasTeamでも自動的に/gamesへ戻さない」ためのフラグ。この端末が他のチームにも
+    // 所属している場合でも、退出操作の直後は必ずオンボーディング画面(作成/参加)を表示する。
+    navigate('/onboarding?add=1', { replace: true })
     const { data: userData } = await supabase.auth.getUser()
     const { error } = await supabase
       .from('team_members')
@@ -346,7 +359,6 @@ export function TeamSettings({ team, onTeamUpdated }) {
     }
     setConfirmLeave(false)
     await onTeamUpdated()
-    navigate('/onboarding')
   }
 
   async function handleToggleStarter(player) {
@@ -497,13 +509,6 @@ export function TeamSettings({ team, onTeamUpdated }) {
 
       <ShareUrlCard team={team} onTeamUpdated={onTeamUpdated} />
 
-      <Link to="/onboarding?add=1">
-        <Button variant="outline" className="w-full">
-          <Plus className="size-4" />
-          別のチームに参加・作成する
-        </Button>
-      </Link>
-
       <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmLeave(true)}>
         <LogOut className="size-4" />
         このチームを退出する
@@ -525,12 +530,6 @@ export function TeamSettings({ team, onTeamUpdated }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <div className="border-t pt-4">
-        <Link to="/account" className="text-xs text-muted-foreground underline underline-offset-2">
-          この端末のアカウントを削除する
-        </Link>
-      </div>
     </div>
   )
 }
