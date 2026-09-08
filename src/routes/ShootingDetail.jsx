@@ -109,11 +109,19 @@ export function ShootingDetail({ teamId }) {
   const { players } = usePlayers(teamId)
   const { games, deleteGame } = useGames(teamId, 'shooting')
   const { entries, addTally, resetZone } = useShootingEntries(id)
-  // シューティング追加時に選手を選んでいれば、その1人目を最初から選択済みにしておく
-  // (追加直後にもう一度選手を選び直す手間を省く)
-  const [selectedPlayerId, setSelectedPlayerId] = useState(() => location.state?.playerIds?.[0] ?? null)
+  // シューティング追加時に選手を選んでいれば、その選手だけをこの画面に表示し、1人目を
+  // 最初から選択済みにしておく(追加直後にもう一度選手を選び直す手間を省く)。
+  // location.stateはマウント直後にuseActiveShareToken(App.jsx)がURLへ?t=を付与するための
+  // replaceナビゲーションで失われてしまうため、マウント時に一度だけstateで捕まえておく
+  const [participantIds] = useState(() => location.state?.playerIds ?? null)
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => participantIds?.[0] ?? null)
   const [pendingZone, setPendingZone] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // 追加時に選手を選んでいれば、その選手だけをこの画面に表示する(他の選手が
+  // 紛れて選びにくくなるのを防ぐ)。選択情報がない場合(直接アクセス等)は全選手を表示する
+  const visiblePlayers =
+    participantIds && participantIds.length > 0 ? players.filter((p) => participantIds.includes(p.id)) : players
 
   const session = games.find((g) => g.id === id)
 
@@ -148,6 +156,10 @@ export function ShootingDetail({ teamId }) {
     navigate('/practice')
   }
 
+  function handleCompleteWorkout() {
+    navigate('/practice', { state: { flashMessage: 'ワークアウトの内容を記録しました。' } })
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <button onClick={() => navigate('/practice')} className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -178,13 +190,17 @@ export function ShootingDetail({ teamId }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <Button variant="destructive" className="w-full" onClick={handleCompleteWorkout}>
+        ワークアウトを完了する
+      </Button>
+
       <div className="flex flex-col gap-2">
         <p className="text-xs font-heading tracking-wide text-muted-foreground">選手を選択</p>
-        {players.length === 0 ? (
+        {visiblePlayers.length === 0 ? (
           <p className="text-sm text-muted-foreground">先に選手を登録してください</p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {players.map((p) => (
+            {visiblePlayers.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setSelectedPlayerId(p.id)}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Plus, X } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { usePlayers } from '@/hooks/usePlayers'
 import { Button } from '@/components/ui/button'
@@ -205,12 +205,24 @@ function CreateShootingDialog({ createGame, players }) {
 }
 
 export function Practice({ teamId }) {
+  const location = useLocation()
   const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
   const { createGame: createShooting } = useGames(teamId, 'shooting')
   const { players } = usePlayers(teamId)
+  // シューティング画面で「ワークアウトを完了する」を押した直後だけ表示する完了メッセージ
+  const [flashMessage, setFlashMessage] = useState(location.state?.flashMessage ?? null)
 
   return (
     <div className="flex flex-col gap-6">
+      {flashMessage && (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-primary/10 px-3 py-2.5 text-sm text-primary">
+          <span>{flashMessage}</span>
+          <button onClick={() => setFlashMessage(null)} aria-label="閉じる" className="shrink-0">
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-heading tracking-wide">PRACTICE</h1>
         <p className="text-xs text-muted-foreground mt-1">
