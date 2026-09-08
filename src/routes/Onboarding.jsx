@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Copy, Check, Loader2, 
 import { supabase } from '@/supabaseClient'
 import { cn } from '@/lib/utils'
 import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legal'
-import { saveShareUrl } from '@/lib/shareUrlStore'
+import { saveShareUrl, getAllShareUrls } from '@/lib/shareUrlStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,21 +43,17 @@ function extractShareToken(input) {
   return match ? match[1] : trimmed
 }
 
-// 共有URLが無効だった場合、この端末が既に参加しているチームの名前として一致するか確認する
-// (チームを切り替える一覧UIは廃止したため、既に参加済みのチームへ戻る唯一の手段としてこれを使う。
-// 自分がまだ参加していないチームを名前だけで探し当てることはできない=総当たりでの不正参加は防げる)
-async function findOwnTeamByJoinedName(name) {
-  const trimmed = name.trim()
+// 共有URLが無効だった場合、この端末が過去に一度でも作成/参加したことのあるチーム
+// (=localStorageに共有URLを保存済みのチーム)の名前として一致するか確認する。
+// チームを切り替える一覧UIは廃止したため、退出後も含めてこの端末が既に知っているチームへ
+// 戻る唯一の手段としてこれを使う。一度もアクセスしたことのないチームを名前だけで
+// 探し当てることはできない(=総当たりでの不正参加は防げる)。team_membersの現在の所属状況は
+// 見ないため、退出済みのチームでも(この端末が正規の共有URLを踏んだことがある限り)名前で戻れる。
+function findRememberedTokenByName(name) {
+  const trimmed = name.trim().toLowerCase()
   if (!trimmed) return null
-  const { data: userData } = await supabase.auth.getUser()
-  const userId = userData?.user?.id
-  if (!userId) return null
-  const { data, error } = await supabase.from('team_members').select('teams(id, name)').eq('user_id', userId)
-  if (error) return null
-  const match = (data ?? [])
-    .map((row) => row.teams)
-    .find((t) => t && t.name.trim().toLowerCase() === trimmed.toLowerCase())
-  return match ?? null
+  const match = getAllShareUrls().find((entry) => entry.name && entry.name.trim().toLowerCase() === trimmed)
+  return match ? extractShareToken(match.shareUrl) : null
 }
 
 function BasketballIcon(props) {
@@ -140,7 +136,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
         setAutoJoining(false)
         return
       }
-      saveShareUrl(result.out_team_id, `${window.location.origin}/t/${token}`)
+      saveShareUrl(result.out_team_id, `${window.location.origin}/t/${token}`, result.out_team_name)
       await finishJoin(result.out_team_id)
     })()
     return () => {
@@ -162,7 +158,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     }
     const team = Array.isArray(data) ? data[0] : data
     const shareUrl = `${window.location.origin}/t/${team.share_token}`
-    saveShareUrl(team.id, shareUrl)
+    saveShareUrl(team.id, shareUrl, team.name)
     setPendingShareReveal({
       teamId: team.id,
       teamName: team.name,
@@ -174,22 +170,25 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     e.preventDefault()
     setSaving(true)
     setError('')
-    const token = extractShareToken(joinInput)
-    const { data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: token })
-    const result = Array.isArray(data) ? data[0] : data
+    let token = extractShareToken(joinInput)
+    let { data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: token })
+    let result = Array.isArray(data) ? data[0] : data
     if (rpcError || !result?.success) {
-      // URL/トークンとして無効だった場合、参加済みのチーム名としての入力かどうか確認する
-      const ownTeam = await findOwnTeamByJoinedName(joinInput)
-      setSaving(false)
-      if (ownTeam) {
-        await finishJoin(ownTeam.id)
-        return
+      // URL/トークンとして無効だった場合、この端末が過去にアクセスしたことのあるチーム名としての
+      // 入力かどうかを確認し、覚えている共有URLのトークンで参加をやり直す
+      const rememberedToken = findRememberedTokenByName(joinInput)
+      if (rememberedToken) {
+        token = rememberedToken
+        ;({ data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: token }))
+        result = Array.isArray(data) ? data[0] : data
       }
+    }
+    setSaving(false)
+    if (rpcError || !result?.success) {
       setError(result?.message || rpcError?.message || '参加に失敗しました')
       return
     }
-    setSaving(false)
-    saveShareUrl(result.out_team_id, `${window.location.origin}/t/${token}`)
+    saveShareUrl(result.out_team_id, `${window.location.origin}/t/${token}`, result.out_team_name)
     await finishJoin(result.out_team_id)
   }
 

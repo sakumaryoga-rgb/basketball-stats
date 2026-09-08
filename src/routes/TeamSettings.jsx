@@ -198,7 +198,7 @@ function ShareUrlCard({ team, onTeamUpdated }) {
       return
     }
     const shareUrl = `${window.location.origin}/t/${data}`
-    saveShareUrl(team.id, shareUrl)
+    saveShareUrl(team.id, shareUrl, team.name)
     setKnownShareUrl(shareUrl)
     onTeamUpdated()
   }
