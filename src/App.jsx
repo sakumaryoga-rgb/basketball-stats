@@ -18,6 +18,7 @@ import { Terms } from '@/routes/Terms'
 import { OperatorInfo } from '@/routes/OperatorInfo'
 import { Layout } from '@/components/Layout'
 import { InAppBrowserBanner } from '@/components/InAppBrowserBanner'
+import { UpdatePrompt } from '@/components/UpdatePrompt'
 
 function FullScreenLoader() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
   if (sessionLoading || !session || teamsLoading) {
     return (
       <>
+        <UpdatePrompt />
         <InAppBrowserBanner />
         <FullScreenLoader />
       </>
@@ -49,6 +51,7 @@ export default function App() {
 
   return (
     <>
+      <UpdatePrompt />
       <InAppBrowserBanner />
       <Routes>
         <Route path="/onboarding" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
