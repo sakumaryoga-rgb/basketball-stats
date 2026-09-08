@@ -3,11 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Plus, X } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { usePlayers } from '@/hooks/usePlayers'
+import { useShootingParticipants } from '@/hooks/useShootingParticipants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -204,6 +207,40 @@ function CreateShootingDialog({ createGame, players }) {
   )
 }
 
+// 一覧の行に重ねて表示する参加選手アイコンの最大数。これを超える分は「+N」で示す
+const MAX_VISIBLE_AVATARS = 3
+
+// 左のアイコンが一番上に来るよう(左→右で徐々に奥へ)重ねて表示する
+function ParticipantAvatars({ players }) {
+  if (players.length === 0) return null
+  const visible = players.slice(0, MAX_VISIBLE_AVATARS)
+  const overflow = players.length - visible.length
+
+  return (
+    <div className="flex items-center shrink-0">
+      {visible.map((p, i) => (
+        <Avatar
+          key={p.id}
+          size="sm"
+          className={cn('ring-2 ring-background', i > 0 && '-ml-2')}
+          style={{ zIndex: visible.length - i }}
+        >
+          <AvatarImage src={p.photo_url} alt={p.name} />
+          <AvatarFallback className="text-[10px]">{p.number ?? p.name?.[0] ?? '-'}</AvatarFallback>
+        </Avatar>
+      ))}
+      {overflow > 0 && (
+        <div
+          className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] text-muted-foreground ring-2 ring-background -ml-2"
+          style={{ zIndex: 0 }}
+        >
+          +{overflow}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Practice({ teamId }) {
   const location = useLocation()
   const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
@@ -211,6 +248,9 @@ export function Practice({ teamId }) {
   const { players } = usePlayers(teamId)
   // useGamesは日付の新しい順に返すため、先頭5件が直近のワークアウトになる
   const recentShootingSessions = shootingSessions.slice(0, 5)
+  // 追加時に選んだだけの選手ではなく、実際にshooting_entriesへ記録がある選手だけを参加者とする
+  const participantsByGame = useShootingParticipants(recentShootingSessions.map((s) => s.id))
+  const playersById = new Map(players.map((p) => [p.id, p]))
   // シューティング画面で「ワークアウトを完了する」を押した直後だけ表示する完了メッセージ
   const [flashMessage, setFlashMessage] = useState(location.state?.flashMessage ?? null)
 
@@ -271,19 +311,25 @@ export function Practice({ teamId }) {
           <p className="text-sm text-muted-foreground py-6 text-center">まだシューティング記録がありません</p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {recentShootingSessions.map((session) => (
-              <li key={session.id}>
-                <Link
-                  to={`/shooting/${session.id}`}
-                  className="flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{session.opponent_name || 'シューティング'}</p>
-                    <p className="text-xs text-muted-foreground">{session.game_date}</p>
-                  </div>
-                </Link>
-              </li>
-            ))}
+            {recentShootingSessions.map((session) => {
+              const participants = (participantsByGame[session.id] ?? [])
+                .map((id) => playersById.get(id))
+                .filter(Boolean)
+              return (
+                <li key={session.id}>
+                  <Link
+                    to={`/shooting/${session.id}`}
+                    className="flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{session.opponent_name || 'シューティング'}</p>
+                      <p className="text-xs text-muted-foreground">{session.game_date}</p>
+                    </div>
+                    <ParticipantAvatars players={participants} />
+                  </Link>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>
