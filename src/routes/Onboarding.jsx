@@ -230,7 +230,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   }
 
   return (
-    <div className="min-h-svh overscroll-none relative flex flex-col items-center justify-center gap-8 px-4 py-10">
+    <div className="min-h-svh overscroll-none relative flex flex-col items-center justify-center gap-8 px-4 pt-[calc(2.5rem+env(safe-area-inset-top))] pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
       <div className="fixed inset-0 -z-10 overflow-hidden bg-background" aria-hidden>
         <div className="absolute -top-24 -right-24 size-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute -bottom-24 -left-24 size-72 rounded-full bg-primary/8 blur-3xl" />
