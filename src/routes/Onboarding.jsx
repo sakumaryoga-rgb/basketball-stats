@@ -75,6 +75,9 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   const navigate = useNavigate()
 
   const isDeliberateAdd = searchParams.get('add') === '1'
+  // /t/:token 経由に加えて、アクティブチームが未確立の間に ?t= 付きでこの画面へ
+  // リダイレクトされてきた場合(App側のuseActiveShareToken/キャッチオールで発生)にも対応する
+  const token = tokenFromPath || searchParams.get('t')
 
   const [mode, setMode] = useState('create')
   const [teamName, setTeamName] = useState('')
@@ -82,7 +85,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   // 共有URLを踏んだ場合は確認なしで自動的に参加させる(手動操作でのつまずきをなくす)
-  const [autoJoining, setAutoJoining] = useState(!!tokenFromPath)
+  const [autoJoining, setAutoJoining] = useState(!!token)
   // チーム作成直後だけ、発行された共有URLを一度きり表示するための状態
   const [pendingShareReveal, setPendingShareReveal] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -124,12 +127,12 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     navigate('/games', { replace: true })
   }
 
-  // 共有URL(/t/:token)を踏んだ場合、自動でチームに参加する
+  // 共有URL(/t/:token、または ?t= 付きでこの画面に来た場合)を踏んだら自動でチームに参加する
   useEffect(() => {
-    if (!tokenFromPath) return
+    if (!token) return
     let cancelled = false
     ;(async () => {
-      const { data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: tokenFromPath })
+      const { data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: token })
       const result = Array.isArray(data) ? data[0] : data
       if (cancelled) return
       if (rpcError || !result?.success) {
@@ -137,7 +140,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
         setAutoJoining(false)
         return
       }
-      saveShareUrl(result.out_team_id, `${window.location.origin}/t/${tokenFromPath}`)
+      saveShareUrl(result.out_team_id, `${window.location.origin}/t/${token}`)
       await finishJoin(result.out_team_id)
     })()
     return () => {
@@ -210,13 +213,13 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   // ここに来た場合は、読み込みタイミングのズレによる意図しない遷移とみなして
   // 試合一覧に戻す(そうしないとチームのデータが見えなくなってしまう)
   useEffect(() => {
-    if (hasTeam && !tokenFromPath && !isDeliberateAdd) {
+    if (hasTeam && !token && !isDeliberateAdd) {
       navigate('/games', { replace: true })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasTeam])
 
-  if (autoJoining || (hasTeam && !tokenFromPath && !isDeliberateAdd)) {
+  if (autoJoining || (hasTeam && !token && !isDeliberateAdd)) {
     return (
       <div className="min-h-svh flex items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />

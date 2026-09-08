@@ -1,7 +1,8 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useSession } from '@/hooks/useSession'
 import { useTeams } from '@/hooks/useTeams'
+import { useActiveShareToken } from '@/hooks/useActiveShareToken'
 import { Onboarding } from '@/routes/Onboarding'
 import { Games } from '@/routes/Games'
 import { GameDetail } from '@/routes/GameDetail'
@@ -28,8 +29,10 @@ function FullScreenLoader() {
 }
 
 export default function App() {
+  const location = useLocation()
   const { session, loading: sessionLoading } = useSession()
   const { teams, activeTeam, loading: teamsLoading, refresh: refreshTeams, switchTeam } = useTeams(session)
+  useActiveShareToken(activeTeam?.id)
 
   async function handleTeamJoined(teamId) {
     await refreshTeams()
@@ -72,7 +75,15 @@ export default function App() {
               <Route path="/team" element={<TeamSettings team={activeTeam} onTeamUpdated={refreshTeams} />} />
             </>
           )}
-          <Route path="*" element={<Navigate to={activeTeam ? '/games' : '/onboarding'} replace />} />
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={{ pathname: activeTeam ? '/games' : '/onboarding', search: location.search }}
+                replace
+              />
+            }
+          />
         </Route>
       </Routes>
     </>
