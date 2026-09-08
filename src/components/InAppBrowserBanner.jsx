@@ -1,25 +1,39 @@
 import { useState } from 'react'
-import { TriangleAlert, Copy, Check, X } from 'lucide-react'
-import { detectInAppBrowser } from '@/lib/inAppBrowser'
+import { TriangleAlert, ExternalLink, Check, X } from 'lucide-react'
+import { detectInAppBrowser, getExternalBrowserUrl } from '@/lib/inAppBrowser'
 import { Button } from '@/components/ui/button'
 
 const DISMISS_KEY = 'inAppBrowserBannerDismissed'
 
-// LINE等のアプリ内ブラウザで開かれた場合、この端末の情報がSafari/Chromeと共有されず
-// 別端末として扱われてしまうため、正しいブラウザで開き直すよう案内する。
+// LINE等のアプリ内ブラウザ(WebView)は動作が不安定なことがあるため、
+// システム標準のSafari/Chromeで開き直すよう案内する。
 export function InAppBrowserBanner() {
   const [appName] = useState(() => detectInAppBrowser())
   const [dismissed, setDismissed] = useState(
     () => typeof window !== 'undefined' && sessionStorage.getItem(DISMISS_KEY) === '1'
   )
-  const [copied, setCopied] = useState(false)
+  const [copiedFallback, setCopiedFallback] = useState(false)
 
   if (!appName || dismissed) return null
 
-  async function handleCopy() {
-    await navigator.clipboard.writeText(window.location.href)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const externalUrl = getExternalBrowserUrl(appName)
+
+  async function handleOpenInBrowser() {
+    if (externalUrl) {
+      // LINE/KakaoTalk等、専用の仕組みで外部ブラウザへ直接遷移できる場合
+      window.location.href = externalUrl
+      return
+    }
+    // Instagram/Facebook/X等、直接開く手段がない場合はタブで開くことを試みつつ、
+    // 失敗した場合に備えてURLもコピーしておく(右上メニューからの手動操作を助けるため)
+    window.open(window.location.href, '_blank', 'noopener,noreferrer')
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopiedFallback(true)
+      setTimeout(() => setCopiedFallback(false), 3000)
+    } catch {
+      // クリップボードが使えない環境では何もしない(タブを開く試みのみ行う)
+    }
   }
 
   function handleDismiss() {
@@ -28,20 +42,39 @@ export function InAppBrowserBanner() {
   }
 
   return (
-    <div className="bg-muted border-b px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
-      <div className="max-w-lg mx-auto flex items-start gap-2.5">
-        <TriangleAlert className="size-4 text-primary shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0 text-xs leading-relaxed">
-          <p className="font-medium">{appName}内のブラウザで開いています</p>
-          <p className="mt-0.5 text-muted-foreground">
-            このまま進めると、端末の情報がSafari/Chromeと共有されず、後で見つけにくくなる場合があります。右上のメニューなどから「他のブラウザで開く」を選ぶか、URLをコピーしてSafari/Chromeで開いてください。
-          </p>
-          <Button type="button" variant="outline" size="sm" className="mt-2" onClick={handleCopy}>
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {copied ? 'コピーしました' : 'URLをコピー'}
-          </Button>
+    <div className="bg-amber-50 border-b border-amber-200 px-4 py-3.5 pt-[calc(0.875rem+env(safe-area-inset-top))]">
+      <div className="max-w-lg mx-auto flex items-start gap-3">
+        <div className="flex size-8 items-center justify-center rounded-full bg-amber-100 shrink-0">
+          <TriangleAlert className="size-4 text-amber-600" />
         </div>
-        <button type="button" onClick={handleDismiss} aria-label="閉じる" className="shrink-0 text-muted-foreground p-1">
+        <div className="flex-1 min-w-0 pt-0.5">
+          <p className="text-sm font-semibold text-amber-900">{appName}内のブラウザで開いています</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-800">
+            アプリ内ブラウザは動作が不安定になることがあります。快適にご利用いただくため、標準のブラウザ(Safari / Chromeなど)で開くことをおすすめします。
+          </p>
+          <div className="mt-2.5 flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleOpenInBrowser}
+            >
+              {copiedFallback ? <Check className="size-3.5" /> : <ExternalLink className="size-3.5" />}
+              {copiedFallback ? 'URLをコピーしました' : 'ブラウザで開く'}
+            </Button>
+            {!externalUrl && copiedFallback && (
+              <span className="text-[11px] text-amber-700 leading-tight">
+                開けない場合は右上のメニューから貼り付けてください
+              </span>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          aria-label="閉じる"
+          className="shrink-0 text-amber-700/70 hover:text-amber-900 p-1 -m-1"
+        >
           <X className="size-4" />
         </button>
       </div>

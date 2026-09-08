@@ -12,6 +12,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // main.jsxでvirtual:pwa-registerを使い、定期的な更新チェック+即時反映を自前で行うため、
+      // 何もしないデフォルトの自動注入スクリプトは無効化する(そうしないと、デプロイ後も
+      // 端末が古いキャッシュ済みバンドルを使い続けてしまう問題が起きていた)
+      injectRegister: false,
       includeAssets: ['apple-touch-icon.png', 'favicon.png'],
       manifest: {
         name: 'BASKETBALL STATS',
