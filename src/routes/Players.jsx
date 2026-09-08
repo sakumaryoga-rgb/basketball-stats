@@ -72,8 +72,6 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
         number: existing.number,
         position: existing.position,
         position2: existing.position2,
-        heightCm: existing.height_cm,
-        weightKg: existing.weight_kg,
         photoUrl: existing.photo_url,
       })
       reset()

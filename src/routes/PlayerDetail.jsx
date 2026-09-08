@@ -86,8 +86,6 @@ function EditProfileDialog({ player, updatePlayer, children }) {
   const [number, setNumber] = useState(player.number ?? '')
   const [position, setPosition] = useState(player.position ?? '')
   const [position2, setPosition2] = useState(player.position2 ?? '')
-  const [heightCm, setHeightCm] = useState(player.height_cm ?? '')
-  const [weightKg, setWeightKg] = useState(player.weight_kg ?? '')
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(player.photo_url ?? '')
   const [removePhoto, setRemovePhoto] = useState(false)
@@ -100,8 +98,6 @@ function EditProfileDialog({ player, updatePlayer, children }) {
       setNumber(player.number ?? '')
       setPosition(player.position ?? '')
       setPosition2(player.position2 ?? '')
-      setHeightCm(player.height_cm ?? '')
-      setWeightKg(player.weight_kg ?? '')
       setPhotoFile(null)
       setPhotoPreview(player.photo_url ?? '')
       setRemovePhoto(false)
@@ -142,8 +138,6 @@ function EditProfileDialog({ player, updatePlayer, children }) {
         number: number ? Number(number) : null,
         position: position || null,
         position2: position2 || null,
-        height_cm: heightCm ? Number(heightCm) : null,
-        weight_kg: weightKg ? Number(weightKg) : null,
         photo_url: photoUrl,
       })
       setOpen(false)
@@ -200,16 +194,6 @@ function EditProfileDialog({ player, updatePlayer, children }) {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-position2">ポジション(第2)</Label>
             <PositionSelect id="edit-position2" value={position2} onChange={setPosition2} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-height">身長 (cm)</Label>
-              <Input id="edit-height" type="number" step="0.1" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} placeholder="例: 180" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-weight">体重 (kg)</Label>
-              <Input id="edit-weight" type="number" step="0.1" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} placeholder="例: 75" />
-            </div>
           </div>
           {error && <p className="text-destructive text-sm">{error}</p>}
           <DialogFooter>
@@ -278,13 +262,7 @@ export function PlayerDetail({ teamId }) {
         <div className="flex-1 min-w-0">
           <p className="text-lg font-medium">{player.name}</p>
           <p className="text-xs text-muted-foreground">
-            {[
-              formatPositions(player.position, player.position2) || null,
-              player.height_cm ? `${player.height_cm}cm` : null,
-              player.weight_kg ? `${player.weight_kg}kg` : null,
-            ]
-              .filter(Boolean)
-              .join(' ・ ')}
+            {formatPositions(player.position, player.position2)}
           </p>
         </div>
         <EditProfileDialog player={player} updatePlayer={updatePlayer}>

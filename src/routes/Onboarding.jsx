@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Copy, Check, Loader2, 
 import { supabase } from '@/supabaseClient'
 import { cn } from '@/lib/utils'
 import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legal'
+import { saveShareUrl } from '@/lib/shareUrlStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -119,6 +120,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
         setAutoJoining(false)
         return
       }
+      saveShareUrl(result.out_team_id, `${window.location.origin}/t/${tokenFromPath}`)
       await finishJoin(result.out_team_id)
     })()
     return () => {
@@ -139,10 +141,12 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
       return
     }
     const team = Array.isArray(data) ? data[0] : data
+    const shareUrl = `${window.location.origin}/t/${team.share_token}`
+    saveShareUrl(team.id, shareUrl)
     setPendingShareReveal({
       teamId: team.id,
       teamName: team.name,
-      shareUrl: `${window.location.origin}/t/${team.share_token}`,
+      shareUrl,
     })
   }
 
@@ -158,6 +162,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
       setError(result?.message || rpcError?.message || '参加に失敗しました')
       return
     }
+    saveShareUrl(result.out_team_id, `${window.location.origin}/t/${token}`)
     await finishJoin(result.out_team_id)
   }
 
@@ -196,9 +201,11 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   }
 
   return (
-    <div className="min-h-svh relative flex flex-col items-center justify-center gap-8 overflow-hidden px-4 py-10">
-      <div className="pointer-events-none absolute -top-24 -right-24 size-72 rounded-full bg-primary/10 blur-3xl" aria-hidden />
-      <div className="pointer-events-none absolute -bottom-24 -left-24 size-72 rounded-full bg-primary/8 blur-3xl" aria-hidden />
+    <div className="min-h-svh overscroll-none relative flex flex-col items-center justify-center gap-8 px-4 py-10">
+      <div className="fixed inset-0 -z-10 overflow-hidden bg-background" aria-hidden>
+        <div className="absolute -top-24 -right-24 size-72 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 size-72 rounded-full bg-primary/8 blur-3xl" />
+      </div>
 
       <div className="relative flex flex-col items-center gap-3">
         <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30">

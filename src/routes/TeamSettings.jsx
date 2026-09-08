@@ -7,6 +7,7 @@ import { useGames } from '@/hooks/useGames'
 import { useTeamSeasonStats } from '@/hooks/useTeamSeasonStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
+import { getShareUrl, saveShareUrl } from '@/lib/shareUrlStore'
 import { formatAvg, formatPct, formatPositions, pct, perGame, POSITIONS } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -137,7 +138,12 @@ function EditTeamDialog({ team, onTeamUpdated, children }) {
             type="button"
             variant="ghost"
             className="w-full text-destructive hover:text-destructive"
-            onClick={() => setConfirmDelete(true)}
+            onClick={() => {
+              // 編集ダイアログを開いたまま削除確認を重ねて表示すると、双方の
+              // 「キャンセル」ボタンが透けて重なって見えてしまうため、先に閉じてから表示する
+              setOpen(false)
+              setConfirmDelete(true)
+            }}
           >
             <Trash2 className="size-4" />
             このチームを削除する
@@ -165,13 +171,14 @@ function EditTeamDialog({ team, onTeamUpdated, children }) {
   )
 }
 
-// 共有URLは発行/再発行の直後にしか平文を得られない(DBにはハッシュしか保存しない)ため、
-// この画面では常に「再発行」の入口だけを示す。再発行しても既存メンバーはそのまま使える。
+// 共有URLの平文はDBにはハッシュしか保存されないため、サーバーからは取得できない。
+// ただし、この端末が過去に作成/参加時に使ったURLはlocalStorageに控えているため、それがあれば
+// そのまま表示する(shareUrlStore参照)。別端末で作成された等の理由で控えがない場合のみ、
+// 再発行して新しいURLを発行する導線を案内する。
 function ShareUrlCard({ team, onTeamUpdated }) {
+  const [knownShareUrl, setKnownShareUrl] = useState(() => getShareUrl(team.id))
   const [confirmRegenerate, setConfirmRegenerate] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
-  const [newShareUrl, setNewShareUrl] = useState('')
-  const [showNewUrl, setShowNewUrl] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
 
@@ -185,27 +192,24 @@ function ShareUrlCard({ team, onTeamUpdated }) {
       setError(rpcError.message)
       return
     }
-    setNewShareUrl(`${window.location.origin}/t/${data}`)
-    setShowNewUrl(true)
+    const shareUrl = `${window.location.origin}/t/${data}`
+    saveShareUrl(team.id, shareUrl)
+    setKnownShareUrl(shareUrl)
+    onTeamUpdated()
   }
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(newShareUrl)
+    await navigator.clipboard.writeText(knownShareUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   async function handleShare() {
     try {
-      await navigator.share({ title: team.name, url: newShareUrl })
+      await navigator.share({ title: team.name, url: knownShareUrl })
     } catch {
       // ユーザーがシェアをキャンセルした場合等は何もしない
     }
-  }
-
-  function handleCloseReveal(next) {
-    setShowNewUrl(next)
-    if (!next) onTeamUpdated()
   }
 
   return (
@@ -217,12 +221,31 @@ function ShareUrlCard({ team, onTeamUpdated }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          セキュリティのため、現在の共有URLはこの画面には表示されません。URLを紛失した場合や、これまで共有した
-          相手からのアクセスを止めたい場合は再発行してください(再発行しても、既にこのチームに入っている
-          メンバーはそのまま使えます)。
-        </p>
+        {knownShareUrl ? (
+          <div className="text-sm bg-muted rounded-md px-3 py-2 break-all">{knownShareUrl}</div>
+        ) : (
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            この端末に保存された共有URLの記録が見つかりません(別の端末で発行された場合など)。
+            URLを紛失した場合や、これまで共有した相手からのアクセスを止めたい場合は再発行してください
+            (再発行しても、既にこのチームに入っているメンバーはそのまま使えます)。
+          </p>
+        )}
         {error && <p className="text-destructive text-sm">{error}</p>}
+        <div className="flex gap-2">
+          {knownShareUrl && (
+            <>
+              <Button type="button" variant="outline" className="flex-1" onClick={handleCopy}>
+                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                {copied ? 'コピーしました' : 'コピー'}
+              </Button>
+              {typeof navigator !== 'undefined' && navigator.share && (
+                <Button type="button" variant="outline" size="icon" aria-label="共有" onClick={handleShare}>
+                  <Share2 className="size-4" />
+                </Button>
+              )}
+            </>
+          )}
+        </div>
         <Button type="button" variant="outline" onClick={() => setConfirmRegenerate(true)}>
           <RefreshCw className="size-4" />
           共有URLを再発行する
@@ -243,31 +266,6 @@ function ShareUrlCard({ team, onTeamUpdated }) {
             <Button disabled={regenerating} onClick={handleRegenerate}>
               {regenerating ? '発行中...' : '再発行する'}
             </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={showNewUrl} onOpenChange={handleCloseReveal}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>新しい共有URL</AlertDialogTitle>
-            <AlertDialogDescription>
-              この画面を閉じると二度と表示されません。忘れずに保存・共有してください。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="text-sm bg-muted rounded-md px-3 py-2 break-all">{newShareUrl}</div>
-          <AlertDialogFooter>
-            <Button type="button" variant="outline" onClick={handleCopy}>
-              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-              {copied ? 'コピーしました' : 'コピー'}
-            </Button>
-            {typeof navigator !== 'undefined' && navigator.share && (
-              <Button type="button" variant="outline" onClick={handleShare}>
-                <Share2 className="size-4" />
-                共有
-              </Button>
-            )}
-            <AlertDialogClose render={<Button />}>閉じる</AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
