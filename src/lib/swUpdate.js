@@ -1,12 +1,26 @@
 // main.jsx(Reactツリーの外)でService Workerの更新登録を行うため、更新の有無を
-// Reactコンポーネント側へ橋渡しする小さなpub/sub。useSyncExternalStoreで購読する
-let needRefresh = false
+// Reactコンポーネント側へ橋渡しする小さなpub/sub。useSyncExternalStoreで購読する。
+//
+// needRefresh: 通常の新バージョン検知(SWのonNeedRefresh)。記録中の画面では
+//   非ブロッキング表示に留め、記録完了・画面離脱後にブロッキング表示へ切り替える
+// forceUpdateRequired: DBスキーマ変更等で旧クライアントとの互換性がなくなった場合の
+//   強制更新(appVersion.jsのcheckMinSupportedVersion)。記録中でも常にブロッキング表示にする
+let state = { needRefresh: false, forceUpdateRequired: false }
 let updateFn = null
 const listeners = new Set()
 
-export function setNeedRefresh(value) {
-  needRefresh = value
+function emit() {
   listeners.forEach((listener) => listener())
+}
+
+export function setNeedRefresh(value) {
+  state = { ...state, needRefresh: value }
+  emit()
+}
+
+export function setForceUpdateRequired(value) {
+  state = { ...state, forceUpdateRequired: value }
+  emit()
 }
 
 export function setUpdateFn(fn) {
@@ -17,11 +31,11 @@ export function applyUpdate() {
   updateFn?.(true)
 }
 
-export function subscribeNeedRefresh(listener) {
+export function subscribe(listener) {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
 
-export function getNeedRefresh() {
-  return needRefresh
+export function getState() {
+  return state
 }
