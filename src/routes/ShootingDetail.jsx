@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { ChevronLeft, Trash2, Check, Undo2, Pencil, X } from 'lucide-react'
+import { ChevronLeft, Trash2, Check, Pencil } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useShootingEntries } from '@/hooks/useShootingEntries'
@@ -119,7 +119,7 @@ export function ShootingDetail({ teamId }) {
   const location = useLocation()
   const { players } = usePlayers(teamId)
   const { games, updateGame, deleteGame } = useGames(teamId, 'shooting')
-  const { entries, addTally, undoTally, resetZone } = useShootingEntries(id)
+  const { entries, addTally, resetZone } = useShootingEntries(id)
   // シューティング追加時に選手を選んでいれば、その選手だけをこの画面に表示し、1人目を
   // 最初から選択済みにしておく(追加直後にもう一度選手を選び直す手間を省く)。
   // location.stateはマウント直後にuseActiveShareToken(App.jsx)がURLへ?t=を付与するための
@@ -133,21 +133,33 @@ export function ShootingDetail({ teamId }) {
   // 完了済み(status='final')のセッションは、意図せずタップして下書きに戻ってしまわないよう
   // デフォルトで読み取り専用にし、「記録を修正する」を押した時だけ編集可能にする
   const [isEditing, setIsEditing] = useState(false)
-  // 直前に追加した記録(選手・ゾーン・本数)。「取り消す」でこの分だけを打ち消せるようにする
-  const [lastAction, setLastAction] = useState(null)
 
-  // この画面に表示する選手は、「追加時に選んだ選手」と「実際に記録(shooting_entries)がある
-  // 選手」の和集合にする。追加時の選択(participantIds)だけに絞ると、複数選手を選んで
-  // 1人が記録し始めた瞬間に、まだ記録していない残りの選手が(recordedPlayerIdsだけを見ていた
-  // 旧ロジックでは)一覧から消えてしまっていた。逆に記録だけに絞ると、PRACTICEタブの一覧から
-  // 追加時の選択情報を持たずに開いた既存セッションで、未参加の選手が紛れ込んでしまう。
-  // 和集合であれば両方のケースを同時に満たせる。どちらの情報もなければ(直接アクセス等)全選手を表示する
-  const recordedPlayerIds = useMemo(() => [...new Set(entries.map((e) => e.player_id))], [entries])
+  // この画面に表示する選手の集合。「追加時に選んだ選手」と「実際に記録(shooting_entries)が
+  // ある選手」を合わせて初期化した後は、新しく記録が付いた選手を追加するだけで
+  // 一度加えた選手を取り除くことはない。記録を全て削除しても対象の選手が
+  // 選手一覧から消えてしまわないようにするための措置(記録の削除は「この選手の記録」の
+  // ゴミ箱アイコンから行う想定で、これが唯一の訂正手段のため、選手ごと消えると
+  // 選び直しすらできなくなってしまう)
+  const [visiblePlayerIds, setVisiblePlayerIds] = useState(
+    () => new Set([...(participantIds ?? []), ...entries.map((e) => e.player_id)])
+  )
+  useEffect(() => {
+    setVisiblePlayerIds((prev) => {
+      const next = new Set(prev)
+      let changed = false
+      for (const e of entries) {
+        if (!next.has(e.player_id)) {
+          next.add(e.player_id)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [entries])
   const visiblePlayers = useMemo(() => {
-    const ids = new Set([...(participantIds ?? []), ...recordedPlayerIds])
-    if (ids.size > 0) return players.filter((p) => ids.has(p.id))
+    if (visiblePlayerIds.size > 0) return players.filter((p) => visiblePlayerIds.has(p.id))
     return players
-  }, [players, recordedPlayerIds, participantIds])
+  }, [players, visiblePlayerIds])
 
   const session = games.find((g) => g.id === id)
 
@@ -195,21 +207,11 @@ export function ShootingDetail({ teamId }) {
 
   async function handleConfirmZone(attempts, makes) {
     await addTally(selectedPlayerId, pendingZone, attempts, makes)
-    setLastAction({ playerId: selectedPlayerId, zone: pendingZone, attempts, makes })
     setPendingZone(null)
-  }
-
-  async function handleUndoLastAction() {
-    if (!lastAction) return
-    await undoTally(lastAction.playerId, lastAction.zone, lastAction.attempts, lastAction.makes)
-    setLastAction(null)
   }
 
   async function handleResetZone(zone) {
     await resetZone(selectedPlayerId, zone)
-    if (lastAction && lastAction.playerId === selectedPlayerId && lastAction.zone === zone) {
-      setLastAction(null)
-    }
   }
 
   async function handleConfirmDelete() {
@@ -228,7 +230,6 @@ export function ShootingDetail({ teamId }) {
       return
     }
     setIsEditing(false)
-    setLastAction(null)
     setShowCompleteAnimation(true)
     // ポップアップのアニメーションを少し見せてから遷移する
     setTimeout(() => {
@@ -290,26 +291,6 @@ export function ShootingDetail({ teamId }) {
             <p className="text-xs text-muted-foreground text-center">まだ記録がありません</p>
           )}
           {completeError && <p className="text-xs text-destructive text-center">{completeError}</p>}
-        </div>
-      )}
-
-      {!readOnly && lastAction && (
-        <div className="flex items-center justify-between gap-2 rounded-lg bg-primary/10 px-3 py-2.5 text-sm text-primary">
-          <span>
-            {ZONES[lastAction.zone].label}に{lastAction.makes}/{lastAction.attempts}本を追加しました
-          </span>
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={handleUndoLastAction}
-              className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-primary/10 font-medium"
-            >
-              <Undo2 className="size-3.5" />
-              取り消す
-            </button>
-            <button onClick={() => setLastAction(null)} aria-label="閉じる">
-              <X className="size-4" />
-            </button>
-          </div>
         </div>
       )}
 
