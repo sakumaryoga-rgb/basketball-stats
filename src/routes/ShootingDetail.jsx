@@ -119,16 +119,16 @@ export function ShootingDetail({ teamId }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showCompleteAnimation, setShowCompleteAnimation] = useState(false)
 
-  // この画面に表示する選手は次の優先順位で決める。
-  // 1. 既に記録(shooting_entries)がある選手がいれば、実際に参加した選手だけを表示する
-  //    (PRACTICEタブの一覧から既存セッションを開いた場合など、追加時の選択情報を
-  //    持たないアクセスでも、未参加の選手が紛れ込まないようにするため)
-  // 2. まだ記録が1件もない場合(作成直後)は、追加時に選んだ選手を表示する
-  // 3. どちらの情報もなければ(直接アクセス等)、全選手を表示する
+  // この画面に表示する選手は、「追加時に選んだ選手」と「実際に記録(shooting_entries)がある
+  // 選手」の和集合にする。追加時の選択(participantIds)だけに絞ると、複数選手を選んで
+  // 1人が記録し始めた瞬間に、まだ記録していない残りの選手が(recordedPlayerIdsだけを見ていた
+  // 旧ロジックでは)一覧から消えてしまっていた。逆に記録だけに絞ると、PRACTICEタブの一覧から
+  // 追加時の選択情報を持たずに開いた既存セッションで、未参加の選手が紛れ込んでしまう。
+  // 和集合であれば両方のケースを同時に満たせる。どちらの情報もなければ(直接アクセス等)全選手を表示する
   const recordedPlayerIds = useMemo(() => [...new Set(entries.map((e) => e.player_id))], [entries])
   const visiblePlayers = useMemo(() => {
-    if (recordedPlayerIds.length > 0) return players.filter((p) => recordedPlayerIds.includes(p.id))
-    if (participantIds && participantIds.length > 0) return players.filter((p) => participantIds.includes(p.id))
+    const ids = new Set([...(participantIds ?? []), ...recordedPlayerIds])
+    if (ids.size > 0) return players.filter((p) => ids.has(p.id))
     return players
   }, [players, recordedPlayerIds, participantIds])
 
