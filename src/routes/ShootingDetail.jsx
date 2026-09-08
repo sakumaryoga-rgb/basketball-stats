@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { ChevronLeft, Trash2 } from 'lucide-react'
+import { ChevronLeft, Trash2, Check } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useShootingEntries } from '@/hooks/useShootingEntries'
@@ -117,6 +117,7 @@ export function ShootingDetail({ teamId }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => participantIds?.[0] ?? null)
   const [pendingZone, setPendingZone] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showCompleteAnimation, setShowCompleteAnimation] = useState(false)
 
   // 追加時に選手を選んでいれば、その選手だけをこの画面に表示する(他の選手が
   // 紛れて選びにくくなるのを防ぐ)。選択情報がない場合(直接アクセス等)は全選手を表示する
@@ -157,7 +158,12 @@ export function ShootingDetail({ teamId }) {
   }
 
   function handleCompleteWorkout() {
-    navigate('/practice', { state: { flashMessage: 'ワークアウトの内容を記録しました。' } })
+    if (entries.length === 0) return
+    setShowCompleteAnimation(true)
+    // ポップアップのアニメーションを少し見せてから遷移する
+    setTimeout(() => {
+      navigate('/practice', { state: { flashMessage: 'ワークアウトの内容を記録しました。' } })
+    }, 1200)
   }
 
   return (
@@ -190,9 +196,23 @@ export function ShootingDetail({ teamId }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Button variant="destructive" className="w-full" onClick={handleCompleteWorkout}>
-        ワークアウトを完了する
-      </Button>
+      <div className="flex flex-col gap-1.5">
+        <Button variant="destructive" className="w-full" disabled={entries.length === 0} onClick={handleCompleteWorkout}>
+          ワークアウトを完了する
+        </Button>
+        {entries.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center">まだ記録がありません</p>
+        )}
+      </div>
+
+      <Dialog open={showCompleteAnimation}>
+        <DialogContent showCloseButton={false} className="flex flex-col items-center gap-4 py-10 text-center">
+          <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 animate-check-pop">
+            <Check className="size-8" strokeWidth={3} />
+          </div>
+          <p className="font-medium">ワークアウトを記録しました</p>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-col gap-2">
         <p className="text-xs font-heading tracking-wide text-muted-foreground">選手を選択</p>

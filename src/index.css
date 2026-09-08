@@ -13,6 +13,28 @@ body {
   margin: 0;
 }
 
+/* ワークアウト完了ポップアップの赤丸チェックマーク用。スプリングのように弾む
+   遊びごころのある演出のため、標準のanimate-inプリセットではなく手書きのkeyframeを使う */
+@keyframes check-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-check-pop {
+  animation: check-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 @theme inline {
   /* Druk Condensed / Druk Wide は商用フォントのため同梱できず、
      似た雰囲気の無料フォント Anton で代替している */

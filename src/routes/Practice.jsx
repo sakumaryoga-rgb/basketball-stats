@@ -207,8 +207,10 @@ function CreateShootingDialog({ createGame, players }) {
 export function Practice({ teamId }) {
   const location = useLocation()
   const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
-  const { createGame: createShooting } = useGames(teamId, 'shooting')
+  const { games: shootingSessions, createGame: createShooting } = useGames(teamId, 'shooting')
   const { players } = usePlayers(teamId)
+  // useGamesは日付の新しい順に返すため、先頭5件が直近のワークアウトになる
+  const recentShootingSessions = shootingSessions.slice(0, 5)
   // シューティング画面で「ワークアウトを完了する」を押した直後だけ表示する完了メッセージ
   const [flashMessage, setFlashMessage] = useState(location.state?.flashMessage ?? null)
 
@@ -262,12 +264,28 @@ export function Practice({ teamId }) {
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">シューティング</h2>
+          <h2 className="text-sm font-medium">シューティング(直近5件)</h2>
           <CreateShootingDialog createGame={createShooting} players={players} />
         </div>
-        <p className="text-xs text-muted-foreground">
-          複数の選手が同時に記録できるため、一覧はここではなく各選手のPRACTICEタブに表示されます
-        </p>
+        {recentShootingSessions.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">まだシューティング記録がありません</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {recentShootingSessions.map((session) => (
+              <li key={session.id}>
+                <Link
+                  to={`/shooting/${session.id}`}
+                  className="flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{session.opponent_name || 'シューティング'}</p>
+                    <p className="text-xs text-muted-foreground">{session.game_date}</p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   )
