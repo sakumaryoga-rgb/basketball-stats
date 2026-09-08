@@ -274,7 +274,7 @@ export function PlayerDetail({ teamId }) {
 
       <div className="flex rounded-lg border p-1">
         {[
-          { key: 'official', label: '公式' },
+          { key: 'official', label: 'OFFICIAL' },
           { key: 'practice', label: 'PRACTICE' },
         ].map((tab) => (
           <button

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { ChevronLeft, Trash2 } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
@@ -105,10 +105,13 @@ function ZoneEntryDialog({ zone, existing, onClose, onConfirm }) {
 export function ShootingDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { players } = usePlayers(teamId)
   const { games, deleteGame } = useGames(teamId, 'shooting')
   const { entries, addTally, resetZone } = useShootingEntries(id)
-  const [selectedPlayerId, setSelectedPlayerId] = useState(null)
+  // シューティング追加時に選手を選んでいれば、その1人目を最初から選択済みにしておく
+  // (追加直後にもう一度選手を選び直す手間を省く)
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => location.state?.playerIds?.[0] ?? null)
   const [pendingZone, setPendingZone] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 

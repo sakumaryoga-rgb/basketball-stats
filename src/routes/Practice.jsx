@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
+import { usePlayers } from '@/hooks/usePlayers'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -102,21 +104,43 @@ function CreateScrimmageDialog({ createGame }) {
   )
 }
 
-function CreateShootingDialog({ createGame }) {
+function CreateShootingDialog({ createGame, players }) {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [memo, setMemo] = useState('')
   const [gameDate, setGameDate] = useState(todayStr())
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  function handleOpenChange(next) {
+    if (next) {
+      setMemo('')
+      setGameDate(todayStr())
+      setSelectedPlayerIds([])
+      setError('')
+    }
+    setOpen(next)
+  }
+
+  function togglePlayer(playerId) {
+    setSelectedPlayerIds((prev) =>
+      prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]
+    )
+  }
+
   async function handleCreate(e) {
     e.preventDefault()
+    if (selectedPlayerIds.length === 0) {
+      setError('シューティングを行う選手を選択してください')
+      return
+    }
     setSaving(true)
     setError('')
     try {
-      await createGame({ opponentName: memo, gameDate })
-      setMemo('')
+      const game = await createGame({ opponentName: memo, gameDate })
       setOpen(false)
+      navigate(`/shooting/${game.id}`, { state: { playerIds: selectedPlayerIds } })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -125,7 +149,7 @@ function CreateShootingDialog({ createGame }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button size="sm" variant="outline" />}>
         <Plus className="size-4" />
         シューティングを追加
@@ -146,6 +170,28 @@ function CreateShootingDialog({ createGame }) {
             <Label htmlFor="shooting-memo">メモ (任意)</Label>
             <Input id="shooting-memo" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="例: 朝練シュート" />
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>シューティングを行う選手(複数選択可)</Label>
+            {players.length === 0 ? (
+              <p className="text-sm text-muted-foreground">先に選手を登録してください</p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto -mx-1 px-1">
+                {players.map((p) => (
+                  <label
+                    key={p.id}
+                    className="flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm cursor-pointer hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={selectedPlayerIds.includes(p.id)}
+                      onCheckedChange={() => togglePlayer(p.id)}
+                    />
+                    {p.number != null ? `#${p.number} ` : ''}
+                    {p.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           {error && <p className="text-destructive text-sm">{error}</p>}
           <DialogFooter>
             <Button type="submit" disabled={saving}>
@@ -160,7 +206,8 @@ function CreateShootingDialog({ createGame }) {
 
 export function Practice({ teamId }) {
   const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
-  const { games: shootingSessions, createGame: createShooting } = useGames(teamId, 'shooting')
+  const { createGame: createShooting } = useGames(teamId, 'shooting')
+  const { players } = usePlayers(teamId)
 
   return (
     <div className="flex flex-col gap-6">
@@ -204,27 +251,11 @@ export function Practice({ teamId }) {
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium">シューティング</h2>
-          <CreateShootingDialog createGame={createShooting} />
+          <CreateShootingDialog createGame={createShooting} players={players} />
         </div>
-        {shootingSessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">まだシューティング記録がありません</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {shootingSessions.map((session) => (
-              <li key={session.id}>
-                <Link
-                  to={`/shooting/${session.id}`}
-                  className="flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{session.opponent_name || 'シューティング'}</p>
-                    <p className="text-xs text-muted-foreground">{session.game_date}</p>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <p className="text-xs text-muted-foreground">
+          複数の選手が同時に記録できるため、一覧はここではなく各選手のPRACTICEタブに表示されます
+        </p>
       </div>
     </div>
   )
