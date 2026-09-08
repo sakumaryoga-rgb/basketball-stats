@@ -147,6 +147,37 @@ function TimePickerDialog({ open, onOpenChange, secondsLeft, onApply }) {
   )
 }
 
+function AssistDialog({ pending, players, onSelect, onSkip }) {
+  const candidates = pending ? players.filter((p) => p.id !== pending.shooterId) : []
+  return (
+    <Dialog open={!!pending} onOpenChange={(next) => !next && onSkip()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>アシストした選手を選択</DialogTitle>
+          <DialogDescription>コートに出ている選手から選んでください</DialogDescription>
+        </DialogHeader>
+        {candidates.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2 text-center">他に出場中の選手がいません</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {candidates.map((p) => (
+              <Button key={p.id} type="button" variant="outline" onClick={() => onSelect(p.id)}>
+                {p.number != null ? `#${p.number} ` : ''}
+                {p.name}
+              </Button>
+            ))}
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onSkip}>
+            アシストなし
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 const STATUS_LABEL = { scheduled: '予定', in_progress: '試合中', final: '終了' }
 const HOT_ZONE_ENABLED_KEY = 'hotZoneEnabled'
 
@@ -167,6 +198,8 @@ export function GameDetail({ teamId }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [activeCategoryKey, setActiveCategoryKey] = useState('fg2')
   const [pendingOutcome, setPendingOutcome] = useState(null)
+  // 2P/3Pが成功した直後に表示する「アシストした選手」選択ダイアログの対象
+  const [pendingAssist, setPendingAssist] = useState(null)
   const [secondsLeft, setSecondsLeft] = useState(600)
   const [clockRunning, setClockRunning] = useState(false)
   const [statsTab, setStatsTab] = useState('basic')
@@ -364,8 +397,14 @@ export function GameDetail({ teamId }) {
     if (!selectedPlayerId) return
     const statKey = outcome === 'make' ? activeCategory.make : activeCategory.miss
     if (activeCategory.kind === 'ft' || !hotZoneEnabled) {
-      const ok = await recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
-      if (ok) showRecordedFlash(selectedPlayerId, statKey)
+      const shooterId = selectedPlayerId
+      const ok = await recordStat(shooterId, statKey, { quarter: game.quarter })
+      if (ok) {
+        showRecordedFlash(shooterId, statKey)
+        if (activeCategory.kind === 'shot' && outcome === 'make') {
+          setPendingAssist({ shooterId, quarter: game.quarter })
+        }
+      }
     } else {
       setPendingOutcome({ statKey })
     }
@@ -374,9 +413,29 @@ export function GameDetail({ teamId }) {
   async function handleCourtTap({ x, y }) {
     if (!pendingOutcome || !selectedPlayerId) return
     const statKey = pendingOutcome.statKey
+    const shooterId = selectedPlayerId
     setPendingOutcome(null)
-    const ok = await recordStat(selectedPlayerId, statKey, { quarter: game.quarter, shotX: x, shotY: y })
-    if (ok) showRecordedFlash(selectedPlayerId, statKey)
+    const ok = await recordStat(shooterId, statKey, { quarter: game.quarter, shotX: x, shotY: y })
+    if (ok) {
+      showRecordedFlash(shooterId, statKey)
+      if (statKey.endsWith('_make')) {
+        setPendingAssist({ shooterId, quarter: game.quarter })
+      }
+    }
+  }
+
+  // アシストした選手を選んだ場合は、その選手のASTとして別途記録する。
+  // 「アシストなし」を選んだ/ダイアログを閉じた場合は何も記録しない
+  async function handleAssistSelect(assistPlayerId) {
+    if (!pendingAssist) return
+    const { quarter } = pendingAssist
+    setPendingAssist(null)
+    const ok = await recordStat(assistPlayerId, 'ast', { quarter })
+    if (ok) showRecordedFlash(assistPlayerId, 'ast')
+  }
+
+  function handleAssistSkip() {
+    setPendingAssist(null)
   }
 
   async function handlePairClick(statKey) {
@@ -556,6 +615,13 @@ export function GameDetail({ teamId }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AssistDialog
+        pending={pendingAssist}
+        players={starters}
+        onSelect={handleAssistSelect}
+        onSkip={handleAssistSkip}
+      />
 
       <Dialog open={!!substitutionTarget} onOpenChange={(o) => !o && setSubstitutionTarget(null)}>
         <DialogContent>
