@@ -185,7 +185,10 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     }
     setSaving(false)
     if (rpcError || !result?.success) {
-      setError(result?.message || rpcError?.message || '参加に失敗しました')
+      // result.messageはredeem_share_tokenが返す「このリンクは無効です」という
+      // URL前提の文言のため、チーム名を入力した場合にも表示されると誤解を招く。
+      // 入力がURL/トークン/チーム名のいずれであっても通用する文言にする。
+      setError(rpcError?.message || '共有URLまたはチーム名が正しくありません。入力内容をご確認ください。')
       return
     }
     saveShareUrl(result.out_team_id, `${window.location.origin}/t/${token}`, result.out_team_name)
@@ -239,7 +242,6 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
         </div>
         <div className="text-center">
           <p className="font-heading text-4xl tracking-wide text-primary">BASKETBALL STATS</p>
-          <p className="text-sm text-muted-foreground mt-1">バスケスタッツ</p>
         </div>
       </div>
 

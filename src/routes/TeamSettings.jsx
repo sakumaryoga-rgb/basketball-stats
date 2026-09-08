@@ -468,7 +468,7 @@ export function TeamSettings({ team, onTeamUpdated }) {
         </CardContent>
       </Card>
 
-      {gamesPlayed > 0 && totals && (
+      {totals && (
         <>
           <div className="rounded-lg border p-4">
             <p className="text-xs text-muted-foreground mb-3">チーム1試合平均 ({gamesPlayed}試合)</p>
