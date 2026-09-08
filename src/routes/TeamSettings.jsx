@@ -282,7 +282,7 @@ function StatBlock({ label, value }) {
   )
 }
 
-export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) {
+export function TeamSettings({ team, onTeamUpdated }) {
   const navigate = useNavigate()
   const { players: allPlayers, updatePlayer } = usePlayers(team.id)
   const players = allPlayers.filter((p) => !p.guest_game_id)
@@ -497,40 +497,12 @@ export function TeamSettings({ team, teams = [], onSwitchTeam, onTeamUpdated }) 
 
       <ShareUrlCard team={team} onTeamUpdated={onTeamUpdated} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>MYTEAM</CardTitle>
-          <CardDescription>所属している他のチームに切り替えられます</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <ul className="flex flex-col gap-2">
-            {teams.map((t) => (
-              <li key={t.id}>
-                <button
-                  onClick={() => onSwitchTeam(t.id)}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors',
-                    t.id === team.id ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                  )}
-                >
-                  <Avatar className="size-8 shrink-0 text-xs font-medium">
-                    <AvatarImage src={t.icon_url} alt={t.name} />
-                    <AvatarFallback className="bg-primary text-primary-foreground">{t.name?.[0] ?? 'B'}</AvatarFallback>
-                  </Avatar>
-                  <span className="flex-1 min-w-0 text-sm font-medium truncate">{t.name}</span>
-                  {t.id === team.id && <span className="text-xs text-primary font-medium shrink-0">表示中</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <Link to="/onboarding?add=1">
-            <Button variant="outline" className="w-full">
-              <Plus className="size-4" />
-              別のチームに参加・作成する
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
+      <Link to="/onboarding?add=1">
+        <Button variant="outline" className="w-full">
+          <Plus className="size-4" />
+          別のチームに参加・作成する
+        </Button>
+      </Link>
 
       <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmLeave(true)}>
         <LogOut className="size-4" />

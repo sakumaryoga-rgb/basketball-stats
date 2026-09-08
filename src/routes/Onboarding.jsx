@@ -43,6 +43,23 @@ function extractShareToken(input) {
   return match ? match[1] : trimmed
 }
 
+// 共有URLが無効だった場合、この端末が既に参加しているチームの名前として一致するか確認する
+// (チームを切り替える一覧UIは廃止したため、既に参加済みのチームへ戻る唯一の手段としてこれを使う。
+// 自分がまだ参加していないチームを名前だけで探し当てることはできない=総当たりでの不正参加は防げる)
+async function findOwnTeamByJoinedName(name) {
+  const trimmed = name.trim()
+  if (!trimmed) return null
+  const { data: userData } = await supabase.auth.getUser()
+  const userId = userData?.user?.id
+  if (!userId) return null
+  const { data, error } = await supabase.from('team_members').select('teams(id, name)').eq('user_id', userId)
+  if (error) return null
+  const match = (data ?? [])
+    .map((row) => row.teams)
+    .find((t) => t && t.name.trim().toLowerCase() === trimmed.toLowerCase())
+  return match ?? null
+}
+
 function BasketballIcon(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" {...props}>
@@ -134,7 +151,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     e.preventDefault()
     setSaving(true)
     setError('')
-    const { data, error: rpcError } = await supabase.rpc('create_team', { team_name: teamName })
+    const { data, error: rpcError } = await supabase.rpc('create_team', { team_name: teamName.trim() })
     setSaving(false)
     if (rpcError) {
       setError(rpcError.message)
@@ -156,12 +173,19 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     setError('')
     const token = extractShareToken(joinInput)
     const { data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: token })
-    setSaving(false)
     const result = Array.isArray(data) ? data[0] : data
     if (rpcError || !result?.success) {
+      // URL/トークンとして無効だった場合、参加済みのチーム名としての入力かどうか確認する
+      const ownTeam = await findOwnTeamByJoinedName(joinInput)
+      setSaving(false)
+      if (ownTeam) {
+        await finishJoin(ownTeam.id)
+        return
+      }
       setError(result?.message || rpcError?.message || '参加に失敗しました')
       return
     }
+    setSaving(false)
     saveShareUrl(result.out_team_id, `${window.location.origin}/t/${token}`)
     await finishJoin(result.out_team_id)
   }
@@ -297,13 +321,13 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
             ) : (
               <form onSubmit={handleJoin} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="join-input">共有URL</Label>
+                  <Label htmlFor="join-input">共有URL または 参加済みのチーム名</Label>
                   <Input
                     id="join-input"
                     required
                     value={joinInput}
                     onChange={(e) => setJoinInput(e.target.value)}
-                    placeholder="共有URLを貼り付け"
+                    placeholder="共有URLを貼り付け、または参加済みのチーム名を入力"
                   />
                 </div>
                 {error && <p className="text-destructive text-sm">{error}</p>}

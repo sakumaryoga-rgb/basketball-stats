@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { CalendarDays, ChevronDown, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
+import { CalendarDays, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { PullToRefresh } from '@/components/PullToRefresh'
 import { HamburgerMenu } from '@/components/HamburgerMenu'
@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { to: '/team', label: 'TEAM', icon: Settings },
 ]
 
-export function Layout({ teamName, teamIconUrl, teams = [] }) {
+export function Layout({ teamName, teamIconUrl }) {
   const location = useLocation()
   // pull-to-refreshで画面のデータを再取得するため、この値を変えて現在の画面を再マウントさせる
   // (各データフックはマウント時に自動でfetchするため、フルリロードなしでソフトに更新できる)
@@ -32,7 +32,6 @@ export function Layout({ teamName, teamIconUrl, teams = [] }) {
               </AvatarFallback>
             </Avatar>
             <span className="font-medium text-sm truncate">{teamName ?? 'バスケスタッツ'}</span>
-            {teams.length > 1 && <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />}
           </Link>
           <HamburgerMenu />
         </div>

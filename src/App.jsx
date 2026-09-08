@@ -51,17 +51,7 @@ export default function App() {
       <Routes>
         <Route path="/onboarding" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
         <Route path="/t/:token" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
-        <Route
-          element={
-            <Layout
-              teamName={activeTeam?.name}
-              teamIconUrl={activeTeam?.icon_url}
-              teams={teams}
-              activeTeamId={activeTeam?.id}
-              onSwitchTeam={switchTeam}
-            />
-          }
-        >
+        <Route element={<Layout teamName={activeTeam?.name} teamIconUrl={activeTeam?.icon_url} />}>
           {/* チーム未所属でも(オンボーディング中の同意ポップアップから遷移できるよう)閲覧できる情報ページ */}
           <Route path="/contact" element={<ContactForm />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -79,17 +69,7 @@ export default function App() {
               <Route path="/players" element={<Players teamId={activeTeam.id} teams={teams} />} />
               <Route path="/players/:id" element={<PlayerDetail teamId={activeTeam.id} />} />
               <Route path="/leaders" element={<Leaders teamId={activeTeam.id} />} />
-              <Route
-                path="/team"
-                element={
-                  <TeamSettings
-                    team={activeTeam}
-                    teams={teams}
-                    onSwitchTeam={switchTeam}
-                    onTeamUpdated={refreshTeams}
-                  />
-                }
-              />
+              <Route path="/team" element={<TeamSettings team={activeTeam} onTeamUpdated={refreshTeams} />} />
             </>
           )}
           <Route path="*" element={<Navigate to={activeTeam ? '/games' : '/onboarding'} replace />} />
