@@ -10,6 +10,7 @@ import { ZONES, ZONE_ORDER, classifyShotZone, aggregateHotZonesFromTallies } fro
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { CourtDiagram } from '@/components/CourtDiagram'
 import { HotZoneChart } from '@/components/HotZoneChart'
 import { cn } from '@/lib/utils'
@@ -107,7 +108,7 @@ export function ShootingDetail({ teamId }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { players } = usePlayers(teamId)
-  const { games, deleteGame } = useGames(teamId, 'shooting')
+  const { games, updateGame, deleteGame } = useGames(teamId, 'shooting')
   const { entries, addTally, resetZone } = useShootingEntries(id)
   // シューティング追加時に選手を選んでいれば、その選手だけをこの画面に表示し、1人目を
   // 最初から選択済みにしておく(追加直後にもう一度選手を選び直す手間を省く)。
@@ -118,6 +119,7 @@ export function ShootingDetail({ teamId }) {
   const [pendingZone, setPendingZone] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showCompleteAnimation, setShowCompleteAnimation] = useState(false)
+  const [completeError, setCompleteError] = useState('')
 
   // この画面に表示する選手は、「追加時に選んだ選手」と「実際に記録(shooting_entries)がある
   // 選手」の和集合にする。追加時の選択(participantIds)だけに絞ると、複数選手を選んで
@@ -155,9 +157,26 @@ export function ShootingDetail({ teamId }) {
     setPendingZone(classifyShotZone(x, y))
   }
 
+  // 完了済み(status='final')のセッションに手を加えた場合、「ワークアウトを完了する」を
+  // もう一度押すまで個人のPRACTICE記録に反映されないよう、編集を始めた時点で下書き状態に戻す
+  async function ensureDraft() {
+    if (session.status !== 'final') return
+    try {
+      await updateGame(session.id, { status: 'scheduled' })
+    } catch (err) {
+      console.error('ワークアウトの状態更新に失敗しました', err)
+    }
+  }
+
   async function handleConfirmZone(attempts, makes) {
+    await ensureDraft()
     await addTally(selectedPlayerId, pendingZone, attempts, makes)
     setPendingZone(null)
+  }
+
+  async function handleResetZone(zone) {
+    await ensureDraft()
+    await resetZone(selectedPlayerId, zone)
   }
 
   async function handleConfirmDelete() {
@@ -165,8 +184,16 @@ export function ShootingDetail({ teamId }) {
     navigate('/practice')
   }
 
-  function handleCompleteWorkout() {
+  async function handleCompleteWorkout() {
     if (entries.length === 0) return
+    setCompleteError('')
+    try {
+      await updateGame(session.id, { status: 'final' })
+    } catch (err) {
+      console.error('ワークアウトの完了処理に失敗しました', err)
+      setCompleteError('完了処理に失敗しました。もう一度お試しください。')
+      return
+    }
     setShowCompleteAnimation(true)
     // ポップアップのアニメーションを少し見せてから遷移する
     setTimeout(() => {
@@ -182,13 +209,23 @@ export function ShootingDetail({ teamId }) {
       </button>
 
       <div className="flex flex-col gap-1 rounded-lg border p-4">
-        <div className="flex items-center justify-between">
-          <p className="font-medium">{session.opponent_name || 'シューティング'}</p>
-          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setConfirmDelete(true)}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="font-medium truncate">{session.opponent_name || 'シューティング'}</p>
+            <Badge variant={session.status === 'final' ? 'secondary' : 'outline'} className="shrink-0">
+              {session.status === 'final' ? '完了' : '下書き'}
+            </Badge>
+          </div>
+          <Button variant="ghost" size="sm" className="text-destructive shrink-0" onClick={() => setConfirmDelete(true)}>
             削除
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">{formatDate(session.game_date)}</p>
+        {session.status !== 'final' && (
+          <p className="text-xs text-muted-foreground">
+            「ワークアウトを完了する」を押すまで、個人のPRACTICE記録には反映されません
+          </p>
+        )}
       </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
@@ -211,6 +248,7 @@ export function ShootingDetail({ teamId }) {
         {entries.length === 0 && (
           <p className="text-xs text-muted-foreground text-center">まだ記録がありません</p>
         )}
+        {completeError && <p className="text-xs text-destructive text-center">{completeError}</p>}
       </div>
 
       <Dialog open={showCompleteAnimation}>
@@ -280,7 +318,7 @@ export function ShootingDetail({ teamId }) {
                       {playerHotZones[key].makes}/{playerHotZones[key].attempts} ({formatPct(playerHotZones[key].pct)})
                     </span>
                     <button
-                      onClick={() => resetZone(selectedPlayerId, key)}
+                      onClick={() => handleResetZone(key)}
                       className="text-muted-foreground hover:text-destructive"
                       aria-label="リセット"
                     >

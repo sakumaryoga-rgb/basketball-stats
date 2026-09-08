@@ -23,7 +23,7 @@ export function usePracticeStats(teamId, playerId) {
     const [practiceStatsRes, practiceGamesRes, shootingGamesRes, shootingEntriesRes] = await Promise.all([
       supabase.from('player_practice_game_stats').select('*').eq('player_id', playerId),
       supabase.from('games').select('id, opponent_name, game_date, status').eq('team_id', teamId).eq('game_type', 'practice'),
-      supabase.from('games').select('id, opponent_name, game_date').eq('team_id', teamId).eq('game_type', 'shooting'),
+      supabase.from('games').select('id, opponent_name, game_date').eq('team_id', teamId).eq('game_type', 'shooting').eq('status', 'final'),
       supabase.from('shooting_entries').select('game_id, zone, attempts, makes').eq('player_id', playerId),
     ])
     if (practiceStatsRes.error) console.error('スクリメージ成績の取得に失敗しました', practiceStatsRes.error)
@@ -39,7 +39,11 @@ export function usePracticeStats(teamId, playerId) {
         .sort((a, b) => (a.game.game_date < b.game.game_date ? 1 : -1))
     )
 
-    const tallies = shootingEntriesRes.data ?? []
+    // 「ワークアウトを完了する」を押す(status='final')までは個人のPRACTICE記録に
+    // 反映しない。完了済みセッションを後から編集した場合も、編集を始めた時点で
+    // status='scheduled'に戻るため、再度完了するまで同様に反映されない
+    const finalizedShootingGameIds = new Set((shootingGamesRes.data ?? []).map((g) => g.id))
+    const tallies = (shootingEntriesRes.data ?? []).filter((t) => finalizedShootingGameIds.has(t.game_id))
     setShootingTallies(tallies)
 
     const totalsByGame = new Map()
