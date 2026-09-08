@@ -53,6 +53,24 @@ export function useShootingEntries(gameId) {
     return true
   }
 
+  // 直前にaddTallyで加算した分だけを打ち消す(取り消し機能用)。ゾーンの記録全体を
+  // 削除するresetZoneとは異なり、既存の数値を割り込まないよう減算のみ行う
+  async function undoTally(playerId, zone, attempts, makes) {
+    const { error } = await supabase.rpc('decrement_shooting_entry', {
+      p_game_id: gameId,
+      p_player_id: playerId,
+      p_zone: zone,
+      p_attempts: attempts,
+      p_makes: makes,
+    })
+    if (error) {
+      console.error('シューティング記録の取り消しに失敗しました', error)
+      return false
+    }
+    refresh()
+    return true
+  }
+
   async function resetZone(playerId, zone) {
     const { error } = await supabase
       .from('shooting_entries')
@@ -67,5 +85,5 @@ export function useShootingEntries(gameId) {
     refresh()
   }
 
-  return { entries, loading, addTally, resetZone, refresh }
+  return { entries, loading, addTally, undoTally, resetZone, refresh }
 }

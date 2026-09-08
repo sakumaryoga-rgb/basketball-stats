@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { ChevronLeft, Trash2, Check } from 'lucide-react'
+import { ChevronLeft, Trash2, Check, Undo2, Pencil, X } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useShootingEntries } from '@/hooks/useShootingEntries'
@@ -37,6 +37,16 @@ function ZoneEntryDialog({ zone, existing, onClose, onConfirm }) {
   const [attempts, setAttempts] = useState('')
   const [makes, setMakes] = useState('')
   const [error, setError] = useState('')
+
+  // このダイアログはゾーンをタップするたびに開閉されるだけでアンマウントされないため、
+  // 開くたびに前回入力した値をクリアしないと、誤って前の数値に上書き入力してしまう
+  useEffect(() => {
+    if (zone) {
+      setAttempts('')
+      setMakes('')
+      setError('')
+    }
+  }, [zone])
 
   if (!zone) return null
 
@@ -109,7 +119,7 @@ export function ShootingDetail({ teamId }) {
   const location = useLocation()
   const { players } = usePlayers(teamId)
   const { games, updateGame, deleteGame } = useGames(teamId, 'shooting')
-  const { entries, addTally, resetZone } = useShootingEntries(id)
+  const { entries, addTally, undoTally, resetZone } = useShootingEntries(id)
   // シューティング追加時に選手を選んでいれば、その選手だけをこの画面に表示し、1人目を
   // 最初から選択済みにしておく(追加直後にもう一度選手を選び直す手間を省く)。
   // location.stateはマウント直後にuseActiveShareToken(App.jsx)がURLへ?t=を付与するための
@@ -120,6 +130,11 @@ export function ShootingDetail({ teamId }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showCompleteAnimation, setShowCompleteAnimation] = useState(false)
   const [completeError, setCompleteError] = useState('')
+  // 完了済み(status='final')のセッションは、意図せずタップして下書きに戻ってしまわないよう
+  // デフォルトで読み取り専用にし、「記録を修正する」を押した時だけ編集可能にする
+  const [isEditing, setIsEditing] = useState(false)
+  // 直前に追加した記録(選手・ゾーン・本数)。「取り消す」でこの分だけを打ち消せるようにする
+  const [lastAction, setLastAction] = useState(null)
 
   // この画面に表示する選手は、「追加時に選んだ選手」と「実際に記録(shooting_entries)がある
   // 選手」の和集合にする。追加時の選択(participantIds)だけに絞ると、複数選手を選んで
@@ -152,8 +167,11 @@ export function ShootingDetail({ teamId }) {
     return <p className="text-sm text-muted-foreground py-8 text-center">読み込み中...</p>
   }
 
+  // 完了済みで、まだ「記録を修正する」を押していない間は読み取り専用にする
+  const readOnly = session.status === 'final' && !isEditing
+
   function handleCourtTap({ x, y }) {
-    if (!selectedPlayerId) return
+    if (!selectedPlayerId || readOnly) return
     setPendingZone(classifyShotZone(x, y))
   }
 
@@ -168,15 +186,30 @@ export function ShootingDetail({ teamId }) {
     }
   }
 
-  async function handleConfirmZone(attempts, makes) {
+  // 完了済みセッションをタップしただけで意図せず下書きに戻ってしまわないよう、
+  // 「記録を修正する」を押した時だけ明示的に編集モードへ入る
+  async function handleStartEditing() {
     await ensureDraft()
+    setIsEditing(true)
+  }
+
+  async function handleConfirmZone(attempts, makes) {
     await addTally(selectedPlayerId, pendingZone, attempts, makes)
+    setLastAction({ playerId: selectedPlayerId, zone: pendingZone, attempts, makes })
     setPendingZone(null)
   }
 
+  async function handleUndoLastAction() {
+    if (!lastAction) return
+    await undoTally(lastAction.playerId, lastAction.zone, lastAction.attempts, lastAction.makes)
+    setLastAction(null)
+  }
+
   async function handleResetZone(zone) {
-    await ensureDraft()
     await resetZone(selectedPlayerId, zone)
+    if (lastAction && lastAction.playerId === selectedPlayerId && lastAction.zone === zone) {
+      setLastAction(null)
+    }
   }
 
   async function handleConfirmDelete() {
@@ -194,6 +227,8 @@ export function ShootingDetail({ teamId }) {
       setCompleteError('完了処理に失敗しました。もう一度お試しください。')
       return
     }
+    setIsEditing(false)
+    setLastAction(null)
     setShowCompleteAnimation(true)
     // ポップアップのアニメーションを少し見せてから遷移する
     setTimeout(() => {
@@ -241,15 +276,42 @@ export function ShootingDetail({ teamId }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="flex flex-col gap-1.5">
-        <Button variant="destructive" className="w-full" disabled={entries.length === 0} onClick={handleCompleteWorkout}>
-          ワークアウトを完了する
+      {readOnly ? (
+        <Button variant="outline" className="w-full" onClick={handleStartEditing}>
+          <Pencil className="size-4" />
+          記録を修正する
         </Button>
-        {entries.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center">まだ記録がありません</p>
-        )}
-        {completeError && <p className="text-xs text-destructive text-center">{completeError}</p>}
-      </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Button variant="destructive" className="w-full" disabled={entries.length === 0} onClick={handleCompleteWorkout}>
+            ワークアウトを完了する
+          </Button>
+          {entries.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center">まだ記録がありません</p>
+          )}
+          {completeError && <p className="text-xs text-destructive text-center">{completeError}</p>}
+        </div>
+      )}
+
+      {!readOnly && lastAction && (
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-primary/10 px-3 py-2.5 text-sm text-primary">
+          <span>
+            {ZONES[lastAction.zone].label}に{lastAction.makes}/{lastAction.attempts}本を追加しました
+          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleUndoLastAction}
+              className="flex items-center gap-1 rounded-md px-2 py-1 hover:bg-primary/10 font-medium"
+            >
+              <Undo2 className="size-3.5" />
+              取り消す
+            </button>
+            <button onClick={() => setLastAction(null)} aria-label="閉じる">
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={showCompleteAnimation}>
         <DialogContent showCloseButton={false} className="flex flex-col items-center gap-4 py-10 text-center">
@@ -287,11 +349,13 @@ export function ShootingDetail({ teamId }) {
 
       <div className="flex flex-col gap-2">
         <p className="text-xs text-muted-foreground text-center">
-          {selectedPlayerId
-            ? 'コートをタップしてゾーンを選び、試投数・成功数をまとめて記録します'
-            : '先に選手を選択してください'}
+          {readOnly
+            ? '内容を修正するには上の「記録を修正する」を押してください'
+            : selectedPlayerId
+              ? 'コートをタップしてゾーンを選び、試投数・成功数をまとめて記録します'
+              : '先に選手を選択してください'}
         </p>
-        <CourtDiagram active={!!selectedPlayerId} onTap={handleCourtTap} />
+        <CourtDiagram active={!!selectedPlayerId && !readOnly} onTap={handleCourtTap} />
       </div>
 
       <ZoneEntryDialog
@@ -317,13 +381,15 @@ export function ShootingDetail({ teamId }) {
                     <span className="tabular-nums text-muted-foreground">
                       {playerHotZones[key].makes}/{playerHotZones[key].attempts} ({formatPct(playerHotZones[key].pct)})
                     </span>
-                    <button
-                      onClick={() => handleResetZone(key)}
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label="リセット"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
+                    {!readOnly && (
+                      <button
+                        onClick={() => handleResetZone(key)}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label="リセット"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
