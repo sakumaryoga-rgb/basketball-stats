@@ -1,5 +1,17 @@
 # basketball-stats
 
+## コミット・プッシュのたびに行うこと
+
+`main`にプッシュする変更(コード修正・機能追加を問わず)は、都度以下を行う。
+
+1. `package.json`の`version`をpatchバージョンで1つ上げる(例: 23.0.2 → 23.0.3)。
+   このバージョンはハンバーガーメニュー下部に表示され(`src/lib/appVersion.js`)、
+   ユーザーが実際に最新の変更を受け取れているかの目印にもなる。
+2. バージョンを上げたコミットに`v<バージョン>`のgitタグを付け、
+   `git push origin main --tags`でタグも一緒にプッシュする。
+   これにより、後から特定バージョンへの切り戻し(`git checkout v23.0.2`等)が
+   いつでもできる状態を保つ。
+
 ## PWA更新機能を変更するとき
 
 `vite.config.js` / `registerType` / Workbox設定 / `vite-plugin-pwa`のバージョン更新 /
