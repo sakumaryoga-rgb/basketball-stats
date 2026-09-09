@@ -83,7 +83,7 @@ export function Layout({ teamName, teamIconUrl }) {
         </PullToRefresh>
       </main>
 
-      <nav className="border-t bg-background/80 backdrop-blur z-10 pb-[calc(env(safe-area-inset-bottom)+10px)] shrink-0">
+      <nav className="border-t bg-background/80 backdrop-blur z-10 pb-[calc(env(safe-area-inset-bottom)+22px)] shrink-0">
         <div className="max-w-lg mx-auto grid grid-cols-5">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
             <NavLink
