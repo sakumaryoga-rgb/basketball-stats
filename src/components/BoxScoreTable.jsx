@@ -2,11 +2,18 @@ import { Link } from 'react-router-dom'
 import { formatMadeAttempt } from '@/lib/format'
 import { formatClock, formatPlusMinus } from '@/lib/stats'
 
+const TEAM_TOTAL_KEYS = ['pts', 'reb', 'ast', 'stl', 'blk', 'tov', 'pf', 'fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta']
+
 // 試合のボックススコア(選手ごとの成績)を表示する横スクロール可能な表
 export function BoxScoreTable({ rows, linkToPlayers = false }) {
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground py-6 text-center">まだスタッツがありません</p>
   }
+
+  const teamTotals = rows.reduce((acc, row) => {
+    for (const key of TEAM_TOTAL_KEYS) acc[key] += row[key] ?? 0
+    return acc
+  }, Object.fromEntries(TEAM_TOTAL_KEYS.map((key) => [key, 0])))
 
   return (
     <div className="overflow-x-auto -mx-4 px-4">
@@ -69,6 +76,27 @@ export function BoxScoreTable({ rows, linkToPlayers = false }) {
               <td className="text-right py-2 pl-2 tabular-nums font-latin">{formatPlusMinus(row.plus_minus)}</td>
             </tr>
           ))}
+          <tr className="border-t-2 font-semibold bg-muted/30">
+            <td className="py-2 pr-3 whitespace-nowrap">TEAM</td>
+            <td className="text-right py-2 px-2 tabular-nums text-muted-foreground">-</td>
+            <td className="text-right py-2 px-2 tabular-nums">{teamTotals.pts}</td>
+            <td className="text-right py-2 px-2 tabular-nums">{teamTotals.reb}</td>
+            <td className="text-right py-2 px-2 tabular-nums">{teamTotals.ast}</td>
+            <td className="text-right py-2 px-2 tabular-nums">{teamTotals.stl}</td>
+            <td className="text-right py-2 px-2 tabular-nums">{teamTotals.blk}</td>
+            <td className="text-right py-2 px-2 tabular-nums">{teamTotals.tov}</td>
+            <td className="text-right py-2 px-2 tabular-nums">{teamTotals.pf}</td>
+            <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">
+              {formatMadeAttempt(teamTotals.fgm, teamTotals.fga)}
+            </td>
+            <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">
+              {formatMadeAttempt(teamTotals.tpm, teamTotals.tpa)}
+            </td>
+            <td className="text-right py-2 px-2 tabular-nums whitespace-nowrap">
+              {formatMadeAttempt(teamTotals.ftm, teamTotals.fta)}
+            </td>
+            <td className="text-right py-2 pl-2 tabular-nums font-latin text-muted-foreground">-</td>
+          </tr>
         </tbody>
       </table>
     </div>
