@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { CalendarDays, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -26,31 +26,9 @@ export function Layout({ teamName, teamIconUrl }) {
     checkForUpdate()
   }, [])
 
-  // inset-0/100dvh/window.innerHeight実測/height:100%連鎖と4通り試したが、いずれも
-  // 「ホーム画面追加時にSafariの検索バー分だけ下部タブバーが浮く」問題が解消しなかった。
-  // これらは結局すべて同じ「ブラウザが報告するビューポート高さ」を参照しており、その
-  // 報告値自体が(検索バー表示時のSafariタブ用の値のまま)ズレている場合はどの書き方でも
-  // 直らない。visualViewport APIはツールバーの表示/非表示に応じて実際に見えている領域を
-  // 動的に報告するために作られたAPIで、window.innerHeightとは別の計測経路を持つため、
-  // これを優先して使うことでズレを回避する
-  useEffect(() => {
-    function setAppHeight() {
-      const vvHeight = window.visualViewport?.height ?? 0
-      const height = Math.max(vvHeight, window.innerHeight)
-      document.documentElement.style.setProperty('--app-height', `${height}px`)
-    }
-    setAppHeight()
-    window.addEventListener('resize', setAppHeight)
-    window.visualViewport?.addEventListener('resize', setAppHeight)
-    window.visualViewport?.addEventListener('scroll', setAppHeight)
-    return () => {
-      window.removeEventListener('resize', setAppHeight)
-      window.visualViewport?.removeEventListener('resize', setAppHeight)
-      window.visualViewport?.removeEventListener('scroll', setAppHeight)
-    }
-  }, [])
-
   return (
+    // --app-heightはmain.jsx側でReactのマウント前からアプリ全体向けに管理している
+    // (Onboarding等Layoutを使わない画面でも同じ値を使う必要があるため)。
     // overflow:hiddenはbody全体ではなくこの要素自身に付与する。Onboarding等
     // Layoutを使わない画面は通常のドキュメントスクロールに依存しているため、
     // bodyにoverflow:hiddenをかけるとそちらが下側にスクロールできなくなり

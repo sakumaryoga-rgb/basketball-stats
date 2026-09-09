@@ -223,14 +223,17 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
 
   if (autoJoining || (hasTeam && !token && !isDeliberateAdd)) {
     return (
-      <div className="min-h-svh flex items-center justify-center">
+      <div className="flex items-center justify-center" style={{ minHeight: 'var(--app-height, 100svh)' }}>
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-svh overscroll-none relative flex flex-col items-center justify-center gap-8 px-4 pt-[calc(2.5rem+env(safe-area-inset-top))] pb-[calc(2.5rem+env(safe-area-inset-bottom))]">
+    <div
+      className="overscroll-none relative flex flex-col items-center justify-center gap-8 px-4 pt-[calc(2.5rem+env(safe-area-inset-top))] pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
+      style={{ minHeight: 'var(--app-height, 100svh)' }}
+    >
       <div className="fixed inset-0 -z-10 overflow-hidden bg-background" aria-hidden>
         <div className="absolute -top-24 -right-24 size-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute -bottom-24 -left-24 size-72 rounded-full bg-primary/8 blur-3xl" />

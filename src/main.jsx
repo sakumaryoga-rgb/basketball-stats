@@ -7,6 +7,26 @@ import { checkMinSupportedVersion } from '@/lib/appVersion'
 import './index.css'
 import App from './App.jsx'
 
+// iOSでは、ホーム画面に追加したPWA(standalone)を開いた直後の最初の描画時点では、
+// svh/dvh等のビューポート単位やCSSのheight:100%連鎖が、通常のSafariタブ用の
+// (存在しないはずの検索バー分を差し引いた)短い値のまま計算されてしまうことがある。
+// 何かしらのリサイズ/スクロール操作が起きて初めて正しい値に再計算されるため、
+// Layout.jsx配下の画面だけでなくOnboarding等も含めアプリ全体で使えるよう、
+// visualViewport APIで実測した高さをCSS変数として最上位(main.jsx)で管理する。
+// Reactのマウント前から必要になるため、Reactの外側(ここ)でセットアップする
+function setupAppHeight() {
+  function setAppHeight() {
+    const vvHeight = window.visualViewport?.height ?? 0
+    const height = Math.max(vvHeight, window.innerHeight)
+    document.documentElement.style.setProperty('--app-height', `${height}px`)
+  }
+  setAppHeight()
+  window.addEventListener('resize', setAppHeight)
+  window.visualViewport?.addEventListener('resize', setAppHeight)
+  window.visualViewport?.addEventListener('scroll', setAppHeight)
+}
+setupAppHeight()
+
 // デフォルトの自動注入スクリプトは登録するだけで更新チェックを行わないため、デプロイ後も
 // 端末が古いキャッシュ済みバンドルを使い続けてしまっていた(共有URL方式への移行時に発覚)。
 // 新しいバージョンを検知したら(以前は確認なしで即座にリロードしていたが、入力中の内容が
