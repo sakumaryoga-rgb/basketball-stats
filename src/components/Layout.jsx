@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { CalendarDays, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -26,15 +26,32 @@ export function Layout({ teamName, teamIconUrl }) {
     checkForUpdate()
   }, [])
 
+  // inset-0/100dvh/window.innerHeight実測/height:100%連鎖と4通り試したが、いずれも
+  // 「ホーム画面追加時にSafariの検索バー分だけ下部タブバーが浮く」問題が解消しなかった。
+  // これらは結局すべて同じ「ブラウザが報告するビューポート高さ」を参照しており、その
+  // 報告値自体が(検索バー表示時のSafariタブ用の値のまま)ズレている場合はどの書き方でも
+  // 直らない。visualViewport APIはツールバーの表示/非表示に応じて実際に見えている領域を
+  // 動的に報告するために作られたAPIで、window.innerHeightとは別の計測経路を持つため、
+  // これを優先して使うことでズレを回避する
+  useEffect(() => {
+    function setAppHeight() {
+      const vvHeight = window.visualViewport?.height ?? 0
+      const height = Math.max(vvHeight, window.innerHeight)
+      document.documentElement.style.setProperty('--app-height', `${height}px`)
+    }
+    setAppHeight()
+    window.addEventListener('resize', setAppHeight)
+    window.visualViewport?.addEventListener('resize', setAppHeight)
+    window.visualViewport?.addEventListener('scroll', setAppHeight)
+    return () => {
+      window.removeEventListener('resize', setAppHeight)
+      window.visualViewport?.removeEventListener('resize', setAppHeight)
+      window.visualViewport?.removeEventListener('scroll', setAppHeight)
+    }
+  }, [])
+
   return (
-    // headerとnavをposition:fixedでビューポート上に重ねる構成(及びそれに続く100dvh/
-    // window.innerHeight実測による対処)では、iOSのSafari/WKWebViewで下部タブバーが
-    // 画面下端まで届かず浮いて見える不具合が解消しなかった。position:fixedに頼らず、
-    // html/body/#rootをheight:100%で連鎖させビューポート一杯に固定し(index.css側で
-    // bodyのoverflowをhiddenにしてドキュメント自体のスクロールを禁止)、この要素自体は
-    // その中でh-fullとして振る舞う、より古典的な手法に切り替える。スクロールはmain内部
-    // (PullToRefreshが持つスクロールコンテナ)だけに限定される
-    <div className="h-full flex flex-col bg-background">
+    <div className="flex flex-col bg-background" style={{ height: 'var(--app-height, 100%)' }}>
       <header className="border-b bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)] shrink-0">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
