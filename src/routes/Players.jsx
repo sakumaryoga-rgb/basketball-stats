@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, ChevronDown } from 'lucide-react'
+import { Plus, ChevronDown, Search } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
 import { formatPositions, groupPlayersByPosition } from '@/lib/stats'
@@ -19,6 +19,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTrigger,
+  DialogClose,
 } from '@/components/ui/dialog'
 
 function AddPlayerDialog({ teamId, teams, addPlayer }) {
@@ -194,7 +195,7 @@ function PlayerRow({ player }) {
   )
 }
 
-function RosterRow({ player, checked, disabled, onToggleStarter }) {
+function RosterRow({ player, checked, onToggleStarter }) {
   return (
     <li
       className={cn(
@@ -216,7 +217,7 @@ function RosterRow({ player, checked, disabled, onToggleStarter }) {
       </Link>
       <div className="flex items-center gap-1.5 shrink-0">
         <span className="text-[10px] text-muted-foreground">STARTING FIVE</span>
-        <Switch checked={checked} onCheckedChange={onToggleStarter} disabled={disabled} />
+        <Switch checked={checked} onCheckedChange={onToggleStarter} />
       </div>
     </li>
   )
@@ -227,9 +228,21 @@ export function Players({ teamId, teams = [] }) {
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const [viewMode, setViewMode] = useState('starting') // 'starting' | 'roster'
   const [openGroups, setOpenGroups] = useState({})
+  const [search, setSearch] = useState('')
+  // STARTING FIVEが5人埋まっている状態で6人目をONにしようとした選手。
+  // nullでなければ「誰と入れ替えるか」の選択ダイアログを表示する
+  const [swapTarget, setSwapTarget] = useState(null)
 
-  const positionGroups = useMemo(() => groupPlayersByPosition(players), [players])
+  const normalizedSearch = search.trim().toLowerCase()
+  const filteredPlayers = useMemo(
+    () => (normalizedSearch ? players.filter((p) => p.name.toLowerCase().includes(normalizedSearch)) : players),
+    [players, normalizedSearch]
+  )
+
+  const positionGroups = useMemo(() => groupPlayersByPosition(filteredPlayers), [filteredPlayers])
+  // STARTING FIVEの人数(5人制限の判定)は検索結果に関わらず常に全選手基準で数える
   const starters = useMemo(() => players.filter((p) => p.is_starter), [players])
+  const visibleStarters = useMemo(() => starters.filter((p) => filteredPlayers.includes(p)), [starters, filteredPlayers])
   const startersCount = starters.length
 
   function toggleGroup(key) {
@@ -237,8 +250,21 @@ export function Players({ teamId, teams = [] }) {
   }
 
   async function handleToggleStarter(player) {
-    if (!player.is_starter && startersCount >= 5) return
+    if (!player.is_starter && startersCount >= 5) {
+      setSwapTarget(player)
+      return
+    }
     await updatePlayer(player.id, { is_starter: !player.is_starter })
+  }
+
+  async function handleSwap(outgoingPlayer) {
+    if (!swapTarget) return
+    const incomingPlayer = swapTarget
+    setSwapTarget(null)
+    await Promise.all([
+      updatePlayer(outgoingPlayer.id, { is_starter: false }),
+      updatePlayer(incomingPlayer.id, { is_starter: true }),
+    ])
   }
 
   return (
@@ -249,26 +275,38 @@ export function Players({ teamId, teams = [] }) {
       </div>
 
       {players.length > 0 && (
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={viewMode === 'starting' ? 'default' : 'outline'}
-            className="flex-1"
-            onClick={() => setViewMode('starting')}
-          >
-            STARTING
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={viewMode === 'roster' ? 'default' : 'outline'}
-            className="flex-1"
-            onClick={() => setViewMode('roster')}
-          >
-            ROSTER
-          </Button>
-        </div>
+        <>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'starting' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setViewMode('starting')}
+            >
+              STARTING
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'roster' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setViewMode('roster')}
+            >
+              ROSTER
+            </Button>
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="選手名で検索"
+              className="pl-9"
+            />
+          </div>
+        </>
       )}
 
       {players.length === 0 ? (
@@ -278,55 +316,96 @@ export function Players({ teamId, teams = [] }) {
           <p className="text-xs text-muted-foreground mb-2">
             STARTING FIVE(試合追加時のデフォルト) ・ {startersCount}/5人選択中
           </p>
-          {positionGroups.map(({ key, players: groupPlayers }) => {
-            const open = !!openGroups[key]
-            return (
-              <div key={key}>
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(key)}
-                  className="flex w-full items-center justify-between rounded-lg -mx-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
-                >
-                  <span>
-                    {key} ({groupPlayers.length}人)
-                  </span>
-                  <ChevronDown className={cn('size-4 transition-transform duration-300', open && 'rotate-180')} />
-                </button>
-                <div
-                  className={cn(
-                    'grid transition-[grid-template-rows] duration-300 ease-in-out',
-                    open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                  )}
-                >
-                  <div className="overflow-hidden">
-                    <ul className="flex flex-col gap-2 pt-2 pb-1">
-                      {groupPlayers.map((player) => (
-                        <RosterRow
-                          key={player.id}
-                          player={player}
-                          checked={player.is_starter}
-                          disabled={!player.is_starter && startersCount >= 5}
-                          onToggleStarter={() => handleToggleStarter(player)}
-                        />
-                      ))}
-                    </ul>
+          {positionGroups.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">該当する選手が見つかりません</p>
+          ) : (
+            positionGroups.map(({ key, players: groupPlayers }) => {
+              const open = !!openGroups[key]
+              return (
+                <div key={key}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(key)}
+                    className="flex w-full items-center justify-between rounded-lg -mx-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <span>
+                      {key} ({groupPlayers.length}人)
+                    </span>
+                    <ChevronDown className={cn('size-4 transition-transform duration-300', open && 'rotate-180')} />
+                  </button>
+                  <div
+                    className={cn(
+                      'grid transition-[grid-template-rows] duration-300 ease-in-out',
+                      open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <ul className="flex flex-col gap-2 pt-2 pb-1">
+                        {groupPlayers.map((player) => (
+                          <RosterRow
+                            key={player.id}
+                            player={player}
+                            checked={player.is_starter}
+                            onToggleStarter={() => handleToggleStarter(player)}
+                          />
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })
+          )}
         </div>
       ) : starters.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">
           まだSTARTING FIVEが選ばれていません。ROSTERタブから選択してください
         </p>
+      ) : visibleStarters.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">該当する選手が見つかりません</p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {starters.map((player) => (
+          {visibleStarters.map((player) => (
             <PlayerRow key={player.id} player={player} />
           ))}
         </ul>
       )}
+
+      <Dialog open={!!swapTarget} onOpenChange={(o) => !o && setSwapTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>どの選手と入れ替えますか?</DialogTitle>
+            <DialogDescription>
+              STARTING FIVEは5人までです。{swapTarget?.name}を追加するには、他の1人と入れ替えてください。
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="flex flex-col gap-2">
+            {starters.map((player) => (
+              <li key={player.id}>
+                <button
+                  type="button"
+                  onClick={() => handleSwap(player)}
+                  className="flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+                >
+                  <Avatar className="size-8 shrink-0 text-xs font-medium">
+                    <AvatarImage src={player.photo_url} alt={player.name} />
+                    <AvatarFallback className="tabular-nums">{player.number ?? '-'}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{player.name}</p>
+                    {player.position && (
+                      <p className="text-xs text-muted-foreground">{formatPositions(player.position, player.position2)}</p>
+                    )}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>キャンセル</DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
