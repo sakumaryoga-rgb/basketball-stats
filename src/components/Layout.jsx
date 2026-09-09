@@ -35,7 +35,10 @@ export function Layout({ teamName, teamIconUrl }) {
     // そのシェル内の通常のflex要素として配置、スクロールはmain内部(PullToRefreshが持つ
     // スクロールコンテナ)だけに限定することで、html/body自体は一切スクロールしなくなり、
     // fixed要素がビューポート基準からずれる原因そのものを取り除く
-    <div className="fixed inset-0 flex flex-col bg-background">
+    // inset-0だけでも通常は高さがビューポート全体に一致するはずだが、iOSのstandaloneで
+    // 下部タブバーが画面下端まで届かず浮いて見える報告があったため、動的ビューポート高さ
+    // (100dvh)を明示指定して高さのズレそのものを解消する
+    <div className="fixed inset-0 h-dvh flex flex-col bg-background">
       <header className="border-b bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)] shrink-0">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
