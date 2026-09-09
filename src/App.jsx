@@ -20,6 +20,7 @@ import { OperatorInfo } from '@/routes/OperatorInfo'
 import { Layout } from '@/components/Layout'
 import { InAppBrowserBanner } from '@/components/InAppBrowserBanner'
 import { UpdatePrompt } from '@/components/UpdatePrompt'
+import { DebugOverlay } from '@/components/DebugOverlay'
 
 function FullScreenLoader() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
   if (sessionLoading || !session || teamsLoading) {
     return (
       <>
+        <DebugOverlay />
         <UpdatePrompt />
         <InAppBrowserBanner />
         <FullScreenLoader />
@@ -52,6 +54,7 @@ export default function App() {
 
   return (
     <>
+      <DebugOverlay />
       <UpdatePrompt />
       <InAppBrowserBanner />
       <Routes>
