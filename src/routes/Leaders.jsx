@@ -15,7 +15,9 @@ const RANK_STYLE = [
 export function Leaders({ teamId }) {
   const { players } = usePlayers(teamId)
   const [period, setPeriod] = useState('season')
-  const { periodStats } = usePeriodStats(teamId, period)
+  // 既存の記録の大半が2Q制のため、デフォルトは2Q制で表示する
+  const [periodSystem, setPeriodSystem] = useState('2q')
+  const { periodStats } = usePeriodStats(teamId, period, periodSystem)
   const [category, setCategory] = useState(LEADER_CATEGORIES[0].key)
 
   const activeCategory = LEADER_CATEGORIES.find((c) => c.key === category)
@@ -43,7 +45,31 @@ export function Leaders({ teamId }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-heading tracking-wide">LEADERS</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-heading tracking-wide">LEADERS</h1>
+        <div className="flex rounded-md border p-0.5">
+          <button
+            type="button"
+            onClick={() => setPeriodSystem('2q')}
+            className={cn(
+              'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+              periodSystem === '2q' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+            )}
+          >
+            2Q制
+          </button>
+          <button
+            type="button"
+            onClick={() => setPeriodSystem('4q')}
+            className={cn(
+              'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+              periodSystem === '4q' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+            )}
+          >
+            4Q制
+          </button>
+        </div>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         {LEADER_PERIODS.map((p) => (

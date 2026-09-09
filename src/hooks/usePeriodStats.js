@@ -4,8 +4,9 @@ import { filterGamesByPeriod } from '@/lib/stats'
 
 const SUM_KEYS = ['pts', 'fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta', 'oreb', 'dreb', 'reb', 'ast', 'stl', 'blk', 'tov', 'pf']
 
-// 期間(直近5試合・直近3ヶ月・今シーズン・全期間)で絞り込んだ選手ごとの合計スタッツを集計する
-export function usePeriodStats(teamId, period) {
+// 期間(直近5試合・直近3ヶ月・今シーズン・全期間)で絞り込んだ選手ごとの合計スタッツを集計する。
+// periodSystemを指定すると、その2Q制/4Q制の試合(公式戦)だけをさらに絞り込む
+export function usePeriodStats(teamId, period, periodSystem) {
   const [periodStats, setPeriodStats] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -19,7 +20,7 @@ export function usePeriodStats(teamId, period) {
 
     const { data: games, error: gamesError } = await supabase
       .from('games')
-      .select('id, game_date')
+      .select('id, game_date, period_system')
       .eq('team_id', teamId)
       .order('game_date', { ascending: false })
 
@@ -30,7 +31,8 @@ export function usePeriodStats(teamId, period) {
       return
     }
 
-    const targetGames = filterGamesByPeriod(games ?? [], period)
+    const gamesForSystem = periodSystem ? (games ?? []).filter((g) => g.period_system === periodSystem) : (games ?? [])
+    const targetGames = filterGamesByPeriod(gamesForSystem, period)
     const gameIds = targetGames.map((g) => g.id)
 
     if (gameIds.length === 0) {
@@ -65,7 +67,7 @@ export function usePeriodStats(teamId, period) {
 
     setPeriodStats(Array.from(byPlayer.values()))
     setLoading(false)
-  }, [teamId, period])
+  }, [teamId, period, periodSystem])
 
   useEffect(() => {
     refresh()

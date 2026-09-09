@@ -15,58 +15,6 @@ const NAV_ITEMS = [
   { to: '/team', label: 'TEAM', icon: Settings },
 ]
 
-// フッターが「浮く」「沈む」不具合の原因調査用の一時的なデバッグ表示。
-// position:fixedでアプリシェル(overflow:hidden)の外、実際のビューポート基準に
-// 配置しているため、シェルの高さがずれていても実機の生の値がそのまま見える。
-// 原因を特定でき次第この表示は削除する
-function ViewportDebugBadge() {
-  const [info, setInfo] = useState(() => readViewportInfo())
-
-  useEffect(() => {
-    function update() {
-      setInfo(readViewportInfo())
-    }
-    update()
-    window.addEventListener('resize', update)
-    window.visualViewport?.addEventListener('resize', update)
-    window.visualViewport?.addEventListener('scroll', update)
-    const id = setInterval(update, 1000)
-    return () => {
-      window.removeEventListener('resize', update)
-      window.visualViewport?.removeEventListener('resize', update)
-      window.visualViewport?.removeEventListener('scroll', update)
-      clearInterval(id)
-    }
-  }, [])
-
-  return (
-    <div className="fixed bottom-1 right-1 z-50 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-mono text-white pointer-events-none">
-      inner:{info.inner} scr:{info.screen} sa:{info.standalone ? '1' : '0'} dvh:{info.dvhSupported ? '1' : '0'} shell:{info.shellHeight} navBottom:{info.navBottom}
-    </div>
-  )
-}
-
-function readViewportInfo() {
-  if (typeof window === 'undefined') return {}
-  const shellEl = document.querySelector('.app-shell')
-  const navEl = document.querySelector('nav')
-  return {
-    inner: window.innerHeight,
-    screen: window.screen?.height ?? '-',
-    // trueならホーム画面に追加したアイコンから起動した状態(Safari自体のUIなし)。
-    // falseの場合、下の余白の正体はSafari自体のツールバー(アプリのコードでは制御不可)である可能性が高い
-    standalone: window.matchMedia?.('(display-mode: standalone)').matches ?? false,
-    dvhSupported: typeof CSS !== 'undefined' && CSS.supports?.('height', '100dvh'),
-    // アプリシェル自体の実際の描画高さ。window.innerHeightと一致していれば
-    // シェルはビューポートを正しく埋め切れている(=それでも余白が見えるなら
-    // アプリの外側=OS/ブラウザ側の領域ということになる)
-    shellHeight: shellEl ? Math.round(shellEl.getBoundingClientRect().height) : '-',
-    // フッターnavの実際の下端位置。window.innerHeightと一致していれば
-    // フッターは画面の描画可能範囲の一番下まで正しく届いている
-    navBottom: navEl ? Math.round(navEl.getBoundingClientRect().bottom) : '-',
-  }
-}
-
 // 試合の記録画面(/games/:id、公式戦・スクリメージ共通)では、下スワイプによる
 // pull-to-refreshがタイマーの再設定など誤操作の原因になるため無効化する。
 // 大会の試合一覧(/games)・大会詳細(/games/t/:tournamentId)は対象外
@@ -153,7 +101,6 @@ export function Layout({ teamName, teamIconUrl }) {
           ))}
         </div>
       </nav>
-      <ViewportDebugBadge />
       </div>
       <div aria-hidden="true" style={{ height: 1 }} />
     </>
