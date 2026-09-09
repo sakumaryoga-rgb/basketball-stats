@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, ChevronDown } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
 import { formatPositions, groupPlayersByPosition } from '@/lib/stats'
@@ -8,7 +8,9 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { PositionSelect } from '@/components/PositionSelect'
+import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -204,13 +206,53 @@ function PlayerRow({ player, onDelete }) {
   )
 }
 
+function RosterRow({ player, checked, disabled, onToggleStarter }) {
+  return (
+    <li
+      className={cn(
+        'flex items-center gap-3 -mx-2 px-2 py-1.5 rounded-lg transition-colors duration-300',
+        player.is_starter && 'bg-primary/5'
+      )}
+    >
+      <Link to={`/players/${player.id}`} className="flex flex-1 min-w-0 items-center gap-3 rounded-lg hover:bg-muted/50">
+        <Avatar className="size-8 shrink-0 text-xs font-medium">
+          <AvatarImage src={player.photo_url} alt={player.name} />
+          <AvatarFallback className="tabular-nums">{player.number ?? '-'}</AvatarFallback>
+        </Avatar>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{player.name}</p>
+          {player.position && (
+            <p className="text-xs text-muted-foreground">{formatPositions(player.position, player.position2)}</p>
+          )}
+        </div>
+      </Link>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className="text-[10px] text-muted-foreground">STARTING FIVE</span>
+        <Switch checked={checked} onCheckedChange={onToggleStarter} disabled={disabled} />
+      </div>
+    </li>
+  )
+}
+
 export function Players({ teamId, teams = [] }) {
-  const { players: allPlayers, addPlayer, removePlayer } = usePlayers(teamId)
+  const { players: allPlayers, addPlayer, removePlayer, updatePlayer } = usePlayers(teamId)
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const [sortMode, setSortMode] = useState('default') // 'default' | 'position'
+  const [viewMode, setViewMode] = useState('starting') // 'starting' | 'roster'
+  const [openGroups, setOpenGroups] = useState({})
 
   const positionGroups = useMemo(() => groupPlayersByPosition(players), [players])
+  const starters = useMemo(() => players.filter((p) => p.is_starter), [players])
+  const startersCount = starters.length
+
+  function toggleGroup(key) {
+    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  async function handleToggleStarter(player) {
+    if (!player.is_starter && startersCount >= 5) return
+    await updatePlayer(player.id, { is_starter: !player.is_starter })
+  }
 
   async function handleConfirmDelete() {
     if (!deleteTarget) return
@@ -230,44 +272,76 @@ export function Players({ teamId, teams = [] }) {
           <Button
             type="button"
             size="sm"
-            variant={sortMode === 'default' ? 'default' : 'outline'}
+            variant={viewMode === 'starting' ? 'default' : 'outline'}
             className="flex-1"
-            onClick={() => setSortMode('default')}
+            onClick={() => setViewMode('starting')}
           >
-            登録順
+            STARTING
           </Button>
           <Button
             type="button"
             size="sm"
-            variant={sortMode === 'position' ? 'default' : 'outline'}
+            variant={viewMode === 'roster' ? 'default' : 'outline'}
             className="flex-1"
-            onClick={() => setSortMode('position')}
+            onClick={() => setViewMode('roster')}
           >
-            ポジション順
+            ROSTER
           </Button>
         </div>
       )}
 
       {players.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">まだ選手が登録されていません</p>
-      ) : sortMode === 'position' ? (
-        <div className="flex flex-col gap-4">
-          {positionGroups.map(({ key, players: groupPlayers }) => (
-            <div key={key} className="flex flex-col gap-2">
-              <p className="text-sm text-muted-foreground">
-                {key} ({groupPlayers.length}人)
-              </p>
-              <ul className="flex flex-col gap-2">
-                {groupPlayers.map((player) => (
-                  <PlayerRow key={player.id} player={player} onDelete={setDeleteTarget} />
-                ))}
-              </ul>
-            </div>
-          ))}
+      ) : viewMode === 'roster' ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs text-muted-foreground mb-2">
+            STARTING FIVE(試合追加時のデフォルト) ・ {startersCount}/5人選択中
+          </p>
+          {positionGroups.map(({ key, players: groupPlayers }) => {
+            const open = !!openGroups[key]
+            return (
+              <div key={key}>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(key)}
+                  className="flex w-full items-center justify-between rounded-lg -mx-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <span>
+                    {key} ({groupPlayers.length}人)
+                  </span>
+                  <ChevronDown className={cn('size-4 transition-transform duration-300', open && 'rotate-180')} />
+                </button>
+                <div
+                  className={cn(
+                    'grid transition-[grid-template-rows] duration-300 ease-in-out',
+                    open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <ul className="flex flex-col gap-2 pt-2 pb-1">
+                      {groupPlayers.map((player) => (
+                        <RosterRow
+                          key={player.id}
+                          player={player}
+                          checked={player.is_starter}
+                          disabled={!player.is_starter && startersCount >= 5}
+                          onToggleStarter={() => handleToggleStarter(player)}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
+      ) : starters.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          まだSTARTING FIVEが選ばれていません。ROSTERタブから選択してください
+        </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {players.map((player) => (
+          {starters.map((player) => (
             <PlayerRow key={player.id} player={player} onDelete={setDeleteTarget} />
           ))}
         </ul>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Copy, Check, ChevronDown, Pencil, RefreshCw, LogOut, Trash2, Share2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Copy, Check, Pencil, RefreshCw, LogOut, Trash2, Share2 } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
@@ -9,13 +9,12 @@ import { useTeamPeriodStats } from '@/hooks/useTeamPeriodStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
 import { getShareUrl, saveShareUrl } from '@/lib/shareUrlStore'
-import { formatAvg, formatPct, formatPositions, pct, perGame, POSITIONS } from '@/lib/stats'
+import { formatAvg, formatPct, pct, perGame } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Switch } from '@/components/ui/switch'
 import { HotZoneSection } from '@/components/HotZoneSection'
 import {
   Dialog,
@@ -290,7 +289,7 @@ function StatBlock({ label, value }) {
 
 export function TeamSettings({ team, onTeamUpdated }) {
   const navigate = useNavigate()
-  const { players: allPlayers, updatePlayer } = usePlayers(team.id)
+  const { players: allPlayers } = usePlayers(team.id)
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const { games } = useGames(team.id)
   const { totals } = useTeamSeasonStats(team.id)
@@ -298,31 +297,11 @@ export function TeamSettings({ team, onTeamUpdated }) {
   const { shots } = useShotChart(team.id)
   const [leaving, setLeaving] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
-  const [openGroups, setOpenGroups] = useState({})
   // 既存の記録の大半が2Q制のため、デフォルトは2Q制で表示する
   const [periodMode, setPeriodMode] = useState('2q')
 
   const gamesPlayed = games.filter((g) => g.status !== 'scheduled').length
-  const startersCount = players.filter((p) => p.is_starter).length
   const periodBucket = periodStats[periodMode]
-
-  // 第一ポジション(PG→SG→SF→PF→C、未設定は最後)ごとにグループ分けする。
-  // 各グループ内は元の並び順(sort_order/背番号)を保つ。
-  const UNSET_POSITION = '未設定'
-  const rosterGroups = useMemo(() => {
-    const buckets = new Map([...POSITIONS, UNSET_POSITION].map((key) => [key, []]))
-    for (const p of players) {
-      const key = POSITIONS.includes(p.position) ? p.position : UNSET_POSITION
-      buckets.get(key).push(p)
-    }
-    return [...POSITIONS, UNSET_POSITION]
-      .map((key) => ({ key, players: buckets.get(key) }))
-      .filter((g) => g.players.length > 0)
-  }, [players])
-
-  function toggleGroup(key) {
-    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
-  }
 
   const averages = useMemo(() => {
     if (!totals) return null
@@ -381,11 +360,6 @@ export function TeamSettings({ team, onTeamUpdated }) {
     await onTeamUpdated()
   }
 
-  async function handleToggleStarter(player) {
-    if (!player.is_starter && startersCount >= 5) return
-    await updatePlayer(player.id, { is_starter: !player.is_starter })
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-heading tracking-wide">TEAM</h1>
@@ -406,80 +380,6 @@ export function TeamSettings({ team, onTeamUpdated }) {
             <Pencil className="size-4" />
           </Button>
         </EditTeamDialog>
-      </div>
-
-      <div className="rounded-lg border p-4">
-        <p className="font-heading text-base font-medium">ROSTER</p>
-        <p className="text-xs text-muted-foreground mb-3">
-          STARTING FIVE(試合追加時のデフォルト) ・ {startersCount}/5人選択中
-        </p>
-        {players.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2 text-center">まだ選手が登録されていません</p>
-        ) : (
-          <div className="flex flex-col gap-1">
-              {rosterGroups.map(({ key, players: groupPlayers }) => {
-                const open = !!openGroups[key]
-                return (
-                  <div key={key}>
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(key)}
-                      className="flex w-full items-center justify-between rounded-lg -mx-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
-                    >
-                      <span>
-                        {key} ({groupPlayers.length}人)
-                      </span>
-                      <ChevronDown className={cn('size-4 transition-transform duration-300', open && 'rotate-180')} />
-                    </button>
-                    <div
-                      className={cn(
-                        'grid transition-[grid-template-rows] duration-300 ease-in-out',
-                        open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                      )}
-                    >
-                      <div className="overflow-hidden">
-                        <ul className="flex flex-col gap-2 pt-2 pb-1">
-                          {groupPlayers.map((p) => (
-                            <li
-                              key={p.id}
-                              className={cn(
-                                'flex items-center gap-3 -mx-2 px-2 py-1.5 rounded-lg transition-colors duration-300',
-                                p.is_starter && 'bg-primary/5'
-                              )}
-                            >
-                              <Link
-                                to={`/players/${p.id}`}
-                                className="flex flex-1 min-w-0 items-center gap-3 rounded-lg hover:bg-muted/50"
-                              >
-                                <Avatar className="size-8 shrink-0 text-xs font-medium">
-                                  <AvatarImage src={p.photo_url} alt={p.name} />
-                                  <AvatarFallback className="tabular-nums">{p.number ?? '-'}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{p.name}</p>
-                                  {p.position && (
-                                    <p className="text-xs text-muted-foreground">{formatPositions(p.position, p.position2)}</p>
-                                  )}
-                                </div>
-                              </Link>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="text-[10px] text-muted-foreground">STARTING FIVE</span>
-                                <Switch
-                                  checked={p.is_starter}
-                                  onCheckedChange={() => handleToggleStarter(p)}
-                                  disabled={!p.is_starter && startersCount >= 5}
-                                />
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
       </div>
 
       {totals && (

@@ -682,7 +682,7 @@ export function GameDetail({ teamId }) {
               <div className="flex flex-col gap-1.5">
                 <p className="text-xs font-heading tracking-wide text-muted-foreground">STARTING FIVE</p>
                 {starters.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">TEAMタブでSTARTING FIVEを設定してください</p>
+                  <p className="text-xs text-muted-foreground">PLAYERSタブでSTARTING FIVEを設定してください</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {starters.map((p) => (
