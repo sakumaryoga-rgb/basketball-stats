@@ -874,11 +874,20 @@ export function GameDetail({ teamId }) {
           >
             SHOT CHART
           </button>
+          <button
+            onClick={() => setStatsTab('log')}
+            className={cn(
+              'pb-2 text-sm font-medium border-b-2 -mb-px',
+              statsTab === 'log' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground'
+            )}
+          >
+            PLAY LOG
+          </button>
         </div>
 
-        {statsTab === 'basic' ? (
-          <BoxScoreTable rows={rows} linkToPlayers />
-        ) : (
+        {statsTab === 'basic' && <BoxScoreTable rows={rows} linkToPlayers />}
+
+        {statsTab === 'shoot' && (
           <div className="flex flex-col gap-2">
             <div className="flex gap-2 overflow-x-auto pb-1">
               <button
@@ -890,7 +899,8 @@ export function GameDetail({ teamId }) {
               >
                 全体
               </button>
-              {gamePlayers.map((p) => (
+              {/* チーム全員ではなく、この試合に出場した選手(ボックススコアに行がある選手)のみ */}
+              {rows.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => setShotChartPlayerId(p.id)}
@@ -904,23 +914,19 @@ export function GameDetail({ teamId }) {
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <CourtDiagram shots={shots} />
-                <p className="text-xs text-muted-foreground text-center">青丸=成功 ・ 赤×=失敗</p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <p className="text-xs font-heading tracking-wide text-muted-foreground">LOG</p>
-                <GameLogPanel
-                  events={events}
-                  gamePlayers={gamePlayers}
-                  periodSystem={periodSystem}
-                  onEdit={editStat}
-                  onDelete={deleteStat}
-                />
-              </div>
-            </div>
+            <CourtDiagram shots={shots} />
+            <p className="text-xs text-muted-foreground text-center">青丸=成功 ・ 赤×=失敗</p>
           </div>
+        )}
+
+        {statsTab === 'log' && (
+          <GameLogPanel
+            events={events}
+            gamePlayers={gamePlayers}
+            periodSystem={periodSystem}
+            onEdit={editStat}
+            onDelete={deleteStat}
+          />
         )}
       </div>
     </div>

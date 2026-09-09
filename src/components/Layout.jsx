@@ -76,13 +76,13 @@ export function Layout({ teamName, teamIconUrl }) {
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 py-2.5 text-xs font-heading tracking-wide ${
+                `flex flex-col items-center gap-1 py-2.5 text-xs font-heading leading-none tracking-wide ${
                   isActive ? 'text-primary' : 'text-muted-foreground'
                 }`
               }
             >
               <Icon className="size-5" />
-              {label}
+              <span className="leading-none">{label}</span>
             </NavLink>
           ))}
         </div>
