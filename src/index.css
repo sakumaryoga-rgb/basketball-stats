@@ -13,21 +13,21 @@ body {
   margin: 0;
 }
 
-/* iOSのホーム画面追加(standalone)では、ページ端でのラバーバンド(バウンス)
-   スクロール中にfixed要素(下部タブバー等)がビューポートに対してずれて見える
-   問題があった。バウンス自体を無効化することでズレを防ぐ */
+/* iOSのSafari/WKWebViewでは、header/navをposition:fixedでビューポートに
+   重ねる構成だと、下部タブバーが画面下端まで届かず浮いて見える不具合があった。
+   position:fixed(および100dvh/window.innerHeightでの高さ実測)による対処を
+   いずれも試したが解消しなかったため、position:fixedに一切頼らない、より
+   古典的で確実な手法に切り替える: html/body/#rootをビューポート一杯の高さに
+   固定(height:100%の親子連鎖)し、bodyのoverflowをhiddenにしてドキュメント
+   自体のスクロールを禁止する。実際のスクロールはPullToRefreshが持つ内部の
+   スクロールコンテナだけに限定される */
 html,
 body {
-  overscroll-behavior-y: none;
+  height: 100%;
+  overflow: hidden;
 }
 
-/* iOSのSafari/WKWebViewには、ページの中身がビューポートより短くスクロール
-   不要な状態だと、fixed要素がビューポート基準ではなくドキュメント基準の位置に
-   描画され、画面中央寄りに「浮いて」見えてしまう既知の挙動がある。html/bodyに
-   明示的にビューポート分の高さを持たせておくことで回避する(中身がそれより
-   長い場合は通常通りページ全体がスクロールされる) */
-html,
-body {
+#root {
   height: 100%;
 }
 
