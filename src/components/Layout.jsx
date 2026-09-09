@@ -15,6 +15,48 @@ const NAV_ITEMS = [
   { to: '/team', label: 'TEAM', icon: Settings },
 ]
 
+// フッターが「浮く」「沈む」不具合の原因調査用の一時的なデバッグ表示。
+// position:fixedでアプリシェル(overflow:hidden)の外、実際のビューポート基準に
+// 配置しているため、シェルの高さがずれていても実機の生の値がそのまま見える。
+// 原因を特定でき次第この表示は削除する
+function ViewportDebugBadge() {
+  const [info, setInfo] = useState(() => readViewportInfo())
+
+  useEffect(() => {
+    function update() {
+      setInfo(readViewportInfo())
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('resize', update)
+    window.visualViewport?.addEventListener('scroll', update)
+    const id = setInterval(update, 1000)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('resize', update)
+      window.visualViewport?.removeEventListener('scroll', update)
+      clearInterval(id)
+    }
+  }, [])
+
+  return (
+    <div className="fixed bottom-1 right-1 z-50 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-mono text-white pointer-events-none">
+      inner:{info.inner} vv:{info.vv ?? '-'} app:{info.app} doc:{info.doc} scr:{info.screen}
+    </div>
+  )
+}
+
+function readViewportInfo() {
+  if (typeof window === 'undefined') return {}
+  return {
+    inner: window.innerHeight,
+    vv: window.visualViewport?.height ?? null,
+    app: getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim(),
+    doc: document.documentElement.clientHeight,
+    screen: window.screen?.height ?? '-',
+  }
+}
+
 // 試合の記録画面(/games/:id、公式戦・スクリメージ共通)では、下スワイプによる
 // pull-to-refreshがタイマーの再設定など誤操作の原因になるため無効化する。
 // 大会の試合一覧(/games)・大会詳細(/games/t/:tournamentId)は対象外
@@ -93,6 +135,7 @@ export function Layout({ teamName, teamIconUrl }) {
           ))}
         </div>
       </nav>
+      <ViewportDebugBadge />
     </div>
   )
 }
