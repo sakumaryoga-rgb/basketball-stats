@@ -41,7 +41,7 @@ function ViewportDebugBadge() {
 
   return (
     <div className="fixed bottom-1 right-1 z-50 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-mono text-white pointer-events-none">
-      inner:{info.inner} vv:{info.vv ?? '-'} app:{info.app} doc:{info.doc} scr:{info.screen}
+      inner:{info.inner} vv:{info.vv ?? '-'} app:{info.app} doc:{info.doc} scr:{info.screen} sa:{info.standalone ? '1' : '0'}
     </div>
   )
 }
@@ -54,6 +54,9 @@ function readViewportInfo() {
     app: getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim(),
     doc: document.documentElement.clientHeight,
     screen: window.screen?.height ?? '-',
+    // trueならホーム画面に追加したアイコンから起動した状態(Safari自体のUIなし)。
+    // falseの場合、下の余白の正体はSafari自体のツールバー(アプリのコードでは制御不可)である可能性が高い
+    standalone: window.matchMedia?.('(display-mode: standalone)').matches ?? false,
   }
 }
 
