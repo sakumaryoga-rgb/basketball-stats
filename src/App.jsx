@@ -4,7 +4,8 @@ import { useSession } from '@/hooks/useSession'
 import { useTeams } from '@/hooks/useTeams'
 import { useActiveShareToken } from '@/hooks/useActiveShareToken'
 import { Onboarding } from '@/routes/Onboarding'
-import { Games } from '@/routes/Games'
+import { Tournaments } from '@/routes/Tournaments'
+import { TournamentGames } from '@/routes/TournamentGames'
 import { GameDetail } from '@/routes/GameDetail'
 import { Practice } from '@/routes/Practice'
 import { ShootingDetail } from '@/routes/ShootingDetail'
@@ -66,7 +67,8 @@ export default function App() {
           {activeTeam && (
             <>
               <Route index element={<Navigate to="/games" replace />} />
-              <Route path="/games" element={<Games teamId={activeTeam.id} />} />
+              <Route path="/games" element={<Tournaments teamId={activeTeam.id} />} />
+              <Route path="/games/t/:tournamentId" element={<TournamentGames teamId={activeTeam.id} />} />
               <Route path="/games/:id" element={<GameDetail teamId={activeTeam.id} />} />
               <Route path="/practice" element={<Practice teamId={activeTeam.id} />} />
               <Route path="/shooting/:id" element={<ShootingDetail teamId={activeTeam.id} />} />

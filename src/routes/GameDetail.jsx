@@ -456,7 +456,8 @@ export function GameDetail({ teamId }) {
     if (ok) showRecordedFlash(selectedPlayerId, statKey)
   }
 
-  const listPath = game.game_type === 'official' ? '/games' : '/practice'
+  // 公式試合は大会(tournament)配下の試合一覧に、スクリメージはPRACTICE一覧に戻る
+  const listPath = game.game_type === 'official' ? `/games/t/${game.tournament_id}` : '/practice'
 
   async function handleConfirmDelete() {
     await deleteGame(game.id)

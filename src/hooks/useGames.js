@@ -4,7 +4,9 @@ import { supabase } from '@/supabaseClient'
 // gameType: 'official'(GAMESタブ) | 'practice'(スクリメージ) | 'shooting'(シューティング)。
 // null/未指定の場合は種別を問わず全件取得する(GameDetailがidだけで試合を
 // 特定する際に使う)。
-export function useGames(teamId, gameType = null) {
+// tournamentId: 'official'の試合を特定の大会だけに絞り込みたい場合に指定する
+// (TournamentGamesが使う。大会の中で試合を作成する際もこのIDが使われる)。
+export function useGames(teamId, gameType = null, tournamentId = null) {
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -16,6 +18,7 @@ export function useGames(teamId, gameType = null) {
     }
     let query = supabase.from('games').select('*').eq('team_id', teamId)
     if (gameType) query = query.eq('game_type', gameType)
+    if (tournamentId) query = query.eq('tournament_id', tournamentId)
     const { data, error } = await query
       .order('game_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -23,7 +26,7 @@ export function useGames(teamId, gameType = null) {
     if (error) console.error('試合一覧の取得に失敗しました', error)
     setGames(data ?? [])
     setLoading(false)
-  }, [teamId, gameType])
+  }, [teamId, gameType, tournamentId])
 
   useEffect(() => {
     refresh()
@@ -32,11 +35,11 @@ export function useGames(teamId, gameType = null) {
   useEffect(() => {
     if (!teamId) return
     const channel = supabase
-      .channel(`games-${teamId}-${gameType}-${Math.random().toString(36).slice(2)}`)
+      .channel(`games-${teamId}-${gameType}-${tournamentId}-${Math.random().toString(36).slice(2)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `team_id=eq.${teamId}` }, () => refresh())
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [teamId, gameType, refresh])
+  }, [teamId, gameType, tournamentId, refresh])
 
   async function createGame({ opponentName, gameDate, location }) {
     const { data, error } = await supabase
@@ -47,6 +50,7 @@ export function useGames(teamId, gameType = null) {
         game_date: gameDate,
         location: location || null,
         game_type: gameType || 'official',
+        tournament_id: tournamentId || null,
       })
       .select()
       .single()

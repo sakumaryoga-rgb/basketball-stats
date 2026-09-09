@@ -42,9 +42,21 @@ create table if not exists players (
   created_at timestamptz not null default now()
 );
 
+-- 大会。公式試合(games.game_type='official')の親要素。GAMEタブは大会単位の
+-- 一覧になり、大会の中に複数の試合を追加する(スクリメージ/シューティングは対象外)。
+create table if not exists tournaments (
+  id uuid primary key default gen_random_uuid(),
+  team_id uuid not null references teams(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists games (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references teams(id) on delete cascade,
+  -- 公式試合(game_type='official')は必ずどこかの大会に属する。大会を削除すると
+  -- その試合・スタッツも連鎖削除される(on delete cascade)
+  tournament_id uuid references tournaments(id) on delete cascade,
   opponent_name text,
   game_date date not null default current_date,
   location text,
@@ -58,7 +70,8 @@ create table if not exists games (
   created_at timestamptz not null default now(),
   -- official=公式試合、practice=スクリメージ(GAME同様にフル記録するが公式スタッツには含めない)、
   -- shooting=シューティング練習(ゾーン単位のタリーのみ)
-  game_type text not null default 'official' check (game_type in ('official', 'practice', 'shooting'))
+  game_type text not null default 'official' check (game_type in ('official', 'practice', 'shooting')),
+  constraint games_official_requires_tournament check (game_type <> 'official' or tournament_id is not null)
 );
 
 -- 試合中にタップされたスタッツ1件ごとのイベントログ。
@@ -253,6 +266,7 @@ group by p.id, p.team_id;
 alter table teams enable row level security;
 alter table team_members enable row level security;
 alter table players enable row level security;
+alter table tournaments enable row level security;
 alter table games enable row level security;
 alter table stat_events enable row level security;
 alter table game_lineups enable row level security;
@@ -275,6 +289,11 @@ create policy "leave team" on team_members
   for delete using (user_id = auth.uid());
 
 create policy "manage own team players" on players
+  for all
+  using (is_team_member(team_id))
+  with check (is_team_member(team_id));
+
+create policy "manage own team tournaments" on tournaments
   for all
   using (is_team_member(team_id))
   with check (is_team_member(team_id));
