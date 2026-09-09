@@ -41,7 +41,7 @@ export function useGames(teamId, gameType = null, tournamentId = null) {
     return () => supabase.removeChannel(channel)
   }, [teamId, gameType, tournamentId, refresh])
 
-  async function createGame({ opponentName, gameDate, location }) {
+  async function createGame({ opponentName, gameDate, location, periodSystem }) {
     const { data, error } = await supabase
       .from('games')
       .insert({
@@ -51,6 +51,7 @@ export function useGames(teamId, gameType = null, tournamentId = null) {
         location: location || null,
         game_type: gameType || 'official',
         tournament_id: tournamentId || null,
+        ...(periodSystem ? { period_system: periodSystem } : {}),
       })
       .select()
       .single()

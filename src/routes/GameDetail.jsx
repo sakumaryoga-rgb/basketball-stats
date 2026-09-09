@@ -5,7 +5,7 @@ import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
 import { useGameLineups } from '@/hooks/useGameLineups'
-import { STAT_CATEGORIES, STAT_KEY_LABEL, QUARTER_OPTIONS, formatClock, formatQuarter } from '@/lib/stats'
+import { STAT_CATEGORIES, STAT_KEY_LABEL, quarterOptions, formatClock, formatQuarter } from '@/lib/stats'
 import { snapToZoneCategory } from '@/lib/hotZones'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BoxScoreTable } from '@/components/BoxScoreTable'
 import { CourtDiagram } from '@/components/CourtDiagram'
+import { GameLogPanel } from '@/components/GameLogPanel'
 import { WheelPicker } from '@/components/WheelPicker'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -193,7 +194,7 @@ export function GameDetail({ teamId }) {
   const { players, addPlayer } = usePlayers(teamId)
   const { games, updateGame, deleteGame } = useGames(teamId)
   const game = games.find((g) => g.id === id)
-  const { events, boxScore, recordStat, undoLast } = useGameStats(id, game?.game_type)
+  const { events, boxScore, recordStat, undoLast, editStat, deleteStat } = useGameStats(id, game?.game_type)
   const { lineups, substitute, incrementSeconds } = useGameLineups(id)
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -305,6 +306,10 @@ export function GameDetail({ teamId }) {
   if (!game) {
     return <p className="text-sm text-muted-foreground py-8 text-center">読み込み中...</p>
   }
+
+  // 2Q制(前半・後半・1OT)はperiod_systemを持つ公式試合のみ対象。スクリメージ/シューティングは
+  // period_systemの値によらず常に従来の4Q表示(1Q〜4Q・OT1・OT2)のまま
+  const periodSystem = game.game_type === 'official' ? game.period_system : '4q'
 
   async function handleStart() {
     await updateGame(game.id, { status: 'in_progress' })
@@ -490,9 +495,9 @@ export function GameDetail({ teamId }) {
             onChange={(e) => handleQuarterChange(Number(e.target.value))}
             className="self-center rounded-full border px-3 py-1 text-sm font-medium text-primary bg-background hover:bg-muted"
           >
-            {QUARTER_OPTIONS.map((q) => (
+            {quarterOptions(periodSystem).map((q) => (
               <option key={q} value={q}>
-                {formatQuarter(q)}
+                {formatQuarter(q, periodSystem)}
               </option>
             ))}
           </select>
@@ -899,8 +904,22 @@ export function GameDetail({ teamId }) {
                 </button>
               ))}
             </div>
-            <CourtDiagram shots={shots} />
-            <p className="text-xs text-muted-foreground text-center">青丸=成功 ・ 赤×=失敗</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <CourtDiagram shots={shots} />
+                <p className="text-xs text-muted-foreground text-center">青丸=成功 ・ 赤×=失敗</p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-heading tracking-wide text-muted-foreground">LOG</p>
+                <GameLogPanel
+                  events={events}
+                  gamePlayers={gamePlayers}
+                  periodSystem={periodSystem}
+                  onEdit={editStat}
+                  onDelete={deleteStat}
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>

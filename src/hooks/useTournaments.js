@@ -38,10 +38,16 @@ export function useTournaments(teamId) {
     return () => supabase.removeChannel(channel)
   }, [teamId, refresh])
 
-  async function createTournament({ name, gameDate, location }) {
+  async function createTournament({ name, gameDate, location, periodSystem }) {
     const { data, error } = await supabase
       .from('tournaments')
-      .insert({ team_id: teamId, name, game_date: gameDate, location: location || null })
+      .insert({
+        team_id: teamId,
+        name,
+        game_date: gameDate,
+        location: location || null,
+        period_system: periodSystem,
+      })
       .select()
       .single()
     if (error) throw error

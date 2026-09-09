@@ -38,6 +38,8 @@ export function Tournaments({ teamId }) {
   const [name, setName] = useState('')
   const [gameDate, setGameDate] = useState(todayStr())
   const [location, setLocation] = useState('')
+  // 既存の試合の大半が2Q制のため、作成フォームのデフォルトも2Q制にしておく
+  const [periodSystem, setPeriodSystem] = useState('2q')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -47,10 +49,11 @@ export function Tournaments({ teamId }) {
     setSaving(true)
     setError('')
     try {
-      await createTournament({ name, gameDate, location })
+      await createTournament({ name, gameDate, location, periodSystem })
       setName('')
       setGameDate(todayStr())
       setLocation('')
+      setPeriodSystem('2q')
       setOpen(false)
     } catch (err) {
       setError(err.message)
@@ -100,6 +103,30 @@ export function Tournaments({ teamId }) {
                   <Input id="tournament-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="任意" />
                 </div>
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>クォーター制</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={periodSystem === '2q' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setPeriodSystem('2q')}
+                  >
+                    2Q制(前半・後半)
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={periodSystem === '4q' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setPeriodSystem('4q')}
+                  >
+                    4Q制(1〜4Q)
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">作成後は変更できません</p>
+              </div>
               {error && <p className="text-destructive text-sm">{error}</p>}
               <DialogFooter>
                 <Button type="submit" disabled={saving}>
@@ -125,6 +152,8 @@ export function Tournaments({ teamId }) {
                 <p className="text-xs text-muted-foreground">
                   {t.game_date}
                   {t.location ? ` ・ ${t.location}` : ''}
+                  {' ・ '}
+                  {t.period_system === '2q' ? '2Q制' : '4Q制'}
                 </p>
               </Link>
               <Button

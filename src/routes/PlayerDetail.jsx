@@ -38,7 +38,7 @@ function usePlayerLog(playerId, teamId) {
     const [seasonRes, statsRes, gamesRes] = await Promise.all([
       supabase.from('player_season_stats').select('*').eq('player_id', playerId).maybeSingle(),
       supabase.from('player_game_stats').select('*').eq('player_id', playerId),
-      supabase.from('games').select('id, opponent_name, game_date, status').eq('team_id', teamId),
+      supabase.from('games').select('id, opponent_name, game_date, status, period_system').eq('team_id', teamId),
     ])
     if (seasonRes.error) console.error('シーズンスタッツの取得に失敗しました', seasonRes.error)
     if (statsRes.error) console.error('試合ごとのスタッツの取得に失敗しました', statsRes.error)
@@ -70,6 +70,8 @@ function usePlayerLog(playerId, teamId) {
 
   return { season, gameLog, loading }
 }
+
+const PERIOD_SUM_KEYS = ['pts', 'reb', 'ast', 'stl', 'blk', 'tov']
 
 function StatBlock({ label, value }) {
   return (
@@ -216,6 +218,8 @@ export function PlayerDetail({ teamId }) {
   const { shots } = useShotChart(teamId, id)
   const practiceStats = usePracticeStats(teamId, id)
   const [statsMode, setStatsMode] = useState('official')
+  // 既存の記録の大半が2Q制のため、デフォルトは2Q制で表示する
+  const [periodMode, setPeriodMode] = useState('2q')
 
   const player = players.find((p) => p.id === id)
 
@@ -242,6 +246,21 @@ export function PlayerDetail({ teamId }) {
       ftPct: pct(season.ftm, season.fta),
     }
   }, [season])
+
+  // 「1試合平均」は大会の2Q制/4Q制で切り替えられるようにするため、season(全期間合算)とは
+  // 別に、対象期間の試合(gameLog)だけをその場で合算して平均を出す
+  const periodGames = useMemo(
+    () => gameLog.filter((row) => row.game.period_system === periodMode),
+    [gameLog, periodMode]
+  )
+  const periodAverages = useMemo(() => {
+    const g = periodGames.length
+    const sums = Object.fromEntries(PERIOD_SUM_KEYS.map((k) => [k, 0]))
+    for (const row of periodGames) {
+      for (const k of PERIOD_SUM_KEYS) sums[k] += row[k] ?? 0
+    }
+    return Object.fromEntries(PERIOD_SUM_KEYS.map((k) => [k, perGame(sums[k], g)]))
+  }, [periodGames])
 
   if (!player) {
     return <p className="text-sm text-muted-foreground py-8 text-center">読み込み中...</p>
@@ -293,14 +312,38 @@ export function PlayerDetail({ teamId }) {
       {statsMode === 'official' && (season && season.games_played > 0 ? (
         <>
           <div className="rounded-lg border p-4">
-            <p className="text-xs text-muted-foreground mb-3">1試合平均 ({season.games_played}試合)</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-muted-foreground">1試合平均 ({periodGames.length}試合)</p>
+              <div className="flex rounded-md border p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPeriodMode('2q')}
+                  className={cn(
+                    'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+                    periodMode === '2q' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  2Q制
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodMode('4q')}
+                  className={cn(
+                    'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+                    periodMode === '4q' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  4Q制
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-3 gap-y-4">
-              <StatBlock label="PPG" value={formatAvg(averages.pts)} />
-              <StatBlock label="RPG" value={formatAvg(averages.reb)} />
-              <StatBlock label="APG" value={formatAvg(averages.ast)} />
-              <StatBlock label="SPG" value={formatAvg(averages.stl)} />
-              <StatBlock label="BPG" value={formatAvg(averages.blk)} />
-              <StatBlock label="TOPG" value={formatAvg(averages.tov)} />
+              <StatBlock label="PPG" value={formatAvg(periodAverages.pts)} />
+              <StatBlock label="RPG" value={formatAvg(periodAverages.reb)} />
+              <StatBlock label="APG" value={formatAvg(periodAverages.ast)} />
+              <StatBlock label="SPG" value={formatAvg(periodAverages.stl)} />
+              <StatBlock label="BPG" value={formatAvg(periodAverages.blk)} />
+              <StatBlock label="TOPG" value={formatAvg(periodAverages.tov)} />
             </div>
           </div>
 

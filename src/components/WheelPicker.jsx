@@ -45,7 +45,7 @@ export function WheelPicker({ values, value, onChange, className }) {
       ref={containerRef}
       onScroll={handleScroll}
       className={cn(
-        'h-[108px] w-14 overflow-y-scroll snap-y snap-mandatory scroll-smooth',
+        'h-[108px] w-14 overflow-y-scroll overscroll-y-contain snap-y snap-mandatory scroll-smooth',
         '[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]',
         className
       )}

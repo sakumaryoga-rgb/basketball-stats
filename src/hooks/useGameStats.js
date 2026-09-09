@@ -65,18 +65,52 @@ export function useGameStats(gameId, gameType = 'official') {
     return true
   }
 
-  async function undoLast() {
-    if (events.length === 0) return
-    const last = events[events.length - 1]
-    const { error } = await supabase.from('stat_events').delete().eq('id', last.id)
+  async function deleteStat(eventId) {
+    const { error } = await supabase.from('stat_events').delete().eq('id', eventId)
     if (error) {
       console.error('取り消しに失敗しました', error)
-      return
+      return false
     }
     // DELETEイベントはreplica identityの都合でgame_idフィルタのrealtime通知が
     // 届かないことがあるため、削除した本人はここで明示的に再取得する
     refresh()
+    return true
   }
 
-  return { events, boxScore, loading, recordStat, undoLast }
+  async function undoLast() {
+    if (events.length === 0) return
+    await deleteStat(events[events.length - 1].id)
+  }
+
+  // プレイ単位の修正(LOG)用。stat_eventsにはUPDATE用のトリガーが無く、INSERT/DELETEに
+  // 連動してgame_lineups.plus_minusを増減させるトリガーだけがあるため、既存イベントを
+  // 一旦削除してから新しい内容で挿入し直すことで、既存のトリガーだけで正しく反映させる
+  async function editStat(eventId, { playerId, statKey, quarter, shotX = null, shotY = null }) {
+    const target = events.find((e) => e.id === eventId)
+    if (!target) return false
+    const { error: deleteError } = await supabase.from('stat_events').delete().eq('id', eventId)
+    if (deleteError) {
+      console.error('プレイの修正に失敗しました', deleteError)
+      return false
+    }
+    const { data: userData } = await supabase.auth.getUser()
+    const { error: insertError } = await supabase.from('stat_events').insert({
+      game_id: gameId,
+      player_id: playerId,
+      stat_key: statKey,
+      quarter,
+      shot_x: shotX,
+      shot_y: shotY,
+      created_by: userData?.user?.id ?? null,
+    })
+    if (insertError) {
+      console.error('プレイの修正に失敗しました', insertError)
+      refresh()
+      return false
+    }
+    refresh()
+    return true
+  }
+
+  return { events, boxScore, loading, recordStat, undoLast, deleteStat, editStat }
 }

@@ -123,12 +123,19 @@ export function formatClock(totalSeconds) {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-export function formatQuarter(quarter) {
+const HALF_QUARTER_LABELS = { 1: '前半', 2: '後半', 3: '1OT' }
+
+// periodSystemが'2q'(前半・後半・1OTの3区分)の試合と、それ以外(1Q〜4Q・OT1・OT2の
+// 6区分、スクリメージ/シューティングも含む)とでクォーター表示を分ける
+export function formatQuarter(quarter, periodSystem = '4q') {
+  if (periodSystem === '2q') return HALF_QUARTER_LABELS[quarter] ?? `${quarter}`
   return quarter <= 4 ? `${quarter}Q` : `OT${quarter - 4}`
 }
 
-// 選択可能なクォーター(1〜4Q、OT1・OT2)
-export const QUARTER_OPTIONS = [1, 2, 3, 4, 5, 6]
+// 選択可能なクォーター。2Q制は前半・後半・1OTの3つ、それ以外は1〜4Q・OT1・OT2の6つ
+export function quarterOptions(periodSystem = '4q') {
+  return periodSystem === '2q' ? [1, 2, 3] : [1, 2, 3, 4, 5, 6]
+}
 
 // スタッツリーダーの集計期間
 export const LEADER_PERIODS = [

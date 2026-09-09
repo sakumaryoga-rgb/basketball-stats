@@ -5,6 +5,7 @@ import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useTeamSeasonStats } from '@/hooks/useTeamSeasonStats'
+import { useTeamPeriodStats } from '@/hooks/useTeamPeriodStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
 import { getShareUrl, saveShareUrl } from '@/lib/shareUrlStore'
@@ -293,13 +294,17 @@ export function TeamSettings({ team, onTeamUpdated }) {
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const { games } = useGames(team.id)
   const { totals } = useTeamSeasonStats(team.id)
+  const { stats: periodStats } = useTeamPeriodStats(team.id)
   const { shots } = useShotChart(team.id)
   const [leaving, setLeaving] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [openGroups, setOpenGroups] = useState({})
+  // 既存の記録の大半が2Q制のため、デフォルトは2Q制で表示する
+  const [periodMode, setPeriodMode] = useState('2q')
 
   const gamesPlayed = games.filter((g) => g.status !== 'scheduled').length
   const startersCount = players.filter((p) => p.is_starter).length
+  const periodBucket = periodStats[periodMode]
 
   // 第一ポジション(PG→SG→SF→PF→C、未設定は最後)ごとにグループ分けする。
   // 各グループ内は元の並び順(sort_order/背番号)を保つ。
@@ -333,6 +338,21 @@ export function TeamSettings({ team, onTeamUpdated }) {
       ftPct: pct(totals.ftm, totals.fta),
     }
   }, [totals, gamesPlayed])
+
+  // 「チーム1試合平均」だけは大会の2Q制/4Q制で切り替えられるようにするため、
+  // 全期間合算のaveragesとは別に、選択中の制度の試合だけで平均を出す
+  const periodAverages = useMemo(() => {
+    const g = periodBucket.gamesPlayed
+    const t = periodBucket.totals
+    return {
+      pts: perGame(t.pts, g),
+      reb: perGame(t.reb, g),
+      ast: perGame(t.ast, g),
+      stl: perGame(t.stl, g),
+      blk: perGame(t.blk, g),
+      tov: perGame(t.tov, g),
+    }
+  }, [periodBucket])
 
   // 共有URLを知っている人は誰でも参加・記録できる方式のため、退出に管理者判定はない。
   // 自分のteam_members行を削除するだけのシンプルな操作。
@@ -465,14 +485,38 @@ export function TeamSettings({ team, onTeamUpdated }) {
       {totals && (
         <>
           <div className="rounded-lg border p-4">
-            <p className="text-xs text-muted-foreground mb-3">チーム1試合平均 ({gamesPlayed}試合)</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-muted-foreground">チーム1試合平均 ({periodBucket.gamesPlayed}試合)</p>
+              <div className="flex rounded-md border p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPeriodMode('2q')}
+                  className={cn(
+                    'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+                    periodMode === '2q' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  2Q制
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodMode('4q')}
+                  className={cn(
+                    'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+                    periodMode === '4q' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  4Q制
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-3 gap-y-4">
-              <StatBlock label="PPG" value={formatAvg(averages.pts)} />
-              <StatBlock label="RPG" value={formatAvg(averages.reb)} />
-              <StatBlock label="APG" value={formatAvg(averages.ast)} />
-              <StatBlock label="SPG" value={formatAvg(averages.stl)} />
-              <StatBlock label="BPG" value={formatAvg(averages.blk)} />
-              <StatBlock label="TOPG" value={formatAvg(averages.tov)} />
+              <StatBlock label="PPG" value={formatAvg(periodAverages.pts)} />
+              <StatBlock label="RPG" value={formatAvg(periodAverages.reb)} />
+              <StatBlock label="APG" value={formatAvg(periodAverages.ast)} />
+              <StatBlock label="SPG" value={formatAvg(periodAverages.stl)} />
+              <StatBlock label="BPG" value={formatAvg(periodAverages.blk)} />
+              <StatBlock label="TOPG" value={formatAvg(periodAverages.tov)} />
             </div>
           </div>
 
