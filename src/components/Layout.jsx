@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { CalendarDays, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -26,6 +26,23 @@ export function Layout({ teamName, teamIconUrl }) {
     checkForUpdate()
   }, [])
 
+  // 100dvhを指定してもiOSのホーム画面追加時に実際の画面高さより短く計算され、
+  // 下部タブバーが画面下端まで届かない(浮いて見える)report があった。CSSの
+  // ビューポート単位(dvh/svh/vh)に頼らず、window.innerHeightで実測した値を
+  // CSS変数として直接反映することで、この手のiOS特有の計算ズレを避ける
+  useEffect(() => {
+    function setAppHeight() {
+      document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`)
+    }
+    setAppHeight()
+    window.addEventListener('resize', setAppHeight)
+    window.visualViewport?.addEventListener('resize', setAppHeight)
+    return () => {
+      window.removeEventListener('resize', setAppHeight)
+      window.visualViewport?.removeEventListener('resize', setAppHeight)
+    }
+  }, [])
+
   return (
     // headerとnavをposition:fixedでビューポート上に重ねる従来の構成では、iOSのSafari/
     // WKWebViewでページ本体(html/body)がビューポートより短くスクロール不要な画面
@@ -35,10 +52,9 @@ export function Layout({ teamName, teamIconUrl }) {
     // そのシェル内の通常のflex要素として配置、スクロールはmain内部(PullToRefreshが持つ
     // スクロールコンテナ)だけに限定することで、html/body自体は一切スクロールしなくなり、
     // fixed要素がビューポート基準からずれる原因そのものを取り除く
-    // inset-0だけでも通常は高さがビューポート全体に一致するはずだが、iOSのstandaloneで
-    // 下部タブバーが画面下端まで届かず浮いて見える報告があったため、動的ビューポート高さ
-    // (100dvh)を明示指定して高さのズレそのものを解消する
-    <div className="fixed inset-0 h-dvh flex flex-col bg-background">
+    // heightは上のeffectがwindow.innerHeightの実測値をCSS変数として設定する。
+    // 初回描画時など変数未設定の間は100dvhをフォールバックにする
+    <div className="fixed inset-0 flex flex-col bg-background" style={{ height: 'var(--app-height, 100dvh)' }}>
       <header className="border-b bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)] shrink-0">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
