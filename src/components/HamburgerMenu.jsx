@@ -48,7 +48,7 @@ export function HamburgerMenu() {
         <Menu className="size-5" />
       </SheetTrigger>
       <SheetContent side="right" className="w-full p-0">
-        <SheetHeader className="border-b">
+        <SheetHeader className="border-b pt-[calc(1rem+env(safe-area-inset-top))]">
           <SheetTitle>メニュー</SheetTitle>
         </SheetHeader>
         <nav className="flex flex-col gap-1 overflow-y-auto p-2">

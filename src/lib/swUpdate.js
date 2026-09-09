@@ -7,6 +7,7 @@
 //   強制更新(appVersion.jsのcheckMinSupportedVersion)。記録中でも常にブロッキング表示にする
 let state = { needRefresh: false, forceUpdateRequired: false }
 let updateFn = null
+let checkFn = null
 const listeners = new Set()
 
 function emit() {
@@ -29,6 +30,18 @@ export function setUpdateFn(fn) {
 
 export function applyUpdate() {
   updateFn?.(true)
+}
+
+export function setCheckFn(fn) {
+  checkFn = fn
+}
+
+// iOSのホーム画面追加(standalone)ではブラウザのpull-to-refreshが使えず、また長時間
+// バックグラウンドに回るとページごと破棄されmain.jsxのsetIntervalも失われるため、
+// 独自のpull-to-refresh(PullToRefresh.jsx)やアプリのフォアグラウンド復帰時から
+// 能動的に更新チェックを呼び出せるようにする
+export function checkForUpdate() {
+  checkFn?.()
 }
 
 export function subscribe(listener) {

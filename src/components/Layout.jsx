@@ -4,6 +4,7 @@ import { CalendarDays, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { PullToRefresh } from '@/components/PullToRefresh'
 import { HamburgerMenu } from '@/components/HamburgerMenu'
+import { checkForUpdate } from '@/lib/swUpdate'
 
 const NAV_ITEMS = [
   { to: '/games', label: 'GAMES', icon: CalendarDays },
@@ -16,9 +17,14 @@ const NAV_ITEMS = [
 export function Layout({ teamName, teamIconUrl }) {
   const location = useLocation()
   // pull-to-refreshで画面のデータを再取得するため、この値を変えて現在の画面を再マウントさせる
-  // (各データフックはマウント時に自動でfetchするため、フルリロードなしでソフトに更新できる)
+  // (各データフックはマウント時に自動でfetchするため、フルリロードなしでソフトに更新できる)。
+  // あわせてPWAの更新チェックも行う(iOSのホーム画面追加時はブラウザ標準の
+  // pull-to-refreshが使えないため、このスワイプが更新確認の唯一の能動的な手段になる)
   const [refreshNonce, setRefreshNonce] = useState(0)
-  const handleRefresh = useCallback(() => setRefreshNonce((n) => n + 1), [])
+  const handleRefresh = useCallback(() => {
+    setRefreshNonce((n) => n + 1)
+    checkForUpdate()
+  }, [])
 
   return (
     <div className="min-h-svh flex flex-col bg-background">

@@ -13,6 +13,14 @@ body {
   margin: 0;
 }
 
+/* iOSのホーム画面追加(standalone)では、ページ端でのラバーバンド(バウンス)
+   スクロール中にfixed要素(下部タブバー等)がビューポートに対してずれて見える
+   問題があった。バウンス自体を無効化することでズレを防ぐ */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
 /* ワークアウト完了ポップアップの赤丸チェックマーク用。スプリングのように弾む
    遊びごころのある演出のため、標準のanimate-inプリセットではなく手書きのkeyframeを使う */
 @keyframes check-pop {

@@ -753,7 +753,7 @@ export function GameDetail({ teamId }) {
                 key={cat.key}
                 onClick={() => handleCategorySelect(cat.key)}
                 className={cn(
-                  'rounded-full border px-2 py-1.5 text-sm transition-colors',
+                  'whitespace-nowrap rounded-full border px-1 py-1.5 text-center text-xs transition-colors',
                   activeCategoryKey === cat.key
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background hover:bg-muted'
