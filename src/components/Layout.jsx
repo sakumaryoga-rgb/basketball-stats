@@ -49,15 +49,7 @@ export function Layout({ teamName, teamIconUrl }) {
     // Layoutを使わない画面は通常のドキュメントスクロールに依存しているため、
     // bodyにoverflow:hiddenをかけるとそちらが下側にスクロールできなくなり
     // 切れて見える回帰バグを起こす(index.css参照)
-    //
-    // .app-shellの直後に高さ1pxの要素を置き、body全体としては(overflow-yが
-    // hiddenでなくても)ちょうど100%ぴったりで実質スクロール不要になって
-    // しまわないよう、ごくわずかに縦スクロール可能な状態を意図的に作る。
-    // iOS standaloneでは、ページがスクロール不要(ちょうど収まるサイズ)だと
-    // 判定されると、本来表示されないはずのSafariツールバー分の領域を
-    // 空けたまま埋めてくれない既知の挙動があるため
-    <>
-      <div className="app-shell flex flex-col overflow-hidden bg-background" style={{ height: 'var(--app-height, 100%)' }}>
+    <div className="app-shell flex flex-col overflow-hidden bg-background" style={{ height: 'var(--app-height, 100%)' }}>
       <header className="border-b bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)] shrink-0">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
@@ -101,8 +93,6 @@ export function Layout({ teamName, teamIconUrl }) {
           ))}
         </div>
       </nav>
-      </div>
-      <div aria-hidden="true" style={{ height: 1 }} />
-    </>
+    </div>
   )
 }

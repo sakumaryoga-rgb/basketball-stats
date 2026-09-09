@@ -151,18 +151,7 @@ export function PullToRefresh({ children, onRefresh, disabled = false }) {
         className={cn('flex-1 min-h-0 overflow-y-auto overscroll-y-contain', settleTransition)}
         style={{ transform: pull ? `translateY(${pull}px)` : undefined }}
       >
-        {/* 中身が画面に収まる短いタブ(GAMES/PRACTICE/PLAYERS等)では、このコンテナ自体に
-            スクロール可能な余白が一切なくなり、overscroll-y-containが機能しなくなる
-            (吸収するスクロールが存在しないため)。その結果、上スワイプがそのままbody側の
-            ゴムのような弾み(rubber-band、--app-height対策で意図的に1pxだけスクロール
-            可能にしている。src/index.css参照)まで伝わり、画面全体が持ち上がって見える
-            不具合が起きていた。中身が長いLEADERS/TEAM等ではこのコンテナ自身がスクロール
-            を吸収するため症状が出ないことを実機で確認したため、min-h-[calc(100%+1px)]で
-            親(このコンテナ)より常に1px高くなるようにし、中身の長さに関わらず
-            スクロールを必ずこのコンテナ自身に吸収させる(単純に末尾へ1px追加するだけでは、
-            中身が元々コンテナよりずっと短い場合にscrollHeightがclientHeightを超えず
-            効果がなかったため、相対値で親を上回らせる指定にしている) */}
-        <div className="min-h-[calc(100%+1px)]">{children}</div>
+        {children}
       </div>
     </div>
   )
