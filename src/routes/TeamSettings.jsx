@@ -370,38 +370,33 @@ export function TeamSettings({ team, onTeamUpdated }) {
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-heading tracking-wide">TEAM</h1>
 
-      <Card>
-        <CardContent className="flex items-center gap-4">
-          <Avatar size="lg" className="size-16">
-            <AvatarImage src={team.icon_url} alt={team.name} />
-            <AvatarFallback className="bg-primary text-primary-foreground text-lg font-bold">
-              {team.name?.[0] ?? 'B'}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-lg font-medium truncate">{team.name}</p>
-            <p className="text-xs text-muted-foreground">{players.length}人の選手が所属</p>
-          </div>
-          <EditTeamDialog team={team} onTeamUpdated={onTeamUpdated}>
-            <Button variant="outline" size="icon-sm" aria-label="編集">
-              <Pencil className="size-4" />
-            </Button>
-          </EditTeamDialog>
-        </CardContent>
-      </Card>
+      <div className="rounded-lg border p-4 flex items-center gap-4">
+        <Avatar size="lg" className="size-16">
+          <AvatarImage src={team.icon_url} alt={team.name} />
+          <AvatarFallback className="bg-primary text-primary-foreground text-lg font-bold">
+            {team.name?.[0] ?? 'B'}
+          </AvatarFallback>
+        </Avatar>
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-medium truncate">{team.name}</p>
+          <p className="text-xs text-muted-foreground">{players.length}人の選手が所属</p>
+        </div>
+        <EditTeamDialog team={team} onTeamUpdated={onTeamUpdated}>
+          <Button variant="outline" size="icon-sm" aria-label="編集">
+            <Pencil className="size-4" />
+          </Button>
+        </EditTeamDialog>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>ROSTER</CardTitle>
-          <CardDescription>
-            STARTING FIVE(試合追加時のデフォルト) ・ {startersCount}/5人選択中
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {players.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2 text-center">まだ選手が登録されていません</p>
-          ) : (
-            <div className="flex flex-col gap-1">
+      <div className="rounded-lg border p-4">
+        <p className="font-heading text-base font-medium">ROSTER</p>
+        <p className="text-xs text-muted-foreground mb-3">
+          STARTING FIVE(試合追加時のデフォルト) ・ {startersCount}/5人選択中
+        </p>
+        {players.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2 text-center">まだ選手が登録されていません</p>
+        ) : (
+          <div className="flex flex-col gap-1">
               {rosterGroups.map(({ key, players: groupPlayers }) => {
                 const open = !!openGroups[key]
                 return (
@@ -465,8 +460,7 @@ export function TeamSettings({ team, onTeamUpdated }) {
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       {totals && (
         <>

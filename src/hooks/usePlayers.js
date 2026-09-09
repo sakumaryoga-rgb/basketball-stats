@@ -11,12 +11,17 @@ export function usePlayers(teamId) {
       setLoading(false)
       return
     }
+    // sort_order/numberが同値の選手が並ぶと(新規チーム作成直後は全員sort_order=0になりやすい)、
+    // PostgreSQLはタイブレークの列がない限り順序を保証しない。is_starterの更新のような
+    // 無関係な変更をきっかけに再取得しただけで表示順が入れ替わって見えていたのはこのため。
+    // created_atを最終タイブレークにして常に同じ順序になるようにする
     const { data, error } = await supabase
       .from('players')
       .select('*')
       .eq('team_id', teamId)
       .order('sort_order')
       .order('number')
+      .order('created_at')
 
     if (error) console.error('選手一覧の取得に失敗しました', error)
     setPlayers(data ?? [])

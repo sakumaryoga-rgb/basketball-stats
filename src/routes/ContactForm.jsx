@@ -19,7 +19,15 @@ export function ContactForm() {
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('') // ハニーポット。人間の利用者には見えないため、値が入っていればbotとみなす
   const [status, setStatus] = useState('idle') // idle | sending | sent | error | duplicate
-  const [renderedAt] = useState(() => Date.now())
+  // フォーム表示からの経過時間が短すぎる送信をbotとみなすチェックのアンカー。
+  // 送信のたびにDate.now()へ更新することで、エラー/重複で同じ画面に留まったまま
+  // 連打・自動リトライされた場合も、直前の送信からの経過時間で毎回判定し直せるようにする
+  // (更新しないと最初の1回しかこのチェックが機能しなかった)
+  const renderedAtRef = useRef(0)
+  useEffect(() => {
+    renderedAtRef.current = Date.now()
+  }, [])
+  const [cooldown, setCooldown] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState('')
   const turnstileContainerRef = useRef(null)
   const turnstileWidgetIdRef = useRef(null)
@@ -52,7 +60,15 @@ export function ContactForm() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (cooldown) return
+    const elapsedAnchor = renderedAtRef.current
+    // 次回の送信はここからの経過時間で判定させる(連打・自動リトライ対策)
+    renderedAtRef.current = Date.now()
     setStatus('sending')
+    // 人間が連打してもbotの連続送信と同じ挙動になってしまわないよう、送信ボタン自体も
+    // 短時間ロックする(サーバー側のMIN_ELAPSED_MSチェックとは独立した、UI側の連打対策)
+    setCooldown(true)
+    setTimeout(() => setCooldown(false), 3000)
     try {
       const {
         data: { session },
@@ -68,7 +84,7 @@ export function ContactForm() {
           message,
           email: email || undefined,
           website,
-          renderedAt,
+          renderedAt: elapsedAnchor,
           turnstileToken,
         }),
       })
@@ -198,7 +214,7 @@ export function ContactForm() {
             )}
             <Button
               type="submit"
-              disabled={status === 'sending' || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
+              disabled={status === 'sending' || cooldown || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
             >
               {status === 'sending' ? '送信中...' : '送信する'}
             </Button>
