@@ -13,7 +13,13 @@ import App from './App.jsx'
 // 何かしらのリサイズ/スクロール操作が起きて初めて正しい値に再計算されるため、
 // Layout.jsx配下の画面だけでなくOnboarding等も含めアプリ全体で使えるよう、
 // visualViewport APIで実測した高さをCSS変数として最上位(main.jsx)で管理する。
-// Reactのマウント前から必要になるため、Reactの外側(ここ)でセットアップする
+// Reactのマウント前から必要になるため、Reactの外側(ここ)でセットアップする。
+//
+// さらに、起動直後はvisualViewport.height自体がまだ確定しておらず(WKWebViewが
+// standalone表示へ完全に落ち着く前の)古い値を返すことがあり、その後resize等の
+// イベントが一切発火しないまま古い値が固定されてしまうケースがあった(スワイプ操作で
+// 偶発的にresizeが発火して初めて直る、という報告と一致)。起動直後の数百ms間だけ
+// 何度か再計測し、値が確定するタイミングを取りこぼさないようにする
 function setupAppHeight() {
   function setAppHeight() {
     const vvHeight = window.visualViewport?.height ?? 0
@@ -22,8 +28,13 @@ function setupAppHeight() {
   }
   setAppHeight()
   window.addEventListener('resize', setAppHeight)
+  window.addEventListener('load', setAppHeight)
+  window.addEventListener('pageshow', setAppHeight)
   window.visualViewport?.addEventListener('resize', setAppHeight)
   window.visualViewport?.addEventListener('scroll', setAppHeight)
+  for (const delay of [50, 150, 300, 500, 1000, 2000]) {
+    setTimeout(setAppHeight, delay)
+  }
 }
 setupAppHeight()
 
