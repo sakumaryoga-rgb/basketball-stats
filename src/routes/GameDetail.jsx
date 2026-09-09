@@ -187,13 +187,6 @@ const EMPTY_STATS = {
   fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, plus_minus: 0,
 }
 
-// カテゴリを選んでから記録する方式(スライド式)だと試合中の操作が煩雑なため、
-// 全カテゴリのボタンを最初から並べて表示する
-const SHOT_CATEGORIES = STAT_CATEGORIES.filter((c) => c.kind === 'shot')
-const FT_CATEGORY = STAT_CATEGORIES.find((c) => c.kind === 'ft')
-const PAIR_CATEGORY = STAT_CATEGORIES.find((c) => c.kind === 'pair')
-const SINGLE_CATEGORIES = STAT_CATEGORIES.filter((c) => c.kind === 'single')
-
 export function GameDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -204,6 +197,7 @@ export function GameDetail({ teamId }) {
   const { lineups, substitute, incrementSeconds } = useGameLineups(id)
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [activeCategoryKey, setActiveCategoryKey] = useState('fg2')
   const [pendingOutcome, setPendingOutcome] = useState(null)
   // 2P/3Pが成功した直後に表示する「アシストした選手」選択ダイアログの対象
   const [pendingAssist, setPendingAssist] = useState(null)
@@ -222,6 +216,8 @@ export function GameDetail({ teamId }) {
   const pendingSecondsRef = useRef(0)
   const longPressTimerRef = useRef(null)
   const longPressFiredRef = useRef(false)
+
+  const activeCategory = STAT_CATEGORIES.find((c) => c.key === activeCategoryKey)
 
   // この試合のロスター: 通常の選手全員 + この試合限定のゲスト(他の試合のゲストは含めない)
   const gamePlayers = useMemo(
@@ -387,21 +383,26 @@ export function GameDetail({ teamId }) {
     setSubstitutionTarget(null)
   }
 
+  function handleCategorySelect(key) {
+    setActiveCategoryKey(key)
+    setPendingOutcome(null)
+  }
+
   function handleHotZoneToggle(next) {
     setHotZoneEnabled(next)
     localStorage.setItem(HOT_ZONE_ENABLED_KEY, String(next))
     setPendingOutcome(null)
   }
 
-  async function handleShotOutcome(category, outcome) {
+  async function handleShotOutcome(outcome) {
     if (!selectedPlayerId) return
-    const statKey = outcome === 'make' ? category.make : category.miss
-    if (category.kind === 'ft' || !hotZoneEnabled) {
+    const statKey = outcome === 'make' ? activeCategory.make : activeCategory.miss
+    if (activeCategory.kind === 'ft' || !hotZoneEnabled) {
       const shooterId = selectedPlayerId
       const ok = await recordStat(shooterId, statKey, { quarter: game.quarter })
       if (ok) {
         showRecordedFlash(shooterId, statKey)
-        if (category.kind === 'shot' && outcome === 'make') {
+        if (activeCategory.kind === 'shot' && outcome === 'make') {
           setPendingAssist({ shooterId, quarter: game.quarter })
         }
       }
@@ -448,8 +449,9 @@ export function GameDetail({ teamId }) {
     if (ok) showRecordedFlash(selectedPlayerId, statKey)
   }
 
-  async function handleSingleClick(statKey) {
+  async function handleSingleClick() {
     if (!selectedPlayerId) return
+    const statKey = activeCategory.stat
     const ok = await recordStat(selectedPlayerId, statKey, { quarter: game.quarter })
     if (ok) showRecordedFlash(selectedPlayerId, statKey)
   }
@@ -745,102 +747,99 @@ export function GameDetail({ teamId }) {
             </div>
           )}
 
-          <div className="flex flex-col gap-3">
-            {SHOT_CATEGORIES.map((cat) => (
-              <div key={cat.key} className="flex flex-col gap-1.5">
-                <p className="text-xs font-heading tracking-wide text-muted-foreground">{cat.label}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant={pendingOutcome?.statKey === cat.miss ? 'default' : 'outline'}
-                    disabled={!selectedPlayerId}
-                    onClick={() => handleShotOutcome(cat, 'miss')}
-                  >
-                    失敗
-                  </Button>
-                  <Button
-                    variant={pendingOutcome?.statKey === cat.make ? 'default' : 'outline'}
-                    disabled={!selectedPlayerId}
-                    onClick={() => handleShotOutcome(cat, 'make')}
-                  >
-                    成功
-                  </Button>
-                </div>
-              </div>
+          <div className="flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory overscroll-x-contain pb-1 -mx-1 px-1">
+            {STAT_CATEGORIES.map((cat) => (
+              <button
+                key={cat.key}
+                onClick={(e) => {
+                  handleCategorySelect(cat.key)
+                  e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+                }}
+                className={cn(
+                  'shrink-0 snap-start rounded-full border px-3 py-1.5 text-sm transition-colors',
+                  activeCategoryKey === cat.key
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted'
+                )}
+              >
+                {cat.label}
+              </button>
             ))}
-
-            <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">ホットゾーンを記録</span>
-                <span className="text-[11px] text-muted-foreground">
-                  オフにするとシュート位置の記録をスキップします
-                </span>
-              </div>
-              <Switch checked={hotZoneEnabled} onCheckedChange={handleHotZoneToggle} />
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              {!hotZoneEnabled
-                ? '成功・失敗を選ぶとすぐに記録されます'
-                : pendingOutcome
-                  ? 'コートをタップして位置を記録'
-                  : '2P/3Pの成功・失敗を選ぶとコートが有効になります'}
-            </p>
-            <CourtDiagram active={hotZoneEnabled && !!pendingOutcome} onTap={handleCourtTap} />
-
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs font-heading tracking-wide text-muted-foreground">{FT_CATEGORY.label}</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant={pendingOutcome?.statKey === FT_CATEGORY.miss ? 'default' : 'outline'}
-                  disabled={!selectedPlayerId}
-                  onClick={() => handleShotOutcome(FT_CATEGORY, 'miss')}
-                >
-                  失敗
-                </Button>
-                <Button
-                  variant={pendingOutcome?.statKey === FT_CATEGORY.make ? 'default' : 'outline'}
-                  disabled={!selectedPlayerId}
-                  onClick={() => handleShotOutcome(FT_CATEGORY, 'make')}
-                >
-                  成功
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs font-heading tracking-wide text-muted-foreground">{PAIR_CATEGORY.label}</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" disabled={!selectedPlayerId} onClick={() => handlePairClick(PAIR_CATEGORY.left.key)}>
-                  {PAIR_CATEGORY.left.label}
-                </Button>
-                <Button variant="outline" disabled={!selectedPlayerId} onClick={() => handlePairClick(PAIR_CATEGORY.right.key)}>
-                  {PAIR_CATEGORY.right.label}
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs font-heading tracking-wide text-muted-foreground">その他</p>
-              <div className="grid grid-cols-2 gap-2">
-                {SINGLE_CATEGORIES.map((cat) => (
-                  <Button
-                    key={cat.key}
-                    variant="outline"
-                    disabled={!selectedPlayerId}
-                    onClick={() => handleSingleClick(cat.stat)}
-                  >
-                    {cat.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
           </div>
+
+          {(activeCategory.kind === 'shot' || activeCategory.kind === 'ft') && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={pendingOutcome?.statKey === activeCategory.miss ? 'default' : 'outline'}
+                disabled={!selectedPlayerId}
+                onClick={() => handleShotOutcome('miss')}
+              >
+                失敗
+              </Button>
+              <Button
+                variant={pendingOutcome?.statKey === activeCategory.make ? 'default' : 'outline'}
+                disabled={!selectedPlayerId}
+                onClick={() => handleShotOutcome('make')}
+              >
+                成功
+              </Button>
+            </div>
+          )}
+
+          {activeCategory.kind === 'pair' && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" disabled={!selectedPlayerId} onClick={() => handlePairClick(activeCategory.left.key)}>
+                {activeCategory.left.label}
+              </Button>
+              <Button variant="outline" disabled={!selectedPlayerId} onClick={() => handlePairClick(activeCategory.right.key)}>
+                {activeCategory.right.label}
+              </Button>
+            </div>
+          )}
+
+          {activeCategory.kind === 'single' && (
+            <Button variant="outline" disabled={!selectedPlayerId} onClick={handleSingleClick}>
+              {activeCategory.label}を記録
+            </Button>
+          )}
+
+          {activeCategory.kind === 'shot' && (
+            <>
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">ホットゾーンを記録</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    オフにするとシュート位置の記録をスキップします
+                  </span>
+                </div>
+                <Switch checked={hotZoneEnabled} onCheckedChange={handleHotZoneToggle} />
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                {!hotZoneEnabled
+                  ? '成功・失敗を選ぶとすぐに記録されます'
+                  : pendingOutcome
+                    ? 'コートをタップして位置を記録'
+                    : '成功・失敗を選ぶとコートが有効になります'}
+              </p>
+              {recordedFlash && (
+                <p
+                  key={recordedFlash}
+                  className="flex items-center justify-center gap-1 text-xs text-primary animate-in fade-in-0 slide-in-from-bottom-1"
+                >
+                  <Check className="size-3.5 shrink-0" />
+                  {recordedFlash}
+                </p>
+              )}
+              <CourtDiagram active={hotZoneEnabled && !!pendingOutcome} onTap={handleCourtTap} />
+            </>
+          )}
 
           <div className="flex flex-col gap-1">
             <Button variant="ghost" size="sm" className="self-start text-muted-foreground" disabled={!lastEvent} onClick={undoLast}>
               <Undo2 className="size-3.5" />
               {lastEvent ? `取り消す(${lastEventPlayer?.name ?? '?'} ・ ${lastEventLabel})` : '取り消す'}
             </Button>
-            {recordedFlash && (
+            {activeCategory.kind !== 'shot' && recordedFlash && (
               <p
                 key={recordedFlash}
                 className="flex items-center gap-1 text-xs text-primary animate-in fade-in-0 slide-in-from-bottom-1"
