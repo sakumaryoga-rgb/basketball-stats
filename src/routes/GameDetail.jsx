@@ -747,16 +747,13 @@ export function GameDetail({ teamId }) {
             </div>
           )}
 
-          <div className="flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory overscroll-x-contain pb-1 -mx-1 px-1">
+          <div className="grid grid-cols-3 gap-2">
             {STAT_CATEGORIES.map((cat) => (
               <button
                 key={cat.key}
-                onClick={(e) => {
-                  handleCategorySelect(cat.key)
-                  e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-                }}
+                onClick={() => handleCategorySelect(cat.key)}
                 className={cn(
-                  'shrink-0 snap-start rounded-full border px-3 py-1.5 text-sm transition-colors',
+                  'rounded-full border px-2 py-1.5 text-sm transition-colors',
                   activeCategoryKey === cat.key
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background hover:bg-muted'
