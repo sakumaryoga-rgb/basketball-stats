@@ -151,7 +151,12 @@ export function PullToRefresh({ children, onRefresh, disabled = false }) {
         className={cn('flex-1 min-h-0 overflow-y-auto overscroll-y-contain', settleTransition)}
         style={{ transform: pull ? `translateY(${pull}px)` : undefined }}
       >
-        {children}
+        {/* 中身が画面に収まる短いタブ(GAMES/PRACTICE/PLAYERS等)では、このコンテナ自体に
+            スクロール可能な余白が一切なくなり、overscroll-y-containが機能しなくなる
+            (吸収するスクロールが存在しないため)。中身の長さに関わらず常にこのコンテナ
+            自身に1px分のスクロール余地を持たせ、外側(body、--app-height学習の足がかり。
+            src/index.css/Layout.jsx参照)まで弾みが伝わらないようにする */}
+        <div className="min-h-[calc(100%+1px)]">{children}</div>
       </div>
     </div>
   )
