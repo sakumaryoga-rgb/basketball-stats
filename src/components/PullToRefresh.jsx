@@ -20,6 +20,10 @@ export function PullToRefresh({ children, onRefresh }) {
   const enabledRef = useRef(false)
   const pendingPullRef = useRef(0)
   const rafIdRef = useRef(null)
+  // Layoutのアプリシェルをposition:fixedにした関係で、スクロールはwindow/body
+  // ではなくこのコンポーネント自身が持つコンテナに限定されている。「最上部にいるか」の
+  // 判定もwindow.scrollYではなくこのrefのscrollTopを見る必要がある
+  const scrollRef = useRef(null)
   // タッチリスナー自体はマウント時に一度だけ登録し、refreshing/onRefreshは
   // refで最新値を参照する。以前はrefreshingが変わるたびにこのeffectを再登録して
   // いたが、そのタイミングでのクリーンアップがcancelAnimationFrameするだけで
@@ -58,7 +62,7 @@ export function PullToRefresh({ children, onRefresh }) {
 
     function handleTouchStart(e) {
       if (!enabledRef.current || refreshingRef.current) return
-      if (window.scrollY > 0) {
+      if ((scrollRef.current?.scrollTop ?? 0) > 0) {
         startYRef.current = null
         return
       }
@@ -119,9 +123,9 @@ export function PullToRefresh({ children, onRefresh }) {
   const settleTransition = !dragging && 'transition-[height,transform] duration-200 ease-out'
 
   return (
-    <>
+    <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
       <div
-        className={cn('flex justify-center overflow-hidden', settleTransition)}
+        className={cn('flex shrink-0 justify-center overflow-hidden', settleTransition)}
         style={{ height: pull }}
         aria-hidden="true"
       >
@@ -137,9 +141,13 @@ export function PullToRefresh({ children, onRefresh }) {
           />
         </div>
       </div>
-      <div className={cn(settleTransition)} style={{ transform: pull ? `translateY(${pull}px)` : undefined }}>
+      <div
+        ref={scrollRef}
+        className={cn('flex-1 min-h-0 overflow-y-auto overscroll-y-contain', settleTransition)}
+        style={{ transform: pull ? `translateY(${pull}px)` : undefined }}
+      >
         {children}
       </div>
-    </>
+    </div>
   )
 }

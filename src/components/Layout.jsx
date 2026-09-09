@@ -27,8 +27,16 @@ export function Layout({ teamName, teamIconUrl }) {
   }, [])
 
   return (
-    <div className="min-h-svh flex flex-col bg-background">
-      <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)]">
+    // headerとnavをposition:fixedでビューポート上に重ねる従来の構成では、iOSのSafari/
+    // WKWebViewでページ本体(html/body)がビューポートより短くスクロール不要な画面
+    // (中身の少ないGAME/PRACTICE等)のときに、fixed要素がビューポート基準ではなく
+    // ドキュメント基準の位置に描画され、画面中央寄りに「浮いて見える」既知の不具合が
+    // あった。ページ全体をposition:fixedでビューポートに固定したシェルにし、header/navは
+    // そのシェル内の通常のflex要素として配置、スクロールはmain内部(PullToRefreshが持つ
+    // スクロールコンテナ)だけに限定することで、html/body自体は一切スクロールしなくなり、
+    // fixed要素がビューポート基準からずれる原因そのものを取り除く
+    <div className="fixed inset-0 flex flex-col bg-background">
+      <header className="border-b bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)] shrink-0">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
             <Avatar className="size-7 shrink-0">
@@ -43,7 +51,7 @@ export function Layout({ teamName, teamIconUrl }) {
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg w-full mx-auto px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+      <main className="flex-1 min-h-0 max-w-lg w-full mx-auto px-4 flex flex-col">
         <PullToRefresh onRefresh={handleRefresh}>
           {/* pathnameとrefreshNonceをkeyにすることで、タブ切り替え時になめらかにフェードインし、
               pull-to-refresh時は画面を再マウントしてデータを再取得する */}
@@ -53,7 +61,7 @@ export function Layout({ teamName, teamIconUrl }) {
         </PullToRefresh>
       </main>
 
-      <nav className="border-t bg-background/80 backdrop-blur fixed bottom-0 inset-x-0 z-10 pb-[env(safe-area-inset-bottom)]">
+      <nav className="border-t bg-background/80 backdrop-blur z-10 pb-[env(safe-area-inset-bottom)] shrink-0">
         <div className="max-w-lg mx-auto grid grid-cols-5">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
             <NavLink
