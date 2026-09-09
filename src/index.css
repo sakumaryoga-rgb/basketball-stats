@@ -32,6 +32,22 @@ body {
   height: 100%;
 }
 
+/* Layout.jsxのアプリシェルは本来JS計測した--app-heightに頼っているが、
+   起動直後の一時的な誤検知や、キーボード開閉時のresize取りこぼしなど、
+   JSでの計測はどうしても発火タイミングに左右される不安定さが残る。
+   dvh(dynamic viewport height)はブラウザ自身がタイミングの問題なく常に
+   その時点の実ビューポートに追従してくれるCSSネイティブな単位のため、
+   対応ブラウザ(iOS Safari 15.4+など、このアプリの対象端末はほぼ全て対応)
+   ではこちらを優先する。!importantでinline style(style={{height:...}})を
+   上書きすることで、JS側のロジックには一切手を加えずに済ませている。
+   dvh未対応の古いブラウザでは@supportsが評価されず、従来通りJS計測の
+   --app-heightにフォールバックする */
+@supports (height: 100dvh) {
+  .app-shell {
+    height: 100dvh !important;
+  }
+}
+
 /* ワークアウト完了ポップアップの赤丸チェックマーク用。スプリングのように弾む
    遊びごころのある演出のため、標準のanimate-inプリセットではなく手書きのkeyframeを使う */
 @keyframes check-pop {

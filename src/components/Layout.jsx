@@ -41,22 +41,29 @@ function ViewportDebugBadge() {
 
   return (
     <div className="fixed bottom-1 right-1 z-50 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-mono text-white pointer-events-none">
-      inner:{info.inner} vv:{info.vv ?? '-'} app:{info.app} doc:{info.doc} scr:{info.screen} sa:{info.standalone ? '1' : '0'}
+      inner:{info.inner} scr:{info.screen} sa:{info.standalone ? '1' : '0'} dvh:{info.dvhSupported ? '1' : '0'} shell:{info.shellHeight} navBottom:{info.navBottom}
     </div>
   )
 }
 
 function readViewportInfo() {
   if (typeof window === 'undefined') return {}
+  const shellEl = document.querySelector('.app-shell')
+  const navEl = document.querySelector('nav')
   return {
     inner: window.innerHeight,
-    vv: window.visualViewport?.height ?? null,
-    app: getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim(),
-    doc: document.documentElement.clientHeight,
     screen: window.screen?.height ?? '-',
     // trueならホーム画面に追加したアイコンから起動した状態(Safari自体のUIなし)。
     // falseの場合、下の余白の正体はSafari自体のツールバー(アプリのコードでは制御不可)である可能性が高い
     standalone: window.matchMedia?.('(display-mode: standalone)').matches ?? false,
+    dvhSupported: typeof CSS !== 'undefined' && CSS.supports?.('height', '100dvh'),
+    // アプリシェル自体の実際の描画高さ。window.innerHeightと一致していれば
+    // シェルはビューポートを正しく埋め切れている(=それでも余白が見えるなら
+    // アプリの外側=OS/ブラウザ側の領域ということになる)
+    shellHeight: shellEl ? Math.round(shellEl.getBoundingClientRect().height) : '-',
+    // フッターnavの実際の下端位置。window.innerHeightと一致していれば
+    // フッターは画面の描画可能範囲の一番下まで正しく届いている
+    navBottom: navEl ? Math.round(navEl.getBoundingClientRect().bottom) : '-',
   }
 }
 
@@ -94,7 +101,7 @@ export function Layout({ teamName, teamIconUrl }) {
     // Layoutを使わない画面は通常のドキュメントスクロールに依存しているため、
     // bodyにoverflow:hiddenをかけるとそちらが下側にスクロールできなくなり
     // 切れて見える回帰バグを起こす(index.css参照)
-    <div className="flex flex-col overflow-hidden bg-background" style={{ height: 'var(--app-height, 100%)' }}>
+    <div className="app-shell flex flex-col overflow-hidden bg-background" style={{ height: 'var(--app-height, 100%)' }}>
       <header className="border-b bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)] shrink-0">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
