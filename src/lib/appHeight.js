@@ -1,68 +1,49 @@
 // iOSでは、ソフトウェアキーボードの表示中はvisualViewport.height(場合によっては
 // window.innerHeightも)がキーボード分だけ縮んだ値を報告する。キーボードを閉じた
-// ときにこれが確実に検知され元の高さへ戻る保証がなく(resizeイベントが必ず
-// 発火するとは限らない)、縮んだ値がそのまま--app-heightに残ってしまい、
-// 入力後に下部タブバーが浮いて見える不具合の原因になっていた
-// (実機での検証により、キーボード表示が原因と特定済み)。
+// ときにこれを検知するresizeイベントが確実に発火するとは限らないため、
+// フォーカスが外れた瞬間(focusout)にも明示的に再計測し、キーボードが閉じた
+// 直後の正しい高さを取りこぼさないようにする。
 //
-// 一度観測した最大の高さ(=キーボードが出ていない状態の正しい高さ)を下回る値は
-// 無視し、常にそれ以上の高さだけを採用することでこの問題を回避する。
+// 過去に「一度観測した最大の高さを下回る値は無視する」という仕組みを試したが、
+// 起動直後のsafe-area確定前に一時的に観測される実際より大きい値をそのまま
+// 学習してしまい、フッターが常に沈んで見える不具合を引き起こした
+// (実機のデバッグ表示で--app-heightがwindow.screen.heightと一致していることを
+// 確認して特定済み)。その後「起動直後の数秒間だけ保護を外す」という調整も
+// 試したが、その数秒間のうちどのタイミングで値が確定するかが不安定で、
+// 今度は逆にフッターが浮く不具合を引き起こすなど、挙動が機種・タイミング
+// 依存で安定しなかった。
 //
-// ただしこの「一度観測した最大値を採用し続ける」仕組みには別の副作用がある。
-// 起動直後はsafe-areaの計算がまだ確定しておらず、ごく短時間だけ
-// window.innerHeight/visualViewport.heightがwindow.screen.height相当の
-// (ホームインジケーター等を含む)実際より大きい値を報告することがある。この
-// 起動直後の一時的な値をそのまま最大値として学習してしまうと、後で正しい値に
-// 収束してもそちらは採用されず、フッターが実際のビューポートより下にはみ出して
-// 常にスクロールしないと見えない「沈み」不具合になる(実機のデバッグ表示で
-// window.screen.heightと--app-heightが一致していることを確認して特定済み)。
-//
-// 対策として、起動直後の値がまだ安定していない一定時間(STARTUP_SETTLE_MS)は
-// 「一度観測した値を下回らない」保護を適用せず、常に最新の値をそのまま採用する。
-// その間に起きるscheduleされた再計測(50ms〜2000ms)で正しい値に収束させ、
-// 安定後に初めて上記の「縮みを無視する」保護を有効にすることで、以降の
-// キーボード開閉時の副作用だけを正しく防ぐ。画面幅が変わった場合(端末回転等)は
-// 新しい向きの高さを起動直後と同様に再度学習し直す
-const STARTUP_SETTLE_MS = 2200
-let maxObservedHeight = 0
-let lastWidth = typeof window !== 'undefined' ? window.innerWidth : 0
-let settled = false
-let settleTimer = null
-
-function scheduleSettle() {
-  settled = false
-  if (settleTimer != null) clearTimeout(settleTimer)
-  settleTimer = setTimeout(() => {
-    settled = true
-  }, STARTUP_SETTLE_MS)
+// そのため、値を溜め込んで「過去の最大値」で判断するのはやめ、毎回その場の
+// 実測値をそのまま素直に採用する方式に戻す。過去にズレた値のまま固定される
+// ことがなくなる代わりに、値が変化しうるタイミング(起動直後・リサイズ・
+// キーボードのフォーカスイン/アウト)でこまめに再計測することで、ズレを
+// 素早く解消する
+export function measureAppHeight() {
+  const vvHeight = window.visualViewport?.height ?? 0
+  const height = Math.max(vvHeight, window.innerHeight)
+  document.documentElement.style.setProperty('--app-height', `${height}px`)
 }
 
-export function measureAppHeight() {
-  const currentWidth = window.innerWidth
-  if (currentWidth !== lastWidth) {
-    lastWidth = currentWidth
-    maxObservedHeight = 0
-    scheduleSettle()
+function remeasureSoon() {
+  for (const delay of [0, 100, 300, 500]) {
+    setTimeout(measureAppHeight, delay)
   }
-  const vvHeight = window.visualViewport?.height ?? 0
-  const candidate = Math.max(vvHeight, window.innerHeight)
-  if (!settled || candidate > maxObservedHeight) {
-    maxObservedHeight = candidate
-  }
-  document.documentElement.style.setProperty('--app-height', `${maxObservedHeight}px`)
 }
 
 export function setupAppHeight() {
-  scheduleSettle()
   measureAppHeight()
   window.addEventListener('resize', measureAppHeight)
   window.addEventListener('load', measureAppHeight)
   window.addEventListener('pageshow', measureAppHeight)
   window.visualViewport?.addEventListener('resize', measureAppHeight)
   window.visualViewport?.addEventListener('scroll', measureAppHeight)
+  // ソフトウェアキーボードが閉じた際、visualViewportのresizeが発火しない
+  // ケースがあるため、フォーカスが外れた瞬間にも明示的に再計測する
+  // (captureフェーズで登録することで、input/textarea以外も含め確実に拾う)
+  document.addEventListener('focusout', remeasureSoon, true)
   // 起動直後はvisualViewport.height自体がまだ確定しておらず、その後resize等の
   // イベントが一切発火しないまま値が固定されてしまうことがあるため、起動直後の
-  // 数百ms〜2秒の間だけ何度か再計測し、正しい最大値の学習を取りこぼさないようにする
+  // 数百ms〜2秒の間だけ何度か再計測し、正しい値の学習を取りこぼさないようにする
   for (const delay of [50, 150, 300, 500, 1000, 2000]) {
     setTimeout(measureAppHeight, delay)
   }
