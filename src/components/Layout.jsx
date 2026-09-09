@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { CalendarDays, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { PullToRefresh } from '@/components/PullToRefresh'
 import { HamburgerMenu } from '@/components/HamburgerMenu'
 import { checkForUpdate } from '@/lib/swUpdate'
+import { measureAppHeight } from '@/lib/appHeight'
 
 const NAV_ITEMS = [
   { to: '/games', label: 'GAMES', icon: CalendarDays },
@@ -24,6 +25,15 @@ export function Layout({ teamName, teamIconUrl }) {
   const handleRefresh = useCallback(() => {
     setRefreshNonce((n) => n + 1)
     checkForUpdate()
+  }, [])
+
+  // --app-heightの初期計測・監視はmain.jsx側でアプリ起動時に行っているが、Layoutは
+  // Onboardingでチームに参加した直後など、起動からしばらく経ってから(main.jsx側の
+  // 再計測タイマーが終わった後で)初めてマウントされることがある。その場合、起動直後の
+  // 一時的にズレた値がここでも使われ続けてしまうため、Layoutが実際にマウントされる
+  // タイミングでも念のため再計測する
+  useEffect(() => {
+    measureAppHeight()
   }, [])
 
   return (
