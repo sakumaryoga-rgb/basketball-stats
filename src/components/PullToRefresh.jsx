@@ -20,10 +20,26 @@ export function PullToRefresh({ children, onRefresh }) {
   const enabledRef = useRef(false)
   const pendingPullRef = useRef(0)
   const rafIdRef = useRef(null)
+  // タッチリスナー自体はマウント時に一度だけ登録し、refreshing/onRefreshは
+  // refで最新値を参照する。以前はrefreshingが変わるたびにこのeffectを再登録して
+  // いたが、そのタイミングでのクリーンアップがcancelAnimationFrameするだけで
+  // rafIdRefをnullに戻していなかったため、1回スワイプして更新した後は
+  // scheduleFlushが「フレームが予約済み」と誤認して二度とsetPullを呼ばなくなり、
+  // 2回目以降スワイプが反応しなくなる不具合があった
+  const refreshingRef = useRef(false)
+  const onRefreshRef = useRef(onRefresh)
 
   useEffect(() => {
     enabledRef.current = window.matchMedia('(display-mode: standalone)').matches
   }, [])
+
+  useEffect(() => {
+    refreshingRef.current = refreshing
+  }, [refreshing])
+
+  useEffect(() => {
+    onRefreshRef.current = onRefresh
+  }, [onRefresh])
 
   useEffect(() => {
     // touchmoveは1フレームの間に何度も発火するため、指の動きをそのままsetPullすると
@@ -41,7 +57,7 @@ export function PullToRefresh({ children, onRefresh }) {
     }
 
     function handleTouchStart(e) {
-      if (!enabledRef.current || refreshing) return
+      if (!enabledRef.current || refreshingRef.current) return
       if (window.scrollY > 0) {
         startYRef.current = null
         return
@@ -64,7 +80,7 @@ export function PullToRefresh({ children, onRefresh }) {
       setPull((current) => {
         if (current >= PULL_THRESHOLD) {
           setRefreshing(true)
-          onRefresh?.()
+          onRefreshRef.current?.()
           return REFRESH_HEIGHT
         }
         return 0
@@ -80,9 +96,12 @@ export function PullToRefresh({ children, onRefresh }) {
       window.removeEventListener('touchmove', handleTouchMove)
       window.removeEventListener('touchend', endDrag)
       window.removeEventListener('touchcancel', endDrag)
-      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current)
+      if (rafIdRef.current != null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
     }
-  }, [refreshing, onRefresh])
+  }, [])
 
   useEffect(() => {
     if (!refreshing) return
