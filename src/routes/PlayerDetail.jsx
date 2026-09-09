@@ -82,7 +82,7 @@ function StatBlock({ label, value }) {
   )
 }
 
-function EditProfileDialog({ player, updatePlayer, children }) {
+function EditProfileDialog({ player, updatePlayer, removePlayer, onDeleted, children }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(player.name)
   const [number, setNumber] = useState(player.number ?? '')
@@ -93,6 +93,8 @@ function EditProfileDialog({ player, updatePlayer, children }) {
   const [removePhoto, setRemovePhoto] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   function handleOpenChange(next) {
     if (next) {
@@ -104,8 +106,22 @@ function EditProfileDialog({ player, updatePlayer, children }) {
       setPhotoPreview(player.photo_url ?? '')
       setRemovePhoto(false)
       setError('')
+      setConfirmDelete(false)
     }
     setOpen(next)
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    setError('')
+    try {
+      await removePlayer(player.id)
+      setOpen(false)
+      onDeleted?.()
+    } catch (err) {
+      setError(err.message)
+      setDeleting(false)
+    }
   }
 
   function handlePhotoChange(e) {
@@ -154,57 +170,86 @@ function EditProfileDialog({ player, updatePlayer, children }) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={children} />
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>プロフィールを編集</DialogTitle>
-          <DialogDescription>選手の情報と写真を更新します</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSave} className="flex flex-col gap-4">
-          <div className="flex items-center gap-4">
-            <Avatar size="lg" className="size-16">
-              <AvatarImage src={photoPreview} alt={name} />
-              <AvatarFallback className="text-base">{number || '-'}</AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="player-photo">写真</Label>
-              <Input id="player-photo" type="file" accept="image/*" onChange={handlePhotoChange} />
-              {photoPreview && (
-                <button
-                  type="button"
-                  onClick={handleRemovePhoto}
-                  className="flex items-center gap-1 text-xs text-destructive self-start"
-                >
-                  <X className="size-3" />
-                  写真を削除
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-name">名前</Label>
-            <Input id="edit-name" required value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-number">背番号</Label>
-              <Input id="edit-number" type="number" value={number} onChange={(e) => setNumber(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-position">ポジション</Label>
-              <PositionSelect id="edit-position" value={position} onChange={setPosition} />
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-position2">ポジション(第2)</Label>
-            <PositionSelect id="edit-position2" value={position2} onChange={setPosition2} />
-          </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
-            <Button type="submit" disabled={saving}>
-              {saving ? '保存中...' : '保存する'}
-            </Button>
-          </DialogFooter>
-        </form>
+        {confirmDelete ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>本当に削除しますか?</DialogTitle>
+              <DialogDescription>
+                {player.name} をロスターから削除します。これまでの試合のスタッツ記録も一緒に削除され、元に戻せません。
+              </DialogDescription>
+            </DialogHeader>
+            {error && <p className="text-destructive text-sm">{error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+                キャンセル
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                {deleting ? '削除中...' : '削除する'}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>プロフィールを編集</DialogTitle>
+              <DialogDescription>選手の情報と写真を更新します</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSave} className="flex flex-col gap-4">
+              <div className="flex items-center gap-4">
+                <Avatar size="lg" className="size-16">
+                  <AvatarImage src={photoPreview} alt={name} />
+                  <AvatarFallback className="text-base">{number || '-'}</AvatarFallback>
+                </Avatar>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="player-photo">写真</Label>
+                  <Input id="player-photo" type="file" accept="image/*" onChange={handlePhotoChange} />
+                  {photoPreview && (
+                    <button
+                      type="button"
+                      onClick={handleRemovePhoto}
+                      className="flex items-center gap-1 text-xs text-destructive self-start"
+                    >
+                      <X className="size-3" />
+                      写真を削除
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-name">名前</Label>
+                <Input id="edit-name" required value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-number">背番号</Label>
+                  <Input id="edit-number" type="number" value={number} onChange={(e) => setNumber(e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="edit-position">ポジション</Label>
+                  <PositionSelect id="edit-position" value={position} onChange={setPosition} />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="edit-position2">ポジション(第2)</Label>
+                <PositionSelect id="edit-position2" value={position2} onChange={setPosition2} />
+              </div>
+              {error && <p className="text-destructive text-sm">{error}</p>}
+              <DialogFooter>
+                <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
+                <Button type="submit" disabled={saving}>
+                  {saving ? '保存中...' : '保存する'}
+                </Button>
+              </DialogFooter>
+            </form>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="text-sm text-destructive text-center pt-3 border-t"
+            >
+              この選手を削除する
+            </button>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -213,7 +258,7 @@ function EditProfileDialog({ player, updatePlayer, children }) {
 export function PlayerDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { players, updatePlayer } = usePlayers(teamId)
+  const { players, updatePlayer, removePlayer } = usePlayers(teamId)
   const { season, gameLog } = usePlayerLog(id, teamId)
   const { shots } = useShotChart(teamId, id)
   const practiceStats = usePracticeStats(teamId, id)
@@ -284,7 +329,12 @@ export function PlayerDetail({ teamId }) {
             {formatPositions(player.position, player.position2)}
           </p>
         </div>
-        <EditProfileDialog player={player} updatePlayer={updatePlayer}>
+        <EditProfileDialog
+          player={player}
+          updatePlayer={updatePlayer}
+          removePlayer={removePlayer}
+          onDeleted={() => navigate('/players', { replace: true })}
+        >
           <Button variant="outline" size="icon-sm" aria-label="編集">
             <Pencil className="size-4" />
           </Button>

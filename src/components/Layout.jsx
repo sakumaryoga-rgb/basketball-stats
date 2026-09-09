@@ -15,8 +15,14 @@ const NAV_ITEMS = [
   { to: '/team', label: 'TEAM', icon: Settings },
 ]
 
+// 試合の記録画面(/games/:id、公式戦・スクリメージ共通)では、下スワイプによる
+// pull-to-refreshがタイマーの再設定など誤操作の原因になるため無効化する。
+// 大会の試合一覧(/games)・大会詳細(/games/t/:tournamentId)は対象外
+const GAME_RECORDING_PATH = /^\/games\/(?!t\/)[^/]+$/
+
 export function Layout({ teamName, teamIconUrl }) {
   const location = useLocation()
+  const pullToRefreshDisabled = GAME_RECORDING_PATH.test(location.pathname)
   // pull-to-refreshで画面のデータを再取得するため、この値を変えて現在の画面を再マウントさせる
   // (各データフックはマウント時に自動でfetchするため、フルリロードなしでソフトに更新できる)。
   // あわせてPWAの更新チェックも行う(iOSのホーム画面追加時はブラウザ標準の
@@ -60,7 +66,7 @@ export function Layout({ teamName, teamIconUrl }) {
       </header>
 
       <main className="flex-1 min-h-0 max-w-lg w-full mx-auto px-4 flex flex-col">
-        <PullToRefresh onRefresh={handleRefresh}>
+        <PullToRefresh onRefresh={handleRefresh} disabled={pullToRefreshDisabled}>
           {/* pathnameとrefreshNonceをkeyにすることで、タブ切り替え時になめらかにフェードインし、
               pull-to-refresh時は画面を再マウントしてデータを再取得する */}
           <div key={`${location.pathname}-${refreshNonce}`} className="py-4 animate-in fade-in slide-in-from-bottom-1 duration-200">

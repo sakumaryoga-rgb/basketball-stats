@@ -12,12 +12,13 @@ const REFRESH_DURATION_MS = 700 // 更新中インジケーターを表示する
 // 通常のブラウザタブではネイティブの挙動を邪魔しないよう、standalone判定の時だけ有効化する。
 // ブラウザのフルリロード(window.location.reload)は白画面のフラッシュが入り滑らかでないため、
 // onRefreshで呼び出し元に現在画面のソフトな再取得を委ね、インジケーターだけをアニメーションさせる。
-export function PullToRefresh({ children, onRefresh }) {
+export function PullToRefresh({ children, onRefresh, disabled = false }) {
   const [pull, setPull] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const startYRef = useRef(null)
   const enabledRef = useRef(false)
+  const disabledRef = useRef(disabled)
   const pendingPullRef = useRef(0)
   const rafIdRef = useRef(null)
   // Layoutのアプリシェルをposition:fixedにした関係で、スクロールはwindow/body
@@ -36,6 +37,10 @@ export function PullToRefresh({ children, onRefresh }) {
   useEffect(() => {
     enabledRef.current = window.matchMedia('(display-mode: standalone)').matches
   }, [])
+
+  useEffect(() => {
+    disabledRef.current = disabled
+  }, [disabled])
 
   useEffect(() => {
     refreshingRef.current = refreshing
@@ -61,7 +66,7 @@ export function PullToRefresh({ children, onRefresh }) {
     }
 
     function handleTouchStart(e) {
-      if (!enabledRef.current || refreshingRef.current) return
+      if (!enabledRef.current || refreshingRef.current || disabledRef.current) return
       if ((scrollRef.current?.scrollTop ?? 0) > 0) {
         startYRef.current = null
         return

@@ -5,9 +5,15 @@
 // 入力後に下部タブバーが浮いて見える不具合の原因になっていた
 // (実機での検証により、キーボード表示が原因と特定済み)。
 //
-// 一度観測した最大の高さ(=キーボードが出ていない状態の正しい高さ)を下回る値は
-// 無視し、常にそれ以上の高さだけを採用することでこの問題を回避する。画面幅が
-// 変わった場合(端末回転等)は基準をリセットし、新しい向きの高さを再度学習し直す
+// 一度観測した最大の高さを下回る値を無条件に無視すると、起動直後にブラウザの
+// ツールバーが一時的に隠れて実際より大きい高さを観測してしまった場合、その
+// 誇張された値に永久に固定されてしまい、フッターが実際のビューポートより下に
+// はみ出して常にスクロールしないと見えない不具合になる(こちらも実機で確認済み)。
+// キーボードの縮み幅(数百px)とツールバー表示/非表示による縮み幅(数十px)には
+// 明確な差があるため、閾値未満の小さな縮みは正しい値として採用し、閾値以上の
+// 大きな縮みだけをキーボードとみなして無視する。画面幅が変わった場合
+// (端末回転等)は基準をリセットし、新しい向きの高さを再度学習し直す
+const KEYBOARD_SHRINK_THRESHOLD = 100
 let maxObservedHeight = 0
 let lastWidth = typeof window !== 'undefined' ? window.innerWidth : 0
 
@@ -19,7 +25,7 @@ export function measureAppHeight() {
   }
   const vvHeight = window.visualViewport?.height ?? 0
   const candidate = Math.max(vvHeight, window.innerHeight)
-  if (candidate > maxObservedHeight) {
+  if (candidate >= maxObservedHeight || maxObservedHeight - candidate < KEYBOARD_SHRINK_THRESHOLD) {
     maxObservedHeight = candidate
   }
   document.documentElement.style.setProperty('--app-height', `${maxObservedHeight}px`)

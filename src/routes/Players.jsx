@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Trash2, ChevronDown } from 'lucide-react'
+import { Plus, ChevronDown } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
 import { formatPositions, groupPlayersByPosition } from '@/lib/stats'
@@ -20,15 +20,6 @@ import {
   DialogFooter,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogClose,
-} from '@/components/ui/alert-dialog'
 
 function AddPlayerDialog({ teamId, teams, addPlayer }) {
   const [open, setOpen] = useState(false)
@@ -186,7 +177,7 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
   )
 }
 
-function PlayerRow({ player, onDelete }) {
+function PlayerRow({ player }) {
   return (
     <li className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
       <Avatar className="size-9 shrink-0 text-sm font-medium">
@@ -199,9 +190,6 @@ function PlayerRow({ player, onDelete }) {
           <p className="text-xs text-muted-foreground">{formatPositions(player.position, player.position2)}</p>
         )}
       </Link>
-      <Button variant="ghost" size="icon-sm" aria-label="削除" onClick={() => onDelete(player)}>
-        <Trash2 className="size-4" />
-      </Button>
     </li>
   )
 }
@@ -235,9 +223,8 @@ function RosterRow({ player, checked, disabled, onToggleStarter }) {
 }
 
 export function Players({ teamId, teams = [] }) {
-  const { players: allPlayers, addPlayer, removePlayer, updatePlayer } = usePlayers(teamId)
+  const { players: allPlayers, addPlayer, updatePlayer } = usePlayers(teamId)
   const players = allPlayers.filter((p) => !p.guest_game_id)
-  const [deleteTarget, setDeleteTarget] = useState(null)
   const [viewMode, setViewMode] = useState('starting') // 'starting' | 'roster'
   const [openGroups, setOpenGroups] = useState({})
 
@@ -252,12 +239,6 @@ export function Players({ teamId, teams = [] }) {
   async function handleToggleStarter(player) {
     if (!player.is_starter && startersCount >= 5) return
     await updatePlayer(player.id, { is_starter: !player.is_starter })
-  }
-
-  async function handleConfirmDelete() {
-    if (!deleteTarget) return
-    await removePlayer(deleteTarget.id)
-    setDeleteTarget(null)
   }
 
   return (
@@ -342,27 +323,10 @@ export function Players({ teamId, teams = [] }) {
       ) : (
         <ul className="flex flex-col gap-2">
           {starters.map((player) => (
-            <PlayerRow key={player.id} player={player} onDelete={setDeleteTarget} />
+            <PlayerRow key={player.id} player={player} />
           ))}
         </ul>
       )}
-
-      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>本当に削除しますか?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTarget?.name} をロスターから削除します。これまでの試合のスタッツ記録も一緒に削除され、元に戻せません。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="outline" />}>キャンセル</AlertDialogClose>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
-              削除する
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
