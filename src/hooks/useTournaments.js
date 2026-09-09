@@ -38,20 +38,37 @@ export function useTournaments(teamId) {
     return () => supabase.removeChannel(channel)
   }, [teamId, refresh])
 
-  async function createTournament({ name }) {
+  async function createTournament({ name, gameDate, location }) {
     const { data, error } = await supabase
       .from('tournaments')
-      .insert({ team_id: teamId, name })
+      .insert({ team_id: teamId, name, game_date: gameDate, location: location || null })
       .select()
       .single()
     if (error) throw error
+    // realtimeの反映を待たず即座に一覧へ反映する(created_at降順なので先頭に追加)
+    setTournaments((prev) => [data, ...prev])
     return data
   }
 
-  async function deleteTournament(id) {
-    const { error } = await supabase.from('tournaments').delete().eq('id', id)
-    if (error) throw error
+  async function updateTournament(id, patch) {
+    setTournaments((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+    const { error } = await supabase.from('tournaments').update(patch).eq('id', id)
+    if (error) {
+      console.error('大会の更新に失敗しました', error)
+      refresh()
+      throw error
+    }
   }
 
-  return { tournaments, loading, refresh, createTournament, deleteTournament }
+  async function deleteTournament(id) {
+    setTournaments((prev) => prev.filter((t) => t.id !== id))
+    const { error } = await supabase.from('tournaments').delete().eq('id', id)
+    if (error) {
+      console.error('大会の削除に失敗しました', error)
+      refresh()
+      throw error
+    }
+  }
+
+  return { tournaments, loading, refresh, createTournament, updateTournament, deleteTournament }
 }

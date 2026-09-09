@@ -48,6 +48,9 @@ create table if not exists tournaments (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references teams(id) on delete cascade,
   name text not null,
+  -- 大会作成時に入力する日程・会場。配下の試合を追加する際のデフォルト値として使う
+  game_date date not null default current_date,
+  location text,
   created_at timestamptz not null default now()
 );
 
@@ -549,6 +552,7 @@ alter publication supabase_realtime add table players;
 alter publication supabase_realtime add table stat_events;
 alter publication supabase_realtime add table game_lineups;
 alter publication supabase_realtime add table shooting_entries;
+alter publication supabase_realtime add table tournaments;
 
 -- ============================================================
 -- 7. 選手写真の保存先ストレージバケット
