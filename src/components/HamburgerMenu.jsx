@@ -3,6 +3,7 @@ import { Menu, Megaphone, HelpCircle, Mail, Shield, FileText, Info, Link2, Chevr
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { APP_VERSION } from '@/lib/appVersion'
 
 function ComingSoonItem({ icon: Icon, label }) {
   return (
@@ -51,7 +52,7 @@ export function HamburgerMenu() {
         <SheetHeader className="border-b pt-[calc(1rem+env(safe-area-inset-top))]">
           <SheetTitle>メニュー</SheetTitle>
         </SheetHeader>
-        <nav className="flex flex-col gap-1 overflow-y-auto p-2">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
           <ComingSoonItem icon={Megaphone} label="BASKETBALL STATSに広告を出す" />
           <ComingSoonItem icon={HelpCircle} label="よくある質問" />
           <MenuLink icon={Mail} label="お問い合わせ" to="/contact" />
@@ -60,6 +61,9 @@ export function HamburgerMenu() {
           <MenuLink icon={Info} label="運用元情報" to="/operator" />
           <ComingSoonItem icon={Link2} label="関連サイト" />
         </nav>
+        <p className="shrink-0 border-t px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] text-center text-xs text-muted-foreground">
+          v{APP_VERSION}
+        </p>
       </SheetContent>
     </Sheet>
   )

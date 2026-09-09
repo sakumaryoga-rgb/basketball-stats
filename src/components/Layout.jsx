@@ -53,7 +53,7 @@ export function Layout({ teamName, teamIconUrl }) {
                 {teamName?.[0] ?? 'B'}
               </AvatarFallback>
             </Avatar>
-            <span className="font-medium text-sm truncate">{teamName ?? 'バスケスタッツ'}</span>
+            <span className="font-medium text-sm truncate">{teamName ?? 'BASKETBALL STATS'}</span>
           </Link>
           <HamburgerMenu />
         </div>

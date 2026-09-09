@@ -24,7 +24,7 @@ export function Terms() {
 
   return (
     <div className="flex flex-col gap-5">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-muted-foreground">
+      <button onClick={() => navigate('/games')} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ChevronLeft className="size-4" />
         戻る
       </button>
