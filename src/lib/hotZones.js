@@ -125,6 +125,49 @@ export function classifyShotZone(shotX, shotY) {
   return classifyCourtPoint(x, y)
 }
 
+export const THREE_POINT_ZONES = new Set([
+  'left_corner_3', 'right_corner_3', 'above_break_3_left', 'above_break_3_center', 'above_break_3_right',
+])
+
+// バスケット中心からタップ地点への直線(角度)上を探索し、指定したカテゴリ
+// (3PT / 2PT)に分類される最も近い距離の点を見つける。試合中の指操作では
+// アーク3のライン付近で隣のゾーン(ミッドレンジ等)を誤タップしやすいが、
+// 記録するスタッツ自体(2P/3P)は選択済みのカテゴリで確定しているため、
+// ホットゾーンの記録だけをそのカテゴリに合う最寄りのゾーンへ自動補正する
+function nearestDistanceForCategory(ux, uy, dist0, wantThree) {
+  const maxDelta = 100
+  const step = 0.1
+  for (let delta = 0; delta <= maxDelta; delta += step) {
+    for (const d of [dist0 + delta, dist0 - delta]) {
+      if (d < 0) continue
+      const px = HOOP.x + ux * d
+      const py = HOOP.y + uy * d
+      if (THREE_POINT_ZONES.has(classifyCourtPoint(px, py)) === wantThree) return d
+    }
+  }
+  return dist0
+}
+
+// shot_x/shot_y(0-100のパーセンテージ)を受け取り、選択中のカテゴリ(2PT/3PT)と
+// 矛盾しないゾーンになるよう座標を補正して返す。既に一致していればそのまま返す
+export function snapToZoneCategory(shotX, shotY, wantThree) {
+  const { x, y } = toCourtUnits(shotX, shotY)
+  const isThree = THREE_POINT_ZONES.has(classifyCourtPoint(x, y))
+  if (isThree === wantThree) return { shotX, shotY }
+
+  const dx = x - HOOP.x
+  const dy = y - HOOP.y
+  const dist0 = distanceFromHoop(dx, dy)
+  if (dist0 === 0) return { shotX, shotY }
+
+  const ux = dx / dist0
+  const uy = dy / dist0
+  const d = nearestDistanceForCategory(ux, uy, dist0, wantThree)
+  const correctedX = HOOP.x + ux * d
+  const correctedYUnits = HOOP.y + uy * d
+  return { shotX: correctedX, shotY: (correctedYUnits / 94) * 100 }
+}
+
 // ショット配列([{shot_x, shot_y, made}, ...])からゾーンごとの試投数・成功数・FG%を集計する
 export function aggregateHotZones(shots) {
   const stats = Object.fromEntries(ZONE_ORDER.map((key) => [key, { attempts: 0, makes: 0 }]))
@@ -140,10 +183,6 @@ export function aggregateHotZones(shots) {
   }
   return stats
 }
-
-export const THREE_POINT_ZONES = new Set([
-  'left_corner_3', 'right_corner_3', 'above_break_3_left', 'above_break_3_center', 'above_break_3_right',
-])
 
 export function isThreePointZone(zoneKey) {
   return THREE_POINT_ZONES.has(zoneKey)

@@ -13,6 +13,11 @@ export function useTeams(session) {
     typeof window !== 'undefined' ? localStorage.getItem(ACTIVE_TEAM_KEY) : null
   )
 
+  // 依存はsession全体ではなくuser.idにする。Supabaseは約1時間おきにアクセストークンを
+  // 自動更新し、そのたびにonAuthStateChangeで別オブジェクトのsessionが渡ってくる
+  // (ユーザー自体は変わっていない)。session全体を依存にしていると、そのたびにここが
+  // 再実行されloading=trueになり、App.jsxの全画面ローディング判定を通じて試合画面
+  // (GameDetail)ごとアンマウントされ、試合中のタイマー等がリセットされる不具合があった
   const refresh = useCallback(async () => {
     if (!session?.user) {
       // セッション確立前の状態。ここでloadingをfalseにすると、セッションが
@@ -44,7 +49,8 @@ export function useTeams(session) {
       )
     }
     setLoading(false)
-  }, [session])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id])
 
   useEffect(() => {
     refresh()
@@ -61,7 +67,8 @@ export function useTeams(session) {
       )
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [session, refresh])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, refresh])
 
   const activeTeam = useMemo(() => {
     if (teams.length === 0) return null

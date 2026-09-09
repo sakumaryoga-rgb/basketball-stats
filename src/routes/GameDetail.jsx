@@ -6,6 +6,7 @@ import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
 import { useGameLineups } from '@/hooks/useGameLineups'
 import { STAT_CATEGORIES, STAT_KEY_LABEL, QUARTER_OPTIONS, formatClock, formatQuarter } from '@/lib/stats'
+import { snapToZoneCategory } from '@/lib/hotZones'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -415,7 +416,11 @@ export function GameDetail({ teamId }) {
     const statKey = pendingOutcome.statKey
     const shooterId = selectedPlayerId
     setPendingOutcome(null)
-    const ok = await recordStat(shooterId, statKey, { quarter: game.quarter, shotX: x, shotY: y })
+    // 指操作でアーク3のライン付近を誤タップしても、記録するスタッツは選択中の
+    // カテゴリ(2P/3P)で確定しているため、ホットゾーンの記録だけをそのカテゴリに
+    // 矛盾しない最寄りのゾーンへ自動補正する(スタッツの値自体は変えない)
+    const { shotX, shotY } = snapToZoneCategory(x, y, statKey.startsWith('fg3_'))
+    const ok = await recordStat(shooterId, statKey, { quarter: game.quarter, shotX, shotY })
     if (ok) {
       showRecordedFlash(shooterId, statKey)
       if (statKey.endsWith('_make')) {
