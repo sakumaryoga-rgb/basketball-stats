@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 
-const CONTACT_EMAIL = 'sakumaryoga@gmail.com'
+const CONTACT_EMAIL = 'basketballstats.help@gmail.com'
 
 function Row({ label, children }) {
   return (

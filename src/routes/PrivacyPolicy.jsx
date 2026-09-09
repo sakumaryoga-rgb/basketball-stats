@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { PRIVACY_VERSION } from '@/lib/legal'
 
-const CONTACT_EMAIL = 'sakumaryoga@gmail.com'
+const CONTACT_EMAIL = 'basketballstats.help@gmail.com'
 
 function Section({ title, children }) {
   return (
