@@ -13,18 +13,15 @@ body {
   margin: 0;
 }
 
-/* iOSのSafari/WKWebViewでは、header/navをposition:fixedでビューポートに
-   重ねる構成だと、下部タブバーが画面下端まで届かず浮いて見える不具合があった。
-   position:fixed(および100dvh/window.innerHeightでの高さ実測)による対処を
-   いずれも試したが解消しなかったため、position:fixedに一切頼らない、より
-   古典的で確実な手法に切り替える: html/body/#rootをビューポート一杯の高さに
-   固定(height:100%の親子連鎖)し、bodyのoverflowをhiddenにしてドキュメント
-   自体のスクロールを禁止する。実際のスクロールはPullToRefreshが持つ内部の
-   スクロールコンテナだけに限定される */
+/* Layout.jsx配下(GAMES等のタブ画面)は自前のスクロールコンテナ(PullToRefresh)を
+   持つ独自のアプリシェル構成を使うが、Onboarding等それ以外の画面は通常の
+   ドキュメントスクロールに依存している。以前ここでbody全体にoverflow:hiddenを
+   かけてしまっていたため、Onboarding画面が画面の高さを超える分に一切スクロール
+   できず、下側が見えなくなる回帰バグを起こしていた。overflow:hiddenは
+   Layout.jsx自身のシェル要素にだけ付与し、ここではheightの連鎖だけを行う */
 html,
 body {
   height: 100%;
-  overflow: hidden;
 }
 
 #root {

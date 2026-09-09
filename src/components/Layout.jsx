@@ -51,7 +51,11 @@ export function Layout({ teamName, teamIconUrl }) {
   }, [])
 
   return (
-    <div className="flex flex-col bg-background" style={{ height: 'var(--app-height, 100%)' }}>
+    // overflow:hiddenはbody全体ではなくこの要素自身に付与する。Onboarding等
+    // Layoutを使わない画面は通常のドキュメントスクロールに依存しているため、
+    // bodyにoverflow:hiddenをかけるとそちらが下側にスクロールできなくなり
+    // 切れて見える回帰バグを起こす(index.css参照)
+    <div className="flex flex-col overflow-hidden bg-background" style={{ height: 'var(--app-height, 100%)' }}>
       <header className="border-b bg-background/80 backdrop-blur z-10 pt-[env(safe-area-inset-top)] shrink-0">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
