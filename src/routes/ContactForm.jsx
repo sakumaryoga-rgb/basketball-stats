@@ -184,7 +184,7 @@ export function ContactForm() {
                 maxLength={MESSAGE_MAX_LENGTH}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="不具合の内容や再現手順、ご要望などをご記入ください(10〜2000文字)"
+                placeholder="機能追加のご要望や、不具合の内容・再現手順などをご記入ください。(10〜2,000文字)"
               />
             </div>
             <div className="flex flex-col gap-1.5">
