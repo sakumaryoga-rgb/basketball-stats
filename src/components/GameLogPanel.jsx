@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { STAT_CATEGORIES, STAT_KEY_LABEL, formatQuarter } from '@/lib/stats'
+import { snapToZoneCategory } from '@/lib/hotZones'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { CourtDiagram } from '@/components/CourtDiagram'
 import {
   Dialog,
   DialogContent,
@@ -46,8 +49,15 @@ function EditEventDialog({ event, players, onSave, onOpenChange }) {
   const [outcome, setOutcome] = useState(initial.outcome ?? null)
   const [pairKey, setPairKey] = useState(initial.pairKey ?? null)
   const [saving, setSaving] = useState(false)
+  // 元のプレイにシュート位置の記録があれば初期値として引き継ぐ。記録時に「ホットゾーンを
+  // 記録しない」を選んでいた場合や、そもそもシュート系のスタッツではない場合はnullのまま
+  const [recordLocation, setRecordLocation] = useState(event.shot_x != null && event.shot_y != null)
+  const [shotPos, setShotPos] = useState(
+    event.shot_x != null && event.shot_y != null ? { x: Number(event.shot_x), y: Number(event.shot_y) } : null
+  )
 
   const category = STAT_CATEGORIES.find((c) => c.key === categoryKey)
+  const isShotCategory = category.kind === 'shot'
 
   function handleCategorySelect(key) {
     setCategoryKey(key)
@@ -66,10 +76,23 @@ function EditEventDialog({ event, players, onSave, onOpenChange }) {
   const statKey = resolveStatKey()
   const canSave = !!playerId && !!statKey
 
+  function handleCourtTap({ x, y }) {
+    if (!statKey) return
+    setShotPos(snapToZoneCategory(x, y, statKey.startsWith('fg3_')))
+  }
+
   async function handleSave() {
     if (!canSave) return
     setSaving(true)
-    const ok = await onSave({ playerId, statKey })
+    // シュート系以外のカテゴリに変更した場合や「ホットゾーンを記録しない」を選んだ場合は
+    // 位置情報を持たせない(どこで打ったか覚えていない場合も、この選択で位置を空にできる)
+    const includeLocation = isShotCategory && recordLocation && shotPos
+    const ok = await onSave({
+      playerId,
+      statKey,
+      shotX: includeLocation ? shotPos.x : null,
+      shotY: includeLocation ? shotPos.y : null,
+    })
     setSaving(false)
     if (ok) onOpenChange(false)
   }
@@ -157,6 +180,32 @@ function EditEventDialog({ event, players, onSave, onOpenChange }) {
                 {category.right.label}
               </Button>
             </div>
+          )}
+
+          {isShotCategory && (
+            <>
+              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">ホットゾーンを記録</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    どこで打ったか覚えていない場合はオフのままにできます
+                  </span>
+                </div>
+                <Switch checked={recordLocation} onCheckedChange={setRecordLocation} />
+              </div>
+              {recordLocation && (
+                <>
+                  <p className="text-xs text-muted-foreground text-center">
+                    コートをタップして位置を{shotPos ? '修正' : '記録'}
+                  </p>
+                  <CourtDiagram
+                    active
+                    onTap={handleCourtTap}
+                    shots={shotPos ? [{ id: 'editing', x: shotPos.x, y: shotPos.y, made: outcome === 'make' }] : []}
+                  />
+                </>
+              )}
+            </>
           )}
         </div>
         <DialogFooter>

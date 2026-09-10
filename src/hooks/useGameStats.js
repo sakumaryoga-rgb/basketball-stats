@@ -84,7 +84,10 @@ export function useGameStats(gameId, gameType = 'official') {
 
   // プレイ単位の修正(LOG)用。stat_eventsにはUPDATE用のトリガーが無く、INSERT/DELETEに
   // 連動してgame_lineups.plus_minusを増減させるトリガーだけがあるため、既存イベントを
-  // 一旦削除してから新しい内容で挿入し直すことで、既存のトリガーだけで正しく反映させる
+  // 一旦削除してから新しい内容で挿入し直すことで、既存のトリガーだけで正しく反映させる。
+  // 再挿入時はcreated_atを元のイベントの値のまま引き継ぐ(省略するとinsert時刻=今になり、
+  // PLAY LOGが時系列順に並んでいる都合上、修正しただけのプレイが一番上(最新)に
+  // 移動して表示されてしまっていたため)
   async function editStat(eventId, { playerId, statKey, quarter, shotX = null, shotY = null }) {
     const target = events.find((e) => e.id === eventId)
     if (!target) return false
@@ -101,6 +104,7 @@ export function useGameStats(gameId, gameType = 'official') {
       quarter,
       shot_x: shotX,
       shot_y: shotY,
+      created_at: target.created_at,
       created_by: userData?.user?.id ?? null,
     })
     if (insertError) {
