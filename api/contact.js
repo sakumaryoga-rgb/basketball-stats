@@ -42,6 +42,7 @@ const AI_STATUS = {
   AI_FAILED: '未分類(AI失敗)',
   APP_CAP_REACHED: 'AI上限到達(未分類)',
   USER_LIMITED: '未分類(利用者上限)',
+  QUOTA_CHECK_ERROR: '未分類(利用枠確認エラー)',
 }
 
 const CLASSIFY_TOOL = {
@@ -283,7 +284,12 @@ export default async function handler(req, res) {
       // --- 3・4. アプリ全体の日次・月次AI利用枠(JST暦日・暦月)をアトミックに確認+消費 ---
       // Anthropic APIを呼び出す「直前」に枠を1件消費する。成功・失敗を問わず、
       // 呼び出した時点でこの枠は戻さない(呼び出し試行件数そのものが課金上限の基準のため)。
+      // RPC呼び出し自体が失敗した場合(DB接続エラー・スキーマキャッシュ未反映等)は、
+      // 「本当に上限に達した」場合と区別できるよう別のステータスにする。以前はどちらも
+      // 一律APP_CAP_REACHEDにしていたため、実際には上限に達していないのに1件目の問い合わせ
+      // から「AI上限到達」と表示され、原因の切り分けができなかった
       let quotaAvailable = false
+      let quotaCheckErrored = false
       try {
         quotaAvailable = await supabaseRpc('contact_try_consume_ai_quota', {
           p_daily_key: jstDateKey(),
@@ -294,9 +300,12 @@ export default async function handler(req, res) {
       } catch (err) {
         console.error('AI利用枠の確保に失敗したため、AI分類をスキップします', err)
         quotaAvailable = false
+        quotaCheckErrored = true
       }
 
-      if (!quotaAvailable) {
+      if (quotaCheckErrored) {
+        aiStatus = AI_STATUS.QUOTA_CHECK_ERROR
+      } else if (!quotaAvailable) {
         aiStatus = AI_STATUS.APP_CAP_REACHED
       } else {
         try {
