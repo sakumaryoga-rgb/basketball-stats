@@ -78,7 +78,8 @@ function EditEventDialog({ event, players, onSave, onOpenChange }) {
 
   function handleCourtTap({ x, y }) {
     if (!statKey) return
-    setShotPos(snapToZoneCategory(x, y, statKey.startsWith('fg3_')))
+    const { shotX, shotY } = snapToZoneCategory(x, y, statKey.startsWith('fg3_'))
+    setShotPos({ x: shotX, y: shotY })
   }
 
   async function handleSave() {
