@@ -148,21 +148,10 @@ export function PullToRefresh({ children, onRefresh, disabled = false }) {
       </div>
       <div
         ref={scrollRef}
-        className={cn('flex-1 min-h-0 overflow-y-auto overscroll-y-none', settleTransition)}
+        className={cn('flex-1 min-h-0 overflow-y-auto overscroll-y-contain', settleTransition)}
         style={{ transform: pull ? `translateY(${pull}px)` : undefined }}
       >
-        {/* 中身が画面に収まる短いタブ(GAMES/PRACTICE/PLAYERS等)では、このコンテナ自体に
-            スクロール可能な余白が一切なくなり、overscroll-y-containが機能しなくなる
-            (吸収するスクロールが存在しないため)。中身の長さに関わらず常にこのコンテナ
-            自身に1px分のスクロール余地を持たせ、外側(body、--app-height学習の足がかり。
-            src/index.css/Layout.jsx参照)まで弾みが伝わらないようにする。
-            以前はoverscroll-y-contain(弾み自体はこの要素内で許容しつつ、親への連鎖だけ止める)
-            を使っていたが、TEAM/LEADERSのように中身が画面より長いタブでは、実際に指を離さず
-            下端(または上端)まで大きくスワイプした際の弾みがcontainで完全には吸収しきれず、
-            背後のbodyまで伝わってフッターが浮く不具合が報告された。この要素の弾み自体は
-            見た目上の演出以上の意味を持たず(pull-to-refreshの表示はJS側のpull stateで
-            別途描画している)、noneにして弾み自体を発生させないほうが安全なため変更した */}
-        <div className="min-h-[calc(100%+1px)]">{children}</div>
+        {children}
       </div>
     </div>
   )
