@@ -28,6 +28,16 @@ body {
   overflow-x: hidden;
 }
 
+/* 起動直後、appHeight.jsが意図的な1pxスクロール(下記)を揺さぶって正しい高さを
+   学習している間は、縦方向の弾み(rubber-band)を止めない。ここで止めてしまうと
+   iOSにSafariツールバー分の予約領域を解放させるきっかけ自体を失ってしまうため。
+   学習が完了したとみなせるタイミングでappHeight.jsが<html>にこのクラスを付与し、
+   以降の弾みだけをロックして止める。ロックされるのは学習後のため、通常操作中に
+   誤って画面全体が持ち上がって見える不具合には繋がらない */
+html.app-height-locked {
+  overscroll-behavior-y: none;
+}
+
 #root {
   height: 100%;
 }
