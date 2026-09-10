@@ -45,6 +45,21 @@ const AI_STATUS = {
   QUOTA_CHECK_ERROR: '未分類(利用枠確認エラー)',
 }
 
+// 対象機能: どの画面・機能についての問い合わせかを分類する。原因の切り分けや
+// 「特定の機能に不具合報告が集中していないか」の集計に使う想定
+const FEATURE_OPTIONS = [
+  '試合記録',
+  '練習記録',
+  '選手管理',
+  '集計・ランキング',
+  'チーム設定',
+  'チーム参加',
+  'ログイン',
+  '表示崩れ・UI',
+  'アプリの更新',
+  'その他',
+]
+
 const CLASSIFY_TOOL = {
   name: 'classify_inquiry',
   description: 'バスケットボールスタッツ記録アプリへの問い合わせ内容を分類する',
@@ -55,8 +70,13 @@ const CLASSIFY_TOOL = {
       type: { type: 'string', enum: ['バグ報告', '機能要望', '使い方の質問', 'その他'] },
       importance: { type: 'string', enum: ['高', '中', '低'] },
       difficulty: { type: 'string', enum: ['小', '中', '大', '該当なし'] },
+      feature: {
+        type: 'string',
+        description: '問い合わせが関係する画面・機能。試合記録=GAMESタブでの試合作成・記録、練習記録=PRACTICEタブ(スクリメージ・シューティング)、選手管理=PLAYERSタブ、集計・ランキング=LEADERSタブや平均成績・ホットゾーン等の集計表示、チーム設定=TEAMタブの設定・共有URL、チーム参加=新規チーム作成や招待URLでの参加、ログイン=認証・端末間のデータ引き継ぎ、表示崩れ・UI=レイアウトや見た目の不具合、アプリの更新=PWAの更新通知やホーム画面追加まわり',
+        enum: FEATURE_OPTIONS,
+      },
     },
-    required: ['title', 'type', 'importance', 'difficulty'],
+    required: ['title', 'type', 'importance', 'difficulty', 'feature'],
   },
 }
 
@@ -162,22 +182,8 @@ async function classifyInquiry(message) {
   return toolUse.input
 }
 
-async function createNotionPage({ message, email, classification, aiStatus }) {
-  const properties = {
-    名前: { title: [{ text: { content: classification?.title || '問い合わせ' } }] },
-    内容: { rich_text: [{ text: { content: message.slice(0, 2000) } }] },
-    種別: { select: { name: classification?.type || 'その他' } },
-    重要度: { select: { name: classification?.importance || '中' } },
-    修正難易度: { select: { name: classification?.difficulty || '該当なし' } },
-    ステータス: { select: { name: '未対応' } },
-    受信日時: { date: { start: new Date().toISOString() } },
-    AI分類状況: { select: { name: aiStatus } },
-  }
-  if (email) {
-    properties.連絡先メール = { email }
-  }
-
-  const response = await fetch('https://api.notion.com/v1/pages', {
+async function postNotionPage(properties) {
+  return fetch('https://api.notion.com/v1/pages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -189,9 +195,43 @@ async function createNotionPage({ message, email, classification, aiStatus }) {
       properties,
     }),
   })
+}
 
+async function createNotionPage({ message, email, classification, aiStatus }) {
+  const properties = {
+    名前: { title: [{ text: { content: classification?.title || '問い合わせ' } }] },
+    内容: { rich_text: [{ text: { content: message.slice(0, 2000) } }] },
+    種別: { select: { name: classification?.type || 'その他' } },
+    重要度: { select: { name: classification?.importance || '中' } },
+    修正難易度: { select: { name: classification?.difficulty || '該当なし' } },
+    対象機能: { select: { name: classification?.feature || 'その他' } },
+    ステータス: { select: { name: '未対応' } },
+    受信日時: { date: { start: new Date().toISOString() } },
+    AI分類状況: { select: { name: aiStatus } },
+  }
+  if (email) {
+    properties.連絡先メール = { email }
+  }
+
+  let response = await postNotionPage(properties)
   if (!response.ok) {
-    throw new Error(`Notion API error: ${response.status} ${await response.text()}`)
+    let bodyText = await response.text()
+    // 「対象機能」列をまだNotion側のデータベースに追加していない間は、このプロパティだけ
+    // 指定するとページ作成自体が失敗してしまう。列が無い場合はこのプロパティを省いて
+    // 再送し、追加し忘れていてもお問い合わせ機能自体は止めないようにする
+    if (response.status === 400 && bodyText.includes('対象機能')) {
+      console.error(
+        'Notionに「対象機能」プロパティ(列)が見つからないため、このプロパティを省略して再送します。' +
+          'Notion側のデータベースに「対象機能」という名前のSelect列を追加してください。',
+        bodyText
+      )
+      const { 対象機能, ...fallbackProperties } = properties
+      response = await postNotionPage(fallbackProperties)
+      if (!response.ok) bodyText = await response.text()
+    }
+    if (!response.ok) {
+      throw new Error(`Notion API error: ${response.status} ${bodyText}`)
+    }
   }
   const page = await response.json()
   return page.id
