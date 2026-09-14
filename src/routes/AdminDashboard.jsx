@@ -28,6 +28,8 @@ const CHART_COLORS = {
   tertiary: 'var(--chart-3)',
 }
 const GAME_TYPE_LABEL = { official: '試合', practice: '練習', shooting: 'シューティング' }
+// 試合/練習/シューティング推移グラフ専用の固定配色(3案目)。他のグラフの配色(CHART_COLORS)とは独立
+const GAME_TYPE_COLORS = { official: '#E11D2E', practice: '#F07A3F', shooting: '#14B8A6' }
 const AXIS_TICK = { fontSize: 11 }
 // グラフの棒が疎らなデータ点でもカード幅いっぱいまで太くならないようにする上限(px)
 const MAX_BAR_SIZE = 45
@@ -190,13 +192,13 @@ function GamesByTypeStackedChart({ rows, granularity }) {
         <YAxis allowDecimals={false} tick={AXIS_TICK} width={32} />
         <Tooltip labelFormatter={tickFormatter} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="official" stackId="a" name={GAME_TYPE_LABEL.official} fill={CHART_COLORS.primary} maxBarSize={MAX_BAR_SIZE} />
-        <Bar dataKey="practice" stackId="a" name={GAME_TYPE_LABEL.practice} fill={CHART_COLORS.secondary} maxBarSize={MAX_BAR_SIZE} />
+        <Bar dataKey="official" stackId="a" name={GAME_TYPE_LABEL.official} fill={GAME_TYPE_COLORS.official} maxBarSize={MAX_BAR_SIZE} />
+        <Bar dataKey="practice" stackId="a" name={GAME_TYPE_LABEL.practice} fill={GAME_TYPE_COLORS.practice} maxBarSize={MAX_BAR_SIZE} />
         <Bar
           dataKey="shooting"
           stackId="a"
           name={GAME_TYPE_LABEL.shooting}
-          fill={CHART_COLORS.tertiary}
+          fill={GAME_TYPE_COLORS.shooting}
           radius={[2, 2, 0, 0]}
           maxBarSize={MAX_BAR_SIZE}
         />
