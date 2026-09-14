@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto'
 import {
   APP_DAILY_AI_LIMIT,
   APP_MONTHLY_AI_LIMIT,
+  AI_STATUS,
   supabaseRequest,
   supabaseCount,
   supabaseRpc,
@@ -36,14 +37,6 @@ const USER_DAILY_LIMIT = 10
 const DEDUP_WINDOW_MINUTES = 5
 const MIN_ELAPSED_MS = 800 // フォーム表示から送信までがこれより速い場合はbotとみなす
 const CLASSIFY_INPUT_MAX_CHARS = 800 // Anthropicに渡す本文は先頭800文字までに抑える
-
-const AI_STATUS = {
-  CLASSIFIED: '分類済み',
-  AI_FAILED: '未分類(AI失敗)',
-  APP_CAP_REACHED: 'AI上限到達(未分類)',
-  USER_LIMITED: '未分類(利用者上限)',
-  QUOTA_CHECK_ERROR: '未分類(利用枠確認エラー)',
-}
 
 // 対象機能: どの画面・機能についての問い合わせかを分類する。原因の切り分けや
 // 「特定の機能に不具合報告が集中していないか」の集計に使う想定
@@ -237,7 +230,7 @@ async function createNotionPage({ message, email, classification, aiStatus }) {
   return page.id
 }
 
-async function logSubmission({ userId, ipHash, messageHash, aiClassified, notionPageId }) {
+async function logSubmission({ userId, ipHash, messageHash, aiClassified, notionPageId, inquiryType, aiStatus }) {
   await supabaseRequest('/rest/v1/contact_submissions', {
     method: 'POST',
     headers: { prefer: 'return=minimal' },
@@ -248,6 +241,8 @@ async function logSubmission({ userId, ipHash, messageHash, aiClassified, notion
         message_hash: messageHash,
         ai_classified: aiClassified,
         notion_page_id: notionPageId,
+        inquiry_type: inquiryType ?? null,
+        ai_status: aiStatus ?? null,
       },
     ],
   })
@@ -367,7 +362,15 @@ export default async function handler(req, res) {
       aiStatus,
     })
 
-    await logSubmission({ userId, ipHash, messageHash, aiClassified, notionPageId })
+    await logSubmission({
+      userId,
+      ipHash,
+      messageHash,
+      aiClassified,
+      notionPageId,
+      inquiryType: classification?.type ?? null,
+      aiStatus,
+    })
 
     res.status(200).json({ ok: true })
   } catch (err) {

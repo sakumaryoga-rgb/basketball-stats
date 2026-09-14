@@ -3,6 +3,16 @@
 export const APP_DAILY_AI_LIMIT = 100
 export const APP_MONTHLY_AI_LIMIT = 2000
 
+// contact.js(お問い合わせ受付)とapi/admin/dashboard.js(集計)の両方から参照するため、
+// AI分類ステータスの文字列はここを唯一の定義元とする(値のハードコード重複を避ける)。
+export const AI_STATUS = {
+  CLASSIFIED: '分類済み',
+  AI_FAILED: '未分類(AI失敗)',
+  APP_CAP_REACHED: 'AI上限到達(未分類)',
+  USER_LIMITED: '未分類(利用者上限)',
+  QUOTA_CHECK_ERROR: '未分類(利用枠確認エラー)',
+}
+
 export async function supabaseRequest(path, { method = 'GET', headers = {}, body } = {}) {
   const url = `${process.env.VITE_SUPABASE_URL}${path}`
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
