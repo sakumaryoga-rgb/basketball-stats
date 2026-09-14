@@ -1,4 +1,16 @@
 import { useEffect, useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,14 +19,44 @@ import { Badge } from '@/components/ui/badge'
 
 // 運営者専用のRead Only管理ダッシュボード。一般ユーザーの匿名認証・チームセッションとは
 // 完全に分離しており、認証は/api/admin/loginが発行する署名付きセッションCookieのみで行う。
-// 削除・Ban・権限変更等の操作機能は無い(閲覧専用)。
+// 削除・Ban・権限変更等の操作機能は無い(閲覧専用)。グラフはRechartsを本画面でのみ使用する。
+
+const CHART_HEIGHT = 220
+const CHART_COLORS = {
+  primary: 'var(--chart-1)',
+  secondary: 'var(--chart-2)',
+  tertiary: 'var(--chart-3)',
+}
+const GAME_TYPE_LABEL = { official: '試合', practice: '練習', shooting: 'シューティング' }
+const AXIS_TICK = { fontSize: 11 }
 
 function formatNumber(value) {
   if (value === null || value === undefined) return '-'
   return value.toLocaleString('ja-JP')
 }
 
-function KpiCard({ label, value, emphasize }) {
+// current/previousの両方が揃っている時だけ%を計算する。previousが0またはnull/undefinedの
+// 場合は「比較データなし」とし、0%として扱わない
+function computeDelta(current, previous) {
+  if (current === null || current === undefined) return null
+  if (previous === null || previous === undefined || previous === 0) return null
+  return ((current - previous) / previous) * 100
+}
+
+function DeltaBadge({ current, previous, label }) {
+  const delta = computeDelta(current, previous)
+  if (delta === null) {
+    return <span className="text-xs text-muted-foreground">比較データなし</span>
+  }
+  const up = delta >= 0
+  return (
+    <span className={`text-xs font-medium ${up ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+      {up ? '↑' : '↓'} {Math.abs(delta).toFixed(1)}% {label}
+    </span>
+  )
+}
+
+function KpiCard({ label, value, emphasize, delta }) {
   return (
     <Card className={emphasize ? 'ring-2 ring-primary' : undefined}>
       <CardContent className="flex flex-col gap-1 py-2">
@@ -22,27 +64,9 @@ function KpiCard({ label, value, emphasize }) {
         <span className={emphasize ? 'text-4xl font-heading tabular-nums' : 'text-2xl font-heading tabular-nums'}>
           {formatNumber(value)}
         </span>
+        {delta && <DeltaBadge current={delta.current} previous={delta.previous} label={delta.label} />}
       </CardContent>
     </Card>
-  )
-}
-
-function TrendChart({ data, valueKey = 'count' }) {
-  if (!data || data.length === 0) {
-    return <p className="text-sm text-muted-foreground">データがありません</p>
-  }
-  const max = Math.max(1, ...data.map((d) => d[valueKey]))
-  return (
-    <div className="flex items-end gap-0.5 h-32">
-      {data.map((d) => (
-        <div key={d.day} className="flex-1 flex flex-col items-center justify-end gap-1" title={`${d.day}: ${d[valueKey]}`}>
-          <div
-            className="w-full rounded-t bg-primary/70"
-            style={{ height: `${Math.max(2, (d[valueKey] / max) * 100)}%` }}
-          />
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -54,6 +78,85 @@ function SectionCard({ title, children }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">{children}</CardContent>
     </Card>
+  )
+}
+
+function EmptyChart() {
+  return <p className="text-sm text-muted-foreground">データがありません</p>
+}
+
+function ActiveUsersLineChart({ data }) {
+  if (!data || data.length === 0) return <EmptyChart />
+  return (
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+      <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="day" tick={AXIS_TICK} />
+        <YAxis allowDecimals={false} tick={AXIS_TICK} width={32} />
+        <Tooltip formatter={(v) => [v, 'DAU']} labelFormatter={(d) => d} />
+        <Line type="monotone" dataKey="count" name="DAU" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} />
+      </LineChart>
+    </ResponsiveContainer>
+  )
+}
+
+function PageViewsBarChart({ data }) {
+  if (!data || data.length === 0) return <EmptyChart />
+  return (
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+      <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="day" tick={AXIS_TICK} />
+        <YAxis allowDecimals={false} tick={AXIS_TICK} width={32} />
+        <Tooltip formatter={(v) => [v, 'PV']} labelFormatter={(d) => d} />
+        <Bar dataKey="count" name="PV" fill={CHART_COLORS.primary} radius={[2, 2, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+function pivotGamesByType(rows) {
+  if (!rows || rows.length === 0) return []
+  const byDay = {}
+  for (const row of rows) {
+    if (!byDay[row.day]) byDay[row.day] = { day: row.day, official: 0, practice: 0, shooting: 0 }
+    byDay[row.day][row.game_type] = row.count
+  }
+  return Object.values(byDay).sort((a, b) => a.day.localeCompare(b.day))
+}
+
+function GamesByTypeStackedChart({ rows }) {
+  const data = pivotGamesByType(rows)
+  if (data.length === 0) return <EmptyChart />
+  return (
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+      <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="day" tick={AXIS_TICK} />
+        <YAxis allowDecimals={false} tick={AXIS_TICK} width={32} />
+        <Tooltip />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        <Bar dataKey="official" stackId="a" name={GAME_TYPE_LABEL.official} fill={CHART_COLORS.primary} />
+        <Bar dataKey="practice" stackId="a" name={GAME_TYPE_LABEL.practice} fill={CHART_COLORS.secondary} />
+        <Bar dataKey="shooting" stackId="a" name={GAME_TYPE_LABEL.shooting} fill={CHART_COLORS.tertiary} radius={[2, 2, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+function TopPagesBarChart({ rows }) {
+  const data = (rows || []).slice(0, 5)
+  if (data.length === 0) return <EmptyChart />
+  return (
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+        <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} />
+        <YAxis type="category" dataKey="path" tick={AXIS_TICK} width={130} />
+        <Tooltip formatter={(v) => [v, 'PV']} />
+        <Bar dataKey="count" name="PV" fill={CHART_COLORS.primary} radius={[0, 2, 2, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   )
 }
 
@@ -176,12 +279,26 @@ export function AdminDashboard() {
         </Button>
       </div>
 
+      {/* 上段: 主要KPI(広告・スポンサー提案用) */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <KpiCard label="MAU(当月)" value={usage.mau} emphasize />
-        <KpiCard label="月間PV" value={usage.pvMonth} />
+        <KpiCard
+          label="MAU(当月)"
+          value={usage.mau}
+          emphasize
+          delta={{ current: usage.mau, previous: usage.mauPrev, label: '前月比' }}
+        />
+        <KpiCard
+          label="月間PV"
+          value={usage.pvMonth}
+          delta={{ current: usage.pvMonth, previous: usage.pvMonthPrev, label: '前月比' }}
+        />
         <KpiCard label="チーム参加ユーザー数" value={usage.teamMemberUserCount} />
         <KpiCard label="総チーム数" value={usage.totalTeams} />
-        <KpiCard label="アクティブチーム数(30日)" value={usage.activeTeams30d} />
+        <KpiCard
+          label="アクティブチーム数(30日)"
+          value={usage.activeTeams30d}
+          delta={{ current: usage.activeTeams30d, previous: usage.activeTeams30dPrev, label: '前30日比' }}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -190,22 +307,21 @@ export function AdminDashboard() {
         <KpiCard label="PV総数 / 直近7日" value={usage.pvTotal} />
       </div>
 
+      {/* 中段: アクティブユーザー推移・PV推移 */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <SectionCard title="アクティブユーザー推移(30日)">
-          <TrendChart data={content.dailyActiveUsers30d} />
+        <SectionCard title="アクティブユーザー推移(30日・日別DAU)">
+          <ActiveUsersLineChart data={content.dailyActiveUsers30d} />
         </SectionCard>
         <SectionCard title="PV推移(30日)">
-          <TrendChart data={content.dailyPageViews30d} />
+          <PageViewsBarChart data={content.dailyPageViews30d} />
         </SectionCard>
       </div>
 
+      {/* 下段: 試合/練習/シューティング推移・ページ別PV TOP5 */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <SectionCard title="コンテンツ・利用実績">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div className="text-muted-foreground">総選手数</div>
-              <div className="text-xl tabular-nums">{formatNumber(content.totalPlayers)}</div>
-            </div>
+        <SectionCard title="試合 / 練習 / シューティング推移(30日)">
+          <GamesByTypeStackedChart rows={content.dailyGamesByType30d} />
+          <div className="grid grid-cols-3 gap-3 text-sm">
             <div>
               <div className="text-muted-foreground">試合数</div>
               <div className="text-xl tabular-nums">{formatNumber(content.officialGames)}</div>
@@ -219,19 +335,14 @@ export function AdminDashboard() {
               <div className="text-xl tabular-nums">{formatNumber(content.shootingGames)}</div>
             </div>
           </div>
-          <div>
-            <div className="mb-1 text-xs text-muted-foreground">ページ別PV(累計・上位)</div>
-            <div className="flex flex-col gap-1 text-sm">
-              {(content.pvByPage || []).slice(0, 8).map((row) => (
-                <div key={row.path} className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{row.path}</span>
-                  <span className="tabular-nums">{formatNumber(row.count)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
         </SectionCard>
+        <SectionCard title="ページ別PV TOP5(累計)">
+          <TopPagesBarChart rows={content.pvByPage} />
+        </SectionCard>
+      </div>
 
+      {/* さらに下: 問い合わせ・最近作成されたチーム・スパム兆候・Storage/Error */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <SectionCard title="お問い合わせ">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
@@ -263,9 +374,7 @@ export function AdminDashboard() {
             </div>
           </div>
         </SectionCard>
-      </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <SectionCard title="最近作成されたチーム">
           <div className="flex flex-col gap-1.5 text-sm">
             {(ops.recentTeams || []).map((team) => (
@@ -278,7 +387,9 @@ export function AdminDashboard() {
             ))}
           </div>
         </SectionCard>
+      </div>
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <SectionCard title="スパム兆候">
           {ops.spam ? (
             <div className="flex flex-col gap-3 text-sm">

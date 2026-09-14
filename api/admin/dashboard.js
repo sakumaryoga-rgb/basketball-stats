@@ -20,6 +20,14 @@ function hoursAgoIso(hours) {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
 }
 
+// 前月比(MAU・月間PV)用。JST暦月の「前月1ヶ月間だけ」の範囲を返す
+function jstPrevMonthRange() {
+  const currentMonthStart = new Date(jstMonthStartUtcIso())
+  const prevMonthStart = new Date(currentMonthStart)
+  prevMonthStart.setUTCMonth(prevMonthStart.getUTCMonth() - 1)
+  return { since: prevMonthStart.toISOString(), until: currentMonthStart.toISOString() }
+}
+
 // 1つの指標の取得失敗がダッシュボード全体を落とさないよう、失敗時はnullにフォールバックする
 async function safe(promise, label) {
   try {
@@ -106,19 +114,24 @@ export default async function handler(req, res) {
 
   const since7d = daysAgoIso(7)
   const since30d = daysAgoIso(30)
+  const since60d = daysAgoIso(60)
   const monthStart = jstMonthStartUtcIso()
   const dayStart = jstDayStartUtcIso()
+  const prevMonth = jstPrevMonthRange()
 
   try {
     const [
       totalTeams,
       activeTeams30d,
+      activeTeams30dPrev,
       teamMemberUserCount,
       dau,
       wau,
       mau,
+      mauPrev,
       pvTotal,
       pvMonth,
+      pvMonthPrev,
       pv7d,
       totalPlayers,
       officialGames,
@@ -126,6 +139,7 @@ export default async function handler(req, res) {
       shootingGames,
       dailyActiveUsers30d,
       dailyPageViews30d,
+      dailyGamesByType30d,
       pvByPage,
       contactTotal,
       contactAiClassified,
@@ -141,12 +155,24 @@ export default async function handler(req, res) {
     ] = await Promise.all([
       safe(countRows('teams'), '総チーム数'),
       safe(rpc('admin_distinct_team_count', { since: since30d }), 'アクティブチーム数'),
+      safe(
+        rpc('admin_distinct_team_count_range', { since: since60d, until: since30d }),
+        'アクティブチーム数(前30日)'
+      ),
       safe(rpc('admin_distinct_member_count'), 'チーム参加ユーザー数'),
       safe(rpc('admin_distinct_user_count', { since: dayStart }), 'DAU'),
       safe(rpc('admin_distinct_user_count', { since: since7d }), 'WAU'),
       safe(rpc('admin_distinct_user_count', { since: monthStart }), 'MAU'),
+      safe(
+        rpc('admin_distinct_user_count_range', { since: prevMonth.since, until: prevMonth.until }),
+        'MAU(前月)'
+      ),
       safe(countRows('page_views'), 'PV総数'),
       safe(countRows('page_views', `created_at=gte.${monthStart}`), '月間PV'),
+      safe(
+        countRows('page_views', `created_at=gte.${prevMonth.since}&created_at=lt.${prevMonth.until}`),
+        '月間PV(前月)'
+      ),
       safe(countRows('page_views', `created_at=gte.${since7d}`), '直近7日PV'),
       safe(countRows('players', 'guest_game_id=is.null'), '総選手数'),
       safe(countRows('games', 'game_type=eq.official'), '試合数'),
@@ -154,6 +180,7 @@ export default async function handler(req, res) {
       safe(countRows('games', 'game_type=eq.shooting'), 'シューティング記録数'),
       safe(rpc('admin_daily_active_users', { since: since30d }), '日別アクティブユーザー推移'),
       safe(rpc('admin_daily_page_views', { since: since30d }), '日別PV推移'),
+      safe(rpc('admin_daily_games_by_type', { since: since30d }), '日別利用種別推移'),
       safe(rpc('admin_pv_by_page'), 'ページ別PV'),
       safe(countRows('contact_submissions'), '問い合わせ総数'),
       safe(countRows('contact_submissions', 'ai_classified=eq.true'), 'AI分類件数'),
@@ -175,12 +202,15 @@ export default async function handler(req, res) {
       usage: {
         totalTeams,
         activeTeams30d,
+        activeTeams30dPrev,
         teamMemberUserCount,
         dau,
         wau,
         mau,
+        mauPrev,
         pvTotal,
         pvMonth,
+        pvMonthPrev,
         pv7d,
       },
       content: {
@@ -190,6 +220,7 @@ export default async function handler(req, res) {
         shootingGames,
         dailyActiveUsers30d,
         dailyPageViews30d,
+        dailyGamesByType30d,
         pvByPage,
       },
       contact: {
