@@ -29,10 +29,31 @@ const CHART_COLORS = {
 }
 const GAME_TYPE_LABEL = { official: '試合', practice: '練習', shooting: 'シューティング' }
 const AXIS_TICK = { fontSize: 11 }
+// グラフの棒が疎らなデータ点でもカード幅いっぱいまで太くならないようにする上限(px)
+const MAX_BAR_SIZE = 45
+
+// 対応する期間はこの5種類のみ(自由な日付範囲指定は行わない)
+const PERIODS = [
+  { key: '30d', label: '30日' },
+  { key: '90d', label: '90日' },
+  { key: '1y', label: '1年' },
+  { key: '3y', label: '3年' },
+  { key: '5y', label: '5年' },
+]
 
 function formatNumber(value) {
   if (value === null || value === undefined) return '-'
   return value.toLocaleString('ja-JP')
+}
+
+// 粒度に応じてX軸・Tooltipのラベルを短く整形する(day/week: M/D, month: YYYY/MM, quarter: YYYY Qn)
+function formatBucketLabel(bucket, granularity) {
+  if (!bucket) return ''
+  const d = new Date(`${bucket}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return bucket
+  if (granularity === 'month') return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`
+  if (granularity === 'quarter') return `${d.getFullYear()} Q${Math.floor(d.getMonth() / 3) + 1}`
+  return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
 // current/previousの両方が揃っている時だけ%を計算する。previousが0またはnull/undefinedの
@@ -81,35 +102,67 @@ function SectionCard({ title, children }) {
   )
 }
 
-function EmptyChart() {
-  return <p className="text-sm text-muted-foreground">データがありません</p>
+function EmptyChart({ message = 'この期間のデータはありません' }) {
+  return (
+    <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ height: CHART_HEIGHT }}>
+      {message}
+    </div>
+  )
 }
 
-function ActiveUsersLineChart({ data }) {
+function PeriodSelector({ value, onChange }) {
+  return (
+    <div className="inline-flex rounded-lg border p-0.5">
+      {PERIODS.map((p) => (
+        <button
+          key={p.key}
+          type="button"
+          onClick={() => onChange(p.key)}
+          className={`rounded-md px-3 py-1 text-sm transition-colors ${
+            value === p.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+          }`}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function ActiveUsersLineChart({ data, granularity }) {
   if (!data || data.length === 0) return <EmptyChart />
+  const tickFormatter = (v) => formatBucketLabel(v, granularity)
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="day" tick={AXIS_TICK} />
+        <XAxis dataKey="bucket" tick={AXIS_TICK} tickFormatter={tickFormatter} interval="preserveStartEnd" />
         <YAxis allowDecimals={false} tick={AXIS_TICK} width={32} />
-        <Tooltip formatter={(v) => [v, 'DAU']} labelFormatter={(d) => d} />
-        <Line type="monotone" dataKey="count" name="DAU" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} />
+        <Tooltip formatter={(v) => [v, 'DAU']} labelFormatter={tickFormatter} />
+        <Line
+          type="monotone"
+          dataKey="count"
+          name="DAU"
+          stroke={CHART_COLORS.primary}
+          strokeWidth={2}
+          dot={{ r: 3 }}
+        />
       </LineChart>
     </ResponsiveContainer>
   )
 }
 
-function PageViewsBarChart({ data }) {
+function PageViewsBarChart({ data, granularity }) {
   if (!data || data.length === 0) return <EmptyChart />
+  const tickFormatter = (v) => formatBucketLabel(v, granularity)
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="day" tick={AXIS_TICK} />
+        <XAxis dataKey="bucket" tick={AXIS_TICK} tickFormatter={tickFormatter} interval="preserveStartEnd" />
         <YAxis allowDecimals={false} tick={AXIS_TICK} width={32} />
-        <Tooltip formatter={(v) => [v, 'PV']} labelFormatter={(d) => d} />
-        <Bar dataKey="count" name="PV" fill={CHART_COLORS.primary} radius={[2, 2, 0, 0]} />
+        <Tooltip formatter={(v) => [v, 'PV']} labelFormatter={tickFormatter} />
+        <Bar dataKey="count" name="PV" fill={CHART_COLORS.primary} radius={[2, 2, 0, 0]} maxBarSize={MAX_BAR_SIZE} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -117,28 +170,36 @@ function PageViewsBarChart({ data }) {
 
 function pivotGamesByType(rows) {
   if (!rows || rows.length === 0) return []
-  const byDay = {}
+  const byBucket = {}
   for (const row of rows) {
-    if (!byDay[row.day]) byDay[row.day] = { day: row.day, official: 0, practice: 0, shooting: 0 }
-    byDay[row.day][row.game_type] = row.count
+    if (!byBucket[row.bucket]) byBucket[row.bucket] = { bucket: row.bucket, official: 0, practice: 0, shooting: 0 }
+    byBucket[row.bucket][row.game_type] = row.count
   }
-  return Object.values(byDay).sort((a, b) => a.day.localeCompare(b.day))
+  return Object.values(byBucket).sort((a, b) => a.bucket.localeCompare(b.bucket))
 }
 
-function GamesByTypeStackedChart({ rows }) {
+function GamesByTypeStackedChart({ rows, granularity }) {
   const data = pivotGamesByType(rows)
   if (data.length === 0) return <EmptyChart />
+  const tickFormatter = (v) => formatBucketLabel(v, granularity)
   return (
     <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="day" tick={AXIS_TICK} />
+        <XAxis dataKey="bucket" tick={AXIS_TICK} tickFormatter={tickFormatter} interval="preserveStartEnd" />
         <YAxis allowDecimals={false} tick={AXIS_TICK} width={32} />
-        <Tooltip />
+        <Tooltip labelFormatter={tickFormatter} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="official" stackId="a" name={GAME_TYPE_LABEL.official} fill={CHART_COLORS.primary} />
-        <Bar dataKey="practice" stackId="a" name={GAME_TYPE_LABEL.practice} fill={CHART_COLORS.secondary} />
-        <Bar dataKey="shooting" stackId="a" name={GAME_TYPE_LABEL.shooting} fill={CHART_COLORS.tertiary} radius={[2, 2, 0, 0]} />
+        <Bar dataKey="official" stackId="a" name={GAME_TYPE_LABEL.official} fill={CHART_COLORS.primary} maxBarSize={MAX_BAR_SIZE} />
+        <Bar dataKey="practice" stackId="a" name={GAME_TYPE_LABEL.practice} fill={CHART_COLORS.secondary} maxBarSize={MAX_BAR_SIZE} />
+        <Bar
+          dataKey="shooting"
+          stackId="a"
+          name={GAME_TYPE_LABEL.shooting}
+          fill={CHART_COLORS.tertiary}
+          radius={[2, 2, 0, 0]}
+          maxBarSize={MAX_BAR_SIZE}
+        />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -154,7 +215,7 @@ function TopPagesBarChart({ rows }) {
         <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} />
         <YAxis type="category" dataKey="path" tick={AXIS_TICK} width={130} />
         <Tooltip formatter={(v) => [v, 'PV']} />
-        <Bar dataKey="count" name="PV" fill={CHART_COLORS.primary} radius={[0, 2, 2, 0]} />
+        <Bar dataKey="count" name="PV" fill={CHART_COLORS.primary} radius={[0, 2, 2, 0]} maxBarSize={MAX_BAR_SIZE} />
       </BarChart>
     </ResponsiveContainer>
   )
@@ -224,6 +285,9 @@ function LoginForm({ onSuccess }) {
 export function AdminDashboard() {
   const [status, setStatus] = useState('loading') // loading | needs-login | ready | error
   const [data, setData] = useState(null)
+  const [period, setPeriod] = useState('30d')
+  const [series, setSeries] = useState(null)
+  const [seriesLoading, setSeriesLoading] = useState(false)
 
   async function loadDashboard() {
     setStatus('loading')
@@ -244,13 +308,33 @@ export function AdminDashboard() {
     }
   }
 
+  // 期間切り替え時はグラフ用データだけを再取得する(ページ全体のリロード・
+  // KPI/問い合わせ/運用確認の再取得はしない)
+  async function loadSeries(selectedPeriod) {
+    setSeriesLoading(true)
+    try {
+      const res = await fetch(`/api/admin/series?period=${selectedPeriod}`, { credentials: 'include' })
+      if (res.ok) setSeries(await res.json())
+    } catch {
+      // グラフ取得失敗時は直前のseriesを保持し、各チャートは空データ扱いで表示を続ける
+    } finally {
+      setSeriesLoading(false)
+    }
+  }
+
   useEffect(() => {
     loadDashboard()
   }, [])
 
+  useEffect(() => {
+    if (status === 'ready') loadSeries(period)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, period])
+
   async function handleLogout() {
     await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' })
     setData(null)
+    setSeries(null)
     setStatus('needs-login')
   }
 
@@ -307,38 +391,48 @@ export function AdminDashboard() {
         <KpiCard label="PV総数 / 直近7日" value={usage.pvTotal} />
       </div>
 
-      {/* 中段: アクティブユーザー推移・PV推移 */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <SectionCard title="アクティブユーザー推移(30日・日別DAU)">
-          <ActiveUsersLineChart data={content.dailyActiveUsers30d} />
-        </SectionCard>
-        <SectionCard title="PV推移(30日)">
-          <PageViewsBarChart data={content.dailyPageViews30d} />
-        </SectionCard>
-      </div>
+      {/* 利用推移: 期間切り替え(30日/90日/1年/3年/5年)は以下4つのグラフに共通で効く */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-heading tracking-wide">利用推移</h2>
+          <PeriodSelector value={period} onChange={setPeriod} />
+        </div>
 
-      {/* 下段: 試合/練習/シューティング推移・ページ別PV TOP5 */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <SectionCard title="試合 / 練習 / シューティング推移(30日)">
-          <GamesByTypeStackedChart rows={content.dailyGamesByType30d} />
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            <div>
-              <div className="text-muted-foreground">試合数</div>
-              <div className="text-xl tabular-nums">{formatNumber(content.officialGames)}</div>
+        <div
+          className={`grid grid-cols-1 gap-3 md:grid-cols-2 transition-opacity ${seriesLoading ? 'opacity-60' : ''}`}
+        >
+          <SectionCard title="アクティブユーザー推移">
+            <ActiveUsersLineChart data={series?.activeUsers} granularity={series?.granularity} />
+          </SectionCard>
+          <SectionCard title="PV推移">
+            <PageViewsBarChart data={series?.pageViews} granularity={series?.granularity} />
+          </SectionCard>
+        </div>
+
+        <div
+          className={`grid grid-cols-1 gap-3 md:grid-cols-2 transition-opacity ${seriesLoading ? 'opacity-60' : ''}`}
+        >
+          <SectionCard title="試合 / 練習 / シューティング推移">
+            <GamesByTypeStackedChart rows={series?.gamesByType} granularity={series?.granularity} />
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div>
+                <div className="text-muted-foreground">試合数(累計)</div>
+                <div className="text-xl tabular-nums">{formatNumber(content.officialGames)}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">練習数(累計)</div>
+                <div className="text-xl tabular-nums">{formatNumber(content.practiceGames)}</div>
+              </div>
+              <div>
+                <div className="text-muted-foreground">シューティング記録数(累計)</div>
+                <div className="text-xl tabular-nums">{formatNumber(content.shootingGames)}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-muted-foreground">練習数</div>
-              <div className="text-xl tabular-nums">{formatNumber(content.practiceGames)}</div>
-            </div>
-            <div>
-              <div className="text-muted-foreground">シューティング記録数</div>
-              <div className="text-xl tabular-nums">{formatNumber(content.shootingGames)}</div>
-            </div>
-          </div>
-        </SectionCard>
-        <SectionCard title="ページ別PV TOP5(累計)">
-          <TopPagesBarChart rows={content.pvByPage} />
-        </SectionCard>
+          </SectionCard>
+          <SectionCard title="ページ別PV TOP5">
+            <TopPagesBarChart rows={series?.pvByPage} />
+          </SectionCard>
+        </div>
       </div>
 
       {/* さらに下: 問い合わせ・最近作成されたチーム・スパム兆候・Storage/Error */}
