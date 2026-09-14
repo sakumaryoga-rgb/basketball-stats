@@ -3,7 +3,10 @@ import { Loader2 } from 'lucide-react'
 import { useSession } from '@/hooks/useSession'
 import { useTeams } from '@/hooks/useTeams'
 import { useActiveShareToken } from '@/hooks/useActiveShareToken'
+import { usePageViewTracking } from '@/hooks/usePageViewTracking'
+import { useErrorTracking } from '@/hooks/useErrorTracking'
 import { Onboarding } from '@/routes/Onboarding'
+import { AdminDashboard } from '@/routes/AdminDashboard'
 import { Tournaments } from '@/routes/Tournaments'
 import { TournamentGames } from '@/routes/TournamentGames'
 import { GameDetail } from '@/routes/GameDetail'
@@ -29,11 +32,25 @@ function FullScreenLoader() {
   )
 }
 
+// 運営者専用の/adminは、匿名認証・チームセッション(useSession/useTeams)を一切使わない
+// 完全に独立した画面のため、それらのフックを呼び出すMainAppとはRoutesの段階で分離する
+// (Reactのフック呼び出し順を一定に保つため、コンポーネント内で条件分岐はしない)。
 export default function App() {
+  return (
+    <Routes>
+      <Route path="/admin" element={<AdminDashboard />} />
+      <Route path="/*" element={<MainApp />} />
+    </Routes>
+  )
+}
+
+function MainApp() {
   const location = useLocation()
   const { session, loading: sessionLoading } = useSession()
   const { teams, activeTeam, loading: teamsLoading, refresh: refreshTeams, switchTeam } = useTeams(session)
   useActiveShareToken(activeTeam?.id)
+  usePageViewTracking(session?.user?.id, activeTeam?.id)
+  useErrorTracking(session?.user?.id)
 
   async function handleTeamJoined(teamId) {
     await refreshTeams()
