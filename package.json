@@ -1,7 +1,7 @@
 {
   "name": "basketball-stats",
   "private": true,
-  "version": "23.0.18",
+  "version": "23.0.19",
   "type": "module",
   "scripts": {
     "dev": "vite",
