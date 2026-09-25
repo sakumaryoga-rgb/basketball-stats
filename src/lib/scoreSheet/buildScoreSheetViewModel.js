@@ -120,6 +120,10 @@ export async function buildScoreSheetViewModel(gameId) {
   const foulCountByQuarter = new Map()
   // 選手別・クォーター別の個人ファウル数
   const playerFoulsByQuarterByPlayer = new Map() // playerId -> Map(quarter -> count)
+  // 選手別・個人ファウルの発生順シーケンス(何本目のファウルが第何クォーターで起きたか)。
+  // stat_eventsにファウル種別(P/T/U/D)の区別が無いため、公式スコアシートの
+  // 「ファウルボックスに種別コードを書く」代わりに、クォーター番号を記入する形で代替する。
+  const playerFoulSequenceByPlayer = new Map() // playerId -> number[](period)
 
   for (const e of events) {
     const pts = STAT_POINTS[e.stat_key]
@@ -133,6 +137,9 @@ export async function buildScoreSheetViewModel(gameId) {
       }
       const perPlayer = playerFoulsByQuarterByPlayer.get(e.player_id)
       perPlayer.set(e.quarter, (perPlayer.get(e.quarter) ?? 0) + 1)
+
+      if (!playerFoulSequenceByPlayer.has(e.player_id)) playerFoulSequenceByPlayer.set(e.player_id, [])
+      playerFoulSequenceByPlayer.get(e.player_id).push(e.quarter)
     }
   }
 
@@ -180,6 +187,7 @@ export async function buildScoreSheetViewModel(gameId) {
       secondsPlayed: lineupByPlayer.get(p.id)?.seconds_played ?? 0,
       stats: toStatLine(boxByPlayer.get(p.id)),
       foulsByPeriod,
+      foulSequence: playerFoulSequenceByPlayer.get(p.id) ?? [],
     }
   })
 

@@ -69,28 +69,6 @@
   font-weight: 700;
 }
 
-/* ファウル・タイムアウトのpips表示(●●●○○のようなマス目)。
-   JBA公式の「マスをXで消していく」記入方式を、塗り/未塗りの丸で表現する */
-.scoresheet-pips {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2em;
-}
-
-.scoresheet-pip {
-  display: inline-block;
-  width: 0.65em;
-  height: 0.65em;
-  border-radius: 999px;
-  border: 1.5px solid var(--muted-foreground);
-  background: transparent;
-}
-
-.scoresheet-pip-filled {
-  background: var(--foreground);
-  border-color: var(--foreground);
-}
-
 .scoresheet-pip-overflow {
   margin-left: 0.15em;
   font-size: 0.75em;
@@ -98,50 +76,114 @@
   color: var(--destructive);
 }
 
-/* RUNNING SCORE: JBA/FIBA公式の「あらかじめ1,2,3...と昇順に並んだマスへ、
-   得点した選手の背番号を書き込む」ランニングスコア欄(ラダー形式)を再現する。
-   紙のシートは複数ブロックを横に並べて160点超まで対応するが、ここではCSSの
-   段組み(columns)で同じ見た目を実現する(1つの連続したリストをブラウザが
-   自動で複数列に分配する)。 */
-.scoresheet-ladder {
-  columns: 2;
-  column-gap: 1rem;
+/* タイムアウト・チームファウルの箱(□)表示。参考にした非公式スコアシート様式の
+   チェックボックス記入方式に合わせた四角形のマス目 */
+.scoresheet-boxes {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+}
+
+.scoresheet-box {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  border: 1.5px solid var(--muted-foreground);
+  background: transparent;
+}
+
+.scoresheet-box-filled {
+  background: var(--foreground);
+  border-color: var(--foreground);
+}
+
+/* チームファウル欄: 参考様式に合わせ「1Q・2Q」「3Q・4Q」「OT」のように
+   2区分ずつ段組みで表示する */
+.scoresheet-foul-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.scoresheet-foul-grid-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.scoresheet-foul-grid-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
   font-size: 0.8125rem;
 }
 
-.scoresheet-ladder-row {
-  display: grid;
-  grid-template-columns: 2.5em 1fr 1fr;
-  align-items: center;
-  gap: 0.4em;
-  padding: 0.15em 0;
-  break-inside: avoid;
-  border-bottom: 1px solid var(--border);
+.scoresheet-foul-grid-label {
+  color: var(--muted-foreground);
+  min-width: 2em;
+}
+
+/* 選手名簿テーブルのファウル欄(5マス、参考様式の「ファウル 1〜5」に対応)。
+   本来は種別コード(P/T/U/D)を書くマスだが、stat_eventsに区別が無いため
+   発生クォーター番号を代わりに記入する */
+.scoresheet-foul-col-header {
+  text-align: center !important;
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+}
+
+.scoresheet-foul-box-cell {
+  text-align: center !important;
+  min-width: 2em;
+}
+
+/* RUNNING SCORE: 得点した選手の背番号を、あらかじめ1,2,3...と昇順に並んだマスへ
+   書き込む形式(参考にした非公式スコアシート様式のランニングスコア欄と同じ構造)。
+   紙のシートと同様に40点区切りのブロックをA/B列付きの表として横に並べる。 */
+.scoresheet-ladder-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.scoresheet-ladder-table {
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.scoresheet-ladder-table th,
+.scoresheet-ladder-table td {
+  border: 1px solid var(--border);
+  padding: 0.1rem 0.4rem;
+  text-align: center;
+}
+
+.scoresheet-ladder-table thead th {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-weight: 500;
 }
 
 .scoresheet-ladder-value {
   color: var(--muted-foreground);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 .scoresheet-ladder-a,
 .scoresheet-ladder-b {
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+  min-width: 2em;
 }
 
 .scoresheet-ladder-b {
   color: var(--muted-foreground);
 }
 
-/* 各クォーター終了時点の得点行(JBA公式: 太い丸+アンダーラインで区切る) */
-.scoresheet-ladder-row-period-end {
+/* 各クォーター終了時点の得点行(参考様式・JBA公式共通: 太線+アンダーラインで区切る) */
+.scoresheet-ladder-row-period-end td {
   border-bottom: 2px solid var(--foreground);
 }
 
-/* 試合終了時点の最終得点行(JBA公式: 太い二重線で区切る) */
-.scoresheet-ladder-row-game-end {
+/* 試合終了時点の最終得点行(参考様式・JBA公式共通: 太い二重線で区切る) */
+.scoresheet-ladder-row-game-end td {
   border-bottom: 3px double var(--foreground);
 }
 
@@ -204,16 +246,28 @@
     break-inside: avoid;
   }
 
-  .scoresheet-ladder {
-    columns: 4;
-    font-size: 7.5pt;
+  .scoresheet-ladder-table {
+    font-size: 6.5pt;
   }
 
-  .scoresheet-pip {
+  .scoresheet-ladder-table th,
+  .scoresheet-ladder-table td {
+    border-color: #000;
+    padding: 0.5pt 2pt;
+    color: #000;
+  }
+
+  .scoresheet-ladder-table thead th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .scoresheet-box {
     border-color: #000;
   }
 
-  .scoresheet-pip-filled {
+  .scoresheet-box-filled {
     background: #000 !important;
     border-color: #000;
     -webkit-print-color-adjust: exact;
@@ -231,12 +285,8 @@
     border-color: #000;
   }
 
-  .scoresheet-ladder-row {
-    border-bottom-color: #000;
-  }
-
-  .scoresheet-ladder-row-period-end,
-  .scoresheet-ladder-row-game-end {
+  .scoresheet-ladder-row-period-end td,
+  .scoresheet-ladder-row-game-end td {
     border-bottom-color: #000;
   }
 }

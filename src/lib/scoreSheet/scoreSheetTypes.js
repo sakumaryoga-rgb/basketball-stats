@@ -41,6 +41,10 @@
  * @property {boolean} isCaptain - 常にfalse(NOT_RECORDED。キャプテンの概念がDBに無い)
  * @property {number} secondsPlayed
  * @property {ScoreSheetPlayerStatLine} stats
+ * @property {number[]} foulSequence - DERIVABLE: この選手の個人ファウルが発生した順に、
+ *   そのクォーター番号を並べた配列(例: [1,1,3]なら1Qに2回・3Qに1回)。JBA公式の
+ *   「ファウルボックスに1本ごとの種別コード(P/T/U/D)を書く」記入方式を参考にしたが、
+ *   stat_eventsにファウル種別の区別が無いため、種別コードの代わりにクォーター番号を表示する
  */
 
 /**
