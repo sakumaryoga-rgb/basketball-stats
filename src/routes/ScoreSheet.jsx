@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, Printer } from 'lucide-react'
 import { buildScoreSheetViewModel, ScoreSheetAccessError } from '@/lib/scoreSheet/buildScoreSheetViewModel'
-import { isScoreSheetEnabledForTeam } from '@/lib/scoreSheet/scoreSheetConfig'
+import { isTeamInTestGroup } from '@/lib/testTeamConfig'
 import { formatQuarter } from '@/lib/stats'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,7 @@ import './ScoreSheet.css'
 // 運営者・チーム関係者向けの試合スコアシート(JBA/FIBAの記録形式、および実際に
 // 現場で使われている非公式スコアシート様式を参考にしたBASKETBALL STATS独自の
 // デジタル帳票)。閲覧のみ(Read Only)。現状はTokyo Comets(検証チーム)限定で
-// 有効化している(scoreSheetConfig.js参照)。通常画面はレスポンシブ表示、印刷時のみ
+// 有効化している(testTeamConfig.js参照)。通常画面はレスポンシブ表示、印刷時のみ
 // A4 1枚に収まるレイアウトへ切り替わる(ScoreSheet.css参照)。
 // BASKETBALL STATSに保存されていない項目は空欄(手書き記入欄)として表示し、
 // 「未記録」等の注記は付けない(印刷して実際に手書きで使えることを優先する)。
@@ -310,7 +310,7 @@ export function ScoreSheet() {
           setStatus('unsupported-game-type')
           return
         }
-        if (!isScoreSheetEnabledForTeam(result.teamA.teamId)) {
+        if (!isTeamInTestGroup(result.teamA.teamId)) {
           setStatus('disabled')
           return
         }
@@ -377,7 +377,7 @@ export function ScoreSheet() {
   return (
     <div className="scoresheet-page">
       <div className="scoresheet-container">
-        <div className="no-print flex items-center justify-between">
+        <div className="no-print flex items-center justify-between pt-[env(safe-area-inset-top)]">
           <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-muted-foreground">
             <ChevronLeft className="size-4" />
             戻る
@@ -389,7 +389,11 @@ export function ScoreSheet() {
         </div>
 
         <div className="flex flex-col gap-1 scoresheet-avoid-break">
-          <p className="text-xs text-muted-foreground">BASKETBALL SCORESHEET</p>
+          <div className="flex items-center gap-1.5">
+            <img src="/icons/icon-512.png" alt="" className="scoresheet-brand-logo" />
+            <p className="text-xs font-semibold tracking-wide">BASKETBALL STATS</p>
+          </div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">GAME SCORESHEET</p>
           <h1 className="text-xl font-heading tracking-wide">
             {teamA.name} vs {teamB.name}
           </h1>

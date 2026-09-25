@@ -7,7 +7,7 @@ import { useGameStats } from '@/hooks/useGameStats'
 import { useGameLineups } from '@/hooks/useGameLineups'
 import { useOpponentScoreEvents } from '@/hooks/useOpponentScoreEvents'
 import { STAT_CATEGORIES, STAT_KEY_LABEL, quarterOptions, formatClock, formatQuarter } from '@/lib/stats'
-import { isScoreSheetEnabledForTeam } from '@/lib/scoreSheet/scoreSheetConfig'
+import { isTeamInTestGroup } from '@/lib/testTeamConfig'
 import { snapToZoneCategory } from '@/lib/hotZones'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -193,6 +193,9 @@ const EMPTY_STATS = {
 export function GameDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
+  // タイマー自動停止・±時間調整ボタン・横スクロール修正は、Tokyo Comets(検証チーム)で
+  // 先行検証してから他チームへ展開する(スコアシート機能と同じ仕組みを再利用)。
+  const isTestTeam = isTeamInTestGroup(teamId)
   const { players, addPlayer } = usePlayers(teamId)
   const { games, updateGame, deleteGame, refresh: refreshGames } = useGames(teamId)
   const game = games.find((g) => g.id === id)
@@ -242,14 +245,27 @@ export function GameDetail({ teamId }) {
   useEffect(() => {
     if (!clockRunning) return
     const timer = setInterval(() => {
-      setSecondsLeft((s) => Math.max(0, s - 1))
-      pendingSecondsRef.current += 1
-      // 出場時間の書き込み回数を抑えるため、5秒分たまってからまとめて反映する
-      if (pendingSecondsRef.current >= 5) {
-        const delta = pendingSecondsRef.current
-        pendingSecondsRef.current = 0
-        incrementSeconds(delta)
-      }
+      setSecondsLeft((s) => {
+        // Tokyo Comets(検証チーム)限定: 0に到達したら自動停止し、これ以上
+        // 出場時間を加算しない。念のため既に0の状態でtickが来た場合も同様に扱う
+        // (二重にsetClockRunning(false)を呼んでも副作用は無い)。
+        if (isTestTeam && s <= 0) {
+          setClockRunning(false)
+          return 0
+        }
+        const next = Math.max(0, s - 1)
+        pendingSecondsRef.current += 1
+        // 出場時間の書き込み回数を抑えるため、5秒分たまってからまとめて反映する
+        if (pendingSecondsRef.current >= 5) {
+          const delta = pendingSecondsRef.current
+          pendingSecondsRef.current = 0
+          incrementSeconds(delta)
+        }
+        if (isTestTeam && next === 0) {
+          setClockRunning(false)
+        }
+        return next
+      })
     }, 1000)
     return () => {
       clearInterval(timer)
@@ -259,7 +275,7 @@ export function GameDetail({ teamId }) {
         incrementSeconds(delta)
       }
     }
-  }, [clockRunning, incrementSeconds])
+  }, [clockRunning, incrementSeconds, isTestTeam])
 
   const onCourtIds = useMemo(() => new Set(lineups.filter((l) => l.on_court).map((l) => l.player_id)), [lineups])
   const lineupByPlayer = useMemo(() => new Map(lineups.map((l) => [l.player_id, l])), [lineups])
@@ -484,7 +500,7 @@ export function GameDetail({ teamId }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className={cn('flex flex-col gap-4', isTestTeam && 'max-w-full overflow-x-hidden overscroll-x-none')}>
       <button onClick={() => navigate(listPath)} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ChevronLeft className="size-4" />
         {game.game_type === 'official' ? '試合一覧' : 'PRACTICE一覧'}
@@ -518,9 +534,11 @@ export function GameDetail({ teamId }) {
         )}
 
         <div className="flex items-center justify-center gap-3">
-          <Button variant="outline" size="icon-sm" onClick={() => adjustClock(-1)}>
-            <Minus className="size-3.5" />
-          </Button>
+          {!isTestTeam && (
+            <Button variant="outline" size="icon-sm" onClick={() => adjustClock(-1)}>
+              <Minus className="size-3.5" />
+            </Button>
+          )}
           <button onClick={toggleClock} aria-label={clockRunning ? '一時停止' : '開始'} className="shrink-0">
             {clockRunning ? <Pause className="size-5 text-primary" /> : <Play className="size-5 text-primary" />}
           </button>
@@ -533,10 +551,28 @@ export function GameDetail({ teamId }) {
           >
             {formatClock(secondsLeft)}
           </button>
-          <Button variant="outline" size="icon-sm" onClick={() => adjustClock(1)}>
-            <Plus className="size-3.5" />
-          </Button>
+          {!isTestTeam && (
+            <Button variant="outline" size="icon-sm" onClick={() => adjustClock(1)}>
+              <Plus className="size-3.5" />
+            </Button>
+          )}
         </div>
+
+        {isTestTeam && (
+          <div className="flex items-center justify-center gap-1.5">
+            {[-10, -5, -1, 1, 5, 10].map((delta) => (
+              <Button
+                key={delta}
+                variant="outline"
+                size="sm"
+                className="min-w-11 tabular-nums"
+                onClick={() => adjustClock(delta)}
+              >
+                {delta > 0 ? `+${delta}` : delta}
+              </Button>
+            ))}
+          </div>
+        )}
 
         <TimePickerDialog
           open={timePickerOpen}
@@ -625,7 +661,7 @@ export function GameDetail({ teamId }) {
           <Button variant="ghost" className="text-destructive" onClick={() => setConfirmDelete(true)}>削除</Button>
         </div>
 
-        {game.game_type !== 'shooting' && isScoreSheetEnabledForTeam(game.team_id) && (
+        {game.game_type !== 'shooting' && isTeamInTestGroup(game.team_id) && (
           <Button variant="outline" className="w-full" render={<Link to={`/scoresheet/${game.id}`} />}>
             <FileText className="size-4" />
             スコアシートを表示

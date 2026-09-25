@@ -18,6 +18,16 @@
   gap: 1.5rem;
 }
 
+/* ヘッダーの「BASKETBALL SCORESHEET」表記の左側に添える控えめなブランドロゴ。
+   既存のアプリアイコン(public/icons/icon-512.png、PWAマニフェストで使用しているもの
+   と同一)を再利用し、新規アセットは追加しない。元画像は512x512の高解像度のため、
+   小さく表示しても印刷時ににじまない。 */
+.scoresheet-brand-logo {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
 /* 画面表示では縦積み、印刷時のみ左(チーム情報)/右(ランニングスコア・スコア)の
    2カラムに切り替える(@media print参照。参考にしたスコアシート様式のレイアウト)。 */
 .scoresheet-grid {
