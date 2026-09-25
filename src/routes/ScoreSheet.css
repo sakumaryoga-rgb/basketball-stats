@@ -1,0 +1,242 @@
+/* /scoresheet/:gameId 専用のスタイル。ScoreSheet.jsxからのみimportされ、
+   このファイル自身がlazy-loadされるチャンクに含まれるため、他画面のバンドル・
+   PWAキャッシュ対象には影響しない。印刷用ルールは@media print配下に閉じ込め、
+   通常画面表示には一切影響させない。 */
+
+.scoresheet-page {
+  min-height: 100svh;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.scoresheet-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.scoresheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.scoresheet-table th,
+.scoresheet-table td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.scoresheet-table th:first-child,
+.scoresheet-table td:first-child {
+  text-align: left;
+}
+
+.scoresheet-table thead th {
+  background: var(--muted);
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+/* ショット種別の記号。JBA公式スコアシートの「3点は○で囲む」「フリースローは●で塗る」
+   という慣習を踏襲しつつ、2P成功に取消線(打ち消し線と誤読されうる)を使うのは避け、
+   無地(既定スタイル)のまま区別する。 */
+.scoresheet-shot-3pt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 0 0.15em;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.scoresheet-shot-ft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  padding: 0 0.15em;
+  border-radius: 999px;
+  background: var(--muted-foreground);
+  color: var(--background);
+  font-weight: 700;
+}
+
+/* ファウル・タイムアウトのpips表示(●●●○○のようなマス目)。
+   JBA公式の「マスをXで消していく」記入方式を、塗り/未塗りの丸で表現する */
+.scoresheet-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+}
+
+.scoresheet-pip {
+  display: inline-block;
+  width: 0.65em;
+  height: 0.65em;
+  border-radius: 999px;
+  border: 1.5px solid var(--muted-foreground);
+  background: transparent;
+}
+
+.scoresheet-pip-filled {
+  background: var(--foreground);
+  border-color: var(--foreground);
+}
+
+.scoresheet-pip-overflow {
+  margin-left: 0.15em;
+  font-size: 0.75em;
+  font-weight: 700;
+  color: var(--destructive);
+}
+
+/* RUNNING SCORE: JBA/FIBA公式の「あらかじめ1,2,3...と昇順に並んだマスへ、
+   得点した選手の背番号を書き込む」ランニングスコア欄(ラダー形式)を再現する。
+   紙のシートは複数ブロックを横に並べて160点超まで対応するが、ここではCSSの
+   段組み(columns)で同じ見た目を実現する(1つの連続したリストをブラウザが
+   自動で複数列に分配する)。 */
+.scoresheet-ladder {
+  columns: 2;
+  column-gap: 1rem;
+  font-size: 0.8125rem;
+}
+
+.scoresheet-ladder-row {
+  display: grid;
+  grid-template-columns: 2.5em 1fr 1fr;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.15em 0;
+  break-inside: avoid;
+  border-bottom: 1px solid var(--border);
+}
+
+.scoresheet-ladder-value {
+  color: var(--muted-foreground);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoresheet-ladder-a,
+.scoresheet-ladder-b {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.scoresheet-ladder-b {
+  color: var(--muted-foreground);
+}
+
+/* 各クォーター終了時点の得点行(JBA公式: 太い丸+アンダーラインで区切る) */
+.scoresheet-ladder-row-period-end {
+  border-bottom: 2px solid var(--foreground);
+}
+
+/* 試合終了時点の最終得点行(JBA公式: 太い二重線で区切る) */
+.scoresheet-ladder-row-game-end {
+  border-bottom: 3px double var(--foreground);
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .scoresheet-page {
+    min-height: 0;
+    background: #fff;
+    color: #000;
+  }
+
+  .scoresheet-container {
+    max-width: none;
+    padding: 0;
+    gap: 8pt;
+  }
+
+  .scoresheet-card {
+    border: 1px solid #000 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    break-inside: avoid;
+  }
+
+  .scoresheet-table {
+    font-size: 8.5pt;
+  }
+
+  .scoresheet-table th,
+  .scoresheet-table td {
+    border: 1px solid #000;
+    padding: 2pt 4pt;
+    color: #000;
+  }
+
+  .scoresheet-table thead th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .scoresheet-page-break {
+    break-before: page;
+  }
+
+  .scoresheet-avoid-break {
+    break-inside: avoid;
+  }
+
+  .scoresheet-ladder {
+    columns: 4;
+    font-size: 7.5pt;
+  }
+
+  .scoresheet-pip {
+    border-color: #000;
+  }
+
+  .scoresheet-pip-filled {
+    background: #000 !important;
+    border-color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .scoresheet-shot-ft {
+    background: #000 !important;
+    color: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .scoresheet-shot-3pt {
+    border-color: #000;
+  }
+
+  .scoresheet-ladder-row {
+    border-bottom-color: #000;
+  }
+
+  .scoresheet-ladder-row-period-end,
+  .scoresheet-ladder-row-game-end {
+    border-bottom-color: #000;
+  }
+}

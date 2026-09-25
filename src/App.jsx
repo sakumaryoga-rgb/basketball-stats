@@ -36,6 +36,10 @@ function FullScreenLoader() {
 // 通常のバンドルには含めずlazyで分割する(/adminを開いた時だけ読み込む)。
 const AdminDashboard = lazy(() => import('@/routes/AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
 
+// ScoreSheetは印刷専用CSS(@media print)を含み、現状は一部チームのみの検証機能
+// (scoreSheetConfig.js参照)のため、通常バンドルには含めずlazyで分割する。
+const ScoreSheet = lazy(() => import('@/routes/ScoreSheet').then((m) => ({ default: m.ScoreSheet })))
+
 // 運営者専用の/adminは、匿名認証・チームセッション(useSession/useTeams)を一切使わない
 // 完全に独立した画面のため、それらのフックを呼び出すMainAppとはRoutesの段階で分離する
 // (Reactのフック呼び出し順を一定に保つため、コンポーネント内で条件分岐はしない)。
@@ -85,6 +89,17 @@ function MainApp() {
       <Routes>
         <Route path="/onboarding" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
         <Route path="/t/:token" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
+        {/* 印刷用A4レイアウト(@media print)を持つ専用ページのため、Layoutの
+            固定高さ・overflow:hiddenのapp-shellの外側に置く(印刷時に内容が
+            クリップされるのを避けるため) */}
+        <Route
+          path="/scoresheet/:gameId"
+          element={
+            <Suspense fallback={<FullScreenLoader />}>
+              <ScoreSheet />
+            </Suspense>
+          }
+        />
         <Route element={<Layout teamName={activeTeam?.name} teamIconUrl={activeTeam?.icon_url} />}>
           {/* チーム未所属でも(オンボーディング中の同意ポップアップから遷移できるよう)閲覧できる情報ページ */}
           <Route path="/contact" element={<ContactForm />} />

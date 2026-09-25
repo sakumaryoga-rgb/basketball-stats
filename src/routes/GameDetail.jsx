@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { Undo2, ChevronLeft, Minus, Plus, Play, Pause, UserPlus, Check, Repeat } from 'lucide-react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import { Undo2, ChevronLeft, Minus, Plus, Play, Pause, UserPlus, Check, Repeat, FileText } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
 import { useGameLineups } from '@/hooks/useGameLineups'
 import { STAT_CATEGORIES, STAT_KEY_LABEL, quarterOptions, formatClock, formatQuarter } from '@/lib/stats'
+import { isScoreSheetEnabledForTeam } from '@/lib/scoreSheet/scoreSheetConfig'
 import { snapToZoneCategory } from '@/lib/hotZones'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -610,6 +611,13 @@ export function GameDetail({ teamId }) {
           )}
           <Button variant="ghost" className="text-destructive" onClick={() => setConfirmDelete(true)}>削除</Button>
         </div>
+
+        {game.game_type !== 'shooting' && isScoreSheetEnabledForTeam(game.team_id) && (
+          <Button variant="outline" className="w-full" render={<Link to={`/scoresheet/${game.id}`} />}>
+            <FileText className="size-4" />
+            スコアシートを表示
+          </Button>
+        )}
       </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
