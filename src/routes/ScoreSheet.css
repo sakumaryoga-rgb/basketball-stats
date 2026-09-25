@@ -18,6 +18,21 @@
   gap: 1.5rem;
 }
 
+/* 画面表示では縦積み、印刷時のみ左(チーム情報)/右(ランニングスコア・スコア)の
+   2カラムに切り替える(@media print参照。参考にしたスコアシート様式のレイアウト)。 */
+.scoresheet-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.scoresheet-grid-left,
+.scoresheet-grid-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
 .scoresheet-table {
   width: 100%;
   border-collapse: collapse;
@@ -43,8 +58,16 @@
   color: var(--muted-foreground);
 }
 
-/* ショット種別の記号。JBA公式スコアシートの「3点は○で囲む」「フリースローは●で塗る」
-   という慣習を踏襲しつつ、2P成功に取消線(打ち消し線と誤読されうる)を使うのは避け、
+/* データが無い項目を、印刷して手書きで記入できる空欄(下線)として表示する */
+.scoresheet-blank {
+  display: inline-block;
+  min-height: 1em;
+  min-width: 4em;
+  border-bottom: 1px solid var(--muted-foreground);
+}
+
+/* ショット種別の記号。「3点は○で囲む」「フリースローは●で塗る」という
+   慣習を踏襲しつつ、2P成功に取消線(打ち消し線と誤読されうる)を使うのは避け、
    無地(既定スタイル)のまま区別する。 */
 .scoresheet-shot-3pt {
   display: inline-flex;
@@ -69,6 +92,12 @@
   font-weight: 700;
 }
 
+/* 相手チーム(B列)の2P成功マーク: 選手番号を持たないため、円囲み/塗りつぶしと
+   見分けが付く程度の小さな点のみを記入する */
+.scoresheet-shot-2pt-mark {
+  font-weight: 700;
+}
+
 .scoresheet-pip-overflow {
   margin-left: 0.15em;
   font-size: 0.75em;
@@ -76,8 +105,7 @@
   color: var(--destructive);
 }
 
-/* タイムアウト・チームファウルの箱(□)表示。参考にした非公式スコアシート様式の
-   チェックボックス記入方式に合わせた四角形のマス目 */
+/* タイムアウト・チームファウルの箱(□)表示 */
 .scoresheet-boxes {
   display: inline-flex;
   align-items: center;
@@ -97,8 +125,7 @@
   border-color: var(--foreground);
 }
 
-/* チームファウル欄: 参考様式に合わせ「1Q・2Q」「3Q・4Q」「OT」のように
-   2区分ずつ段組みで表示する */
+/* チームファウル欄: 「1Q・2Q」「3Q・4Q」「OT」のように2区分ずつ段組みで表示する */
 .scoresheet-foul-grid {
   display: flex;
   flex-direction: column;
@@ -123,9 +150,8 @@
   min-width: 2em;
 }
 
-/* 選手名簿テーブルのファウル欄(5マス、参考様式の「ファウル 1〜5」に対応)。
-   本来は種別コード(P/T/U/D)を書くマスだが、stat_eventsに区別が無いため
-   発生クォーター番号を代わりに記入する */
+/* 選手名簿テーブルのファウル欄(5マス)。種別コード(P/T/U/D)の代わりに
+   発生クォーター番号を記入する */
 .scoresheet-foul-col-header {
   text-align: center !important;
   font-size: 0.7rem;
@@ -138,8 +164,7 @@
 }
 
 /* RUNNING SCORE: 得点した選手の背番号を、あらかじめ1,2,3...と昇順に並んだマスへ
-   書き込む形式(参考にした非公式スコアシート様式のランニングスコア欄と同じ構造)。
-   紙のシートと同様に40点区切りのブロックをA/B列付きの表として横に並べる。 */
+   書き込む形式。40点区切りのブロックをA/B列付きの表として並べる。 */
 .scoresheet-ladder-grid {
   display: flex;
   flex-wrap: wrap;
@@ -173,24 +198,19 @@
   min-width: 2em;
 }
 
-.scoresheet-ladder-b {
-  color: var(--muted-foreground);
-}
-
-/* 各クォーター終了時点の得点行(参考様式・JBA公式共通: 太線+アンダーラインで区切る) */
-.scoresheet-ladder-row-period-end td {
+/* 各チームのクォーター終了時点の得点マス(太線)・試合終了時点の最終得点マス(二重線) */
+.scoresheet-ladder-period-end {
   border-bottom: 2px solid var(--foreground);
 }
 
-/* 試合終了時点の最終得点行(参考様式・JBA公式共通: 太い二重線で区切る) */
-.scoresheet-ladder-row-game-end td {
+.scoresheet-ladder-game-end {
   border-bottom: 3px double var(--foreground);
 }
 
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm 10mm;
+    margin: 8mm;
   }
 
   html,
@@ -211,24 +231,51 @@
   .scoresheet-container {
     max-width: none;
     padding: 0;
-    gap: 8pt;
+    gap: 4pt;
+    font-size: 8pt;
+  }
+
+  .scoresheet-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    gap: 4pt;
+  }
+
+  .scoresheet-grid-left,
+  .scoresheet-grid-right {
+    gap: 4pt;
   }
 
   .scoresheet-card {
-    border: 1px solid #000 !important;
+    --card-spacing: 4pt;
+    border: 0.75pt solid #000 !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     break-inside: avoid;
   }
 
+  .scoresheet-card [data-slot='card-content'] {
+    gap: 3pt !important;
+  }
+
+  .scoresheet-card [data-slot='card-title'] {
+    font-size: 8pt;
+    letter-spacing: 0;
+  }
+
+  h1 {
+    font-size: 12pt !important;
+  }
+
   .scoresheet-table {
-    font-size: 8.5pt;
+    font-size: 6.5pt;
   }
 
   .scoresheet-table th,
   .scoresheet-table td {
-    border: 1px solid #000;
-    padding: 2pt 4pt;
+    border: 0.5pt solid #000;
+    padding: 0.5pt 2pt;
     color: #000;
   }
 
@@ -238,22 +285,19 @@
     print-color-adjust: exact;
   }
 
-  .scoresheet-page-break {
-    break-before: page;
-  }
-
-  .scoresheet-avoid-break {
-    break-inside: avoid;
+  .scoresheet-blank {
+    min-height: 0.9em;
+    border-bottom-color: #000;
   }
 
   .scoresheet-ladder-table {
-    font-size: 6.5pt;
+    font-size: 5.5pt;
   }
 
   .scoresheet-ladder-table th,
   .scoresheet-ladder-table td {
     border-color: #000;
-    padding: 0.5pt 2pt;
+    padding: 0.3pt 1.5pt;
     color: #000;
   }
 
@@ -263,8 +307,14 @@
     print-color-adjust: exact;
   }
 
+  .scoresheet-ladder-grid {
+    gap: 3pt;
+  }
+
   .scoresheet-box {
     border-color: #000;
+    width: 0.6em;
+    height: 0.6em;
   }
 
   .scoresheet-box-filled {
@@ -285,8 +335,11 @@
     border-color: #000;
   }
 
-  .scoresheet-ladder-row-period-end td,
-  .scoresheet-ladder-row-game-end td {
+  .scoresheet-ladder-period-end {
+    border-bottom-color: #000;
+  }
+
+  .scoresheet-ladder-game-end {
     border-bottom-color: #000;
   }
 }

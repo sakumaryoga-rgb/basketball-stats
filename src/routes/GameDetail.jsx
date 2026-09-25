@@ -5,6 +5,7 @@ import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
 import { useGameLineups } from '@/hooks/useGameLineups'
+import { useOpponentScoreEvents, OPPONENT_STAT_POINTS } from '@/hooks/useOpponentScoreEvents'
 import { STAT_CATEGORIES, STAT_KEY_LABEL, quarterOptions, formatClock, formatQuarter } from '@/lib/stats'
 import { isScoreSheetEnabledForTeam } from '@/lib/scoreSheet/scoreSheetConfig'
 import { snapToZoneCategory } from '@/lib/hotZones'
@@ -197,6 +198,7 @@ export function GameDetail({ teamId }) {
   const game = games.find((g) => g.id === id)
   const { events, boxScore, recordStat, undoLast, editStat, deleteStat } = useGameStats(id, game?.game_type)
   const { lineups, substitute, incrementSeconds } = useGameLineups(id)
+  const { events: opponentEvents, recordOpponentStat, undoLastOpponentStat } = useOpponentScoreEvents(id)
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [activeCategoryKey, setActiveCategoryKey] = useState('fg2')
@@ -333,8 +335,16 @@ export function GameDetail({ teamId }) {
     await updateGame(game.id, { status: 'in_progress' })
   }
 
-  async function adjustOpponentScore(delta) {
-    await updateGame(game.id, { opponent_score: Math.max(0, game.opponent_score + delta) })
+  async function recordOpponentScore(statKey) {
+    const ok = await recordOpponentStat(statKey, game.quarter)
+    if (ok) await updateGame(game.id, { opponent_score: Math.max(0, game.opponent_score + OPPONENT_STAT_POINTS[statKey]) })
+  }
+
+  async function undoOpponentScore() {
+    const last = opponentEvents[opponentEvents.length - 1]
+    if (!last) return
+    const ok = await undoLastOpponentStat()
+    if (ok) await updateGame(game.id, { opponent_score: Math.max(0, game.opponent_score - OPPONENT_STAT_POINTS[last.stat_key]) })
   }
 
   async function adjustTimeouts(side, delta) {
@@ -590,12 +600,12 @@ export function GameDetail({ teamId }) {
         {game.status !== 'final' && (
           <div className="flex items-center justify-center gap-2">
             <span className="text-xs text-muted-foreground mr-1">相手の点数</span>
-            <Button variant="outline" size="icon-sm" onClick={() => adjustOpponentScore(-1)}>
-              <Minus className="size-3.5" />
+            <Button variant="outline" size="icon-sm" onClick={undoOpponentScore} disabled={opponentEvents.length === 0}>
+              <Undo2 className="size-3.5" />
             </Button>
-            <Button variant="outline" size="sm" onClick={() => adjustOpponentScore(1)}>+1</Button>
-            <Button variant="outline" size="sm" onClick={() => adjustOpponentScore(2)}>+2</Button>
-            <Button variant="outline" size="sm" onClick={() => adjustOpponentScore(3)}>+3</Button>
+            <Button variant="outline" size="sm" onClick={() => recordOpponentScore('ft_make')}>FT</Button>
+            <Button variant="outline" size="sm" onClick={() => recordOpponentScore('fg2_make')}>2P</Button>
+            <Button variant="outline" size="sm" onClick={() => recordOpponentScore('fg3_make')}>3P</Button>
           </div>
         )}
 

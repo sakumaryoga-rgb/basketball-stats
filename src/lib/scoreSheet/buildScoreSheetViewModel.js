@@ -104,6 +104,15 @@ export async function buildScoreSheetViewModel(gameId) {
     if (res.error) throw res.error
   }
 
+  // 相手チームの得点イベント(opponent_score_events)。マイグレーション未適用の環境では
+  // テーブルが存在せずエラーになり得るため、他の取得とは切り離し、失敗しても
+  // スコアシート全体は表示できるよう空配列にフォールバックする
+  const opponentEventsRes = await supabase.from('opponent_score_events').select('*').eq('game_id', gameId).order('created_at')
+  if (opponentEventsRes.error) {
+    console.error('相手チームの得点イベントの取得に失敗しました', opponentEventsRes.error)
+  }
+  const opponentEvents = opponentEventsRes.data ?? []
+
   const team = teamRes.data
   const tournament = tournamentRes.data
   // この試合のロスター: 通常の選手全員 + この試合限定のゲスト(GameDetail.jsxと同じフィルタ)
@@ -169,6 +178,26 @@ export async function buildScoreSheetViewModel(gameId) {
       type: STAT_TYPE_LABEL[e.stat_key],
       points: pts,
       runningScoreSelf: runningTotal,
+    })
+  }
+
+  // --- 相手チームの得点イベント時系列(opponent_score_events由来)。
+  // 選手名簿が無いため、プレイヤー番号は持たない(誰が決めたかは記録しない) ---
+  let opponentRunningTotal = 0
+  let opponentSequence = 0
+  const opponentScoringEvents = []
+  for (const e of opponentEvents) {
+    const pts = STAT_POINTS[e.stat_key]
+    if (!pts) continue
+    opponentRunningTotal += pts
+    opponentSequence += 1
+    opponentScoringEvents.push({
+      id: e.id,
+      sequence: opponentSequence,
+      period: e.quarter,
+      type: STAT_TYPE_LABEL[e.stat_key],
+      points: pts,
+      runningScoreOpponent: opponentRunningTotal,
     })
   }
 
@@ -253,6 +282,7 @@ export async function buildScoreSheetViewModel(gameId) {
     teamA,
     teamB,
     scoringEvents,
+    opponentScoringEvents,
     officials: {
       scorer: null,
       assistantScorer: null,

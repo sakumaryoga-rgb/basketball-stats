@@ -118,6 +118,19 @@
  */
 
 /**
+ * @typedef {Object} ScoreSheetOpponentScoringEvent - 相手チームの得点イベントの時系列。
+ *   DERIVABLE(opponent_score_eventsをcreated_at順に並べたもの)。相手チームの選手名簿は
+ *   管理していないため、プレイヤー単位の紐付けは持たない(誰が決めたかは記録しない)。
+ *   opponent_score_eventsが導入される前に終了した試合には存在しない(空配列)。
+ * @property {string} id
+ * @property {number} sequence
+ * @property {number} period
+ * @property {'FT'|'2PT'|'3PT'} type
+ * @property {number} points
+ * @property {number} runningScoreOpponent
+ */
+
+/**
  * @typedef {Object} ScoreSheetOfficials - すべて常にnull(NOT_RECORDED)。
  *   審判・スコアラー等の担当者名を入力する仕組みが現状のアプリに無いため。
  *   将来入力UIを追加する場合に備え、フィールド自体はFIBA Appendix Bの構成に合わせて残す。
@@ -143,6 +156,7 @@
  * @property {ScoreSheetTeamSide} teamA - 自チーム(home)
  * @property {ScoreSheetTeamSide} teamB - 相手チーム(away)
  * @property {ScoreSheetScoringEvent[]} scoringEvents
+ * @property {ScoreSheetOpponentScoringEvent[]} opponentScoringEvents
  * @property {ScoreSheetOfficials} officials
  * @property {ScoreSheetResult} result
  * @property {string} generatedAt - ISO文字列。表示のたびに都度生成される(DBやStorageに保存しない)
