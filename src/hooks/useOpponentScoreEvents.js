@@ -3,6 +3,12 @@ import { supabase } from '@/supabaseClient'
 
 // 相手チームの得点イベント(ショット種別・クォーター・発生時刻)を取得・記録する。
 // 相手チームの選手名簿は管理していないため、プレイヤー単位の紐付けは行わない。
+//
+// 記録・取り消しはPostgres側のRPC(record_opponent_score / undo_last_opponent_score,
+// supabase/migrations/035_atomic_opponent_score.sql参照)を通す。イベントの追加と
+// games.opponent_scoreの更新を同一トランザクション内で行うことで、クライアント側の
+// 古いstateを基準にした加算によるロスト・アップデート(連続入力時に一部の加点が
+// 失われる不具合)を防ぐ。
 export const OPPONENT_STAT_POINTS = { fg2_make: 2, fg3_make: 3, ft_make: 1 }
 
 export function useOpponentScoreEvents(gameId) {
@@ -42,31 +48,30 @@ export function useOpponentScoreEvents(gameId) {
     return () => supabase.removeChannel(channel)
   }, [gameId, refresh])
 
+  // 戻り値: 成功時は新しいgames.opponent_score(RPCがDB側で計算した値)、失敗時はnull
   async function recordOpponentStat(statKey, quarter) {
-    const { data: userData } = await supabase.auth.getUser()
-    const { error } = await supabase.from('opponent_score_events').insert({
-      game_id: gameId,
-      stat_key: statKey,
-      quarter,
-      created_by: userData?.user?.id ?? null,
+    const { data, error } = await supabase.rpc('record_opponent_score', {
+      p_game_id: gameId,
+      p_stat_key: statKey,
+      p_quarter: quarter,
     })
     if (error) {
       console.error('相手チームの得点記録に失敗しました', error)
-      return false
+      return null
     }
     refresh()
-    return true
+    return data?.[0]?.new_opponent_score ?? null
   }
 
   async function undoLastOpponentStat() {
-    if (events.length === 0) return false
-    const { error } = await supabase.from('opponent_score_events').delete().eq('id', events[events.length - 1].id)
+    if (events.length === 0) return null
+    const { data, error } = await supabase.rpc('undo_last_opponent_score', { p_game_id: gameId })
     if (error) {
       console.error('相手チームの得点記録の取り消しに失敗しました', error)
-      return false
+      return null
     }
     refresh()
-    return true
+    return data?.[0]?.new_opponent_score ?? null
   }
 
   return { events, loading, recordOpponentStat, undoLastOpponentStat }

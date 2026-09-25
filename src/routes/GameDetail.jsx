@@ -5,7 +5,7 @@ import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
 import { useGameStats } from '@/hooks/useGameStats'
 import { useGameLineups } from '@/hooks/useGameLineups'
-import { useOpponentScoreEvents, OPPONENT_STAT_POINTS } from '@/hooks/useOpponentScoreEvents'
+import { useOpponentScoreEvents } from '@/hooks/useOpponentScoreEvents'
 import { STAT_CATEGORIES, STAT_KEY_LABEL, quarterOptions, formatClock, formatQuarter } from '@/lib/stats'
 import { isScoreSheetEnabledForTeam } from '@/lib/scoreSheet/scoreSheetConfig'
 import { snapToZoneCategory } from '@/lib/hotZones'
@@ -194,7 +194,7 @@ export function GameDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const { players, addPlayer } = usePlayers(teamId)
-  const { games, updateGame, deleteGame } = useGames(teamId)
+  const { games, updateGame, deleteGame, refresh: refreshGames } = useGames(teamId)
   const game = games.find((g) => g.id === id)
   const { events, boxScore, recordStat, undoLast, editStat, deleteStat } = useGameStats(id, game?.game_type)
   const { lineups, substitute, incrementSeconds } = useGameLineups(id)
@@ -335,16 +335,19 @@ export function GameDetail({ teamId }) {
     await updateGame(game.id, { status: 'in_progress' })
   }
 
+  // opponent_score_eventsへの記録とgames.opponent_scoreの更新は、Postgres側のRPC
+  // (record_opponent_score/undo_last_opponent_score)が同一トランザクションで
+  // 原子的に行う。クライアント側は現在のgame.opponent_scoreを一切参照しない
+  // (連続入力時のロスト・アップデートを防ぐため)。RPC後にrefreshGames()を呼び、
+  // 画面表示をrealtime通知を待たず即座に同期する。
   async function recordOpponentScore(statKey) {
-    const ok = await recordOpponentStat(statKey, game.quarter)
-    if (ok) await updateGame(game.id, { opponent_score: Math.max(0, game.opponent_score + OPPONENT_STAT_POINTS[statKey]) })
+    const newScore = await recordOpponentStat(statKey, game.quarter)
+    if (newScore != null) await refreshGames()
   }
 
   async function undoOpponentScore() {
-    const last = opponentEvents[opponentEvents.length - 1]
-    if (!last) return
-    const ok = await undoLastOpponentStat()
-    if (ok) await updateGame(game.id, { opponent_score: Math.max(0, game.opponent_score - OPPONENT_STAT_POINTS[last.stat_key]) })
+    const newScore = await undoLastOpponentStat()
+    if (newScore != null) await refreshGames()
   }
 
   async function adjustTimeouts(side, delta) {
