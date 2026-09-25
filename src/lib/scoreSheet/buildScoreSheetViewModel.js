@@ -186,6 +186,7 @@ export async function buildScoreSheetViewModel(gameId) {
   let opponentRunningTotal = 0
   let opponentSequence = 0
   const opponentScoringEvents = []
+  const opponentPointsByQuarter = new Map()
   for (const e of opponentEvents) {
     const pts = STAT_POINTS[e.stat_key]
     if (!pts) continue
@@ -199,6 +200,7 @@ export async function buildScoreSheetViewModel(gameId) {
       points: pts,
       runningScoreOpponent: opponentRunningTotal,
     })
+    opponentPointsByQuarter.set(e.quarter, (opponentPointsByQuarter.get(e.quarter) ?? 0) + pts)
   }
 
   // --- 選手一覧(自チームのみ。相手チームは選手名簿がDBに存在しない) ---
@@ -254,7 +256,9 @@ export async function buildScoreSheetViewModel(gameId) {
     timeoutsTotal: DEFAULT_TIMEOUTS,
     timeoutsUsed: Math.max(0, DEFAULT_TIMEOUTS - awayTimeoutsRemaining),
     teamFoulsByPeriod: [],
-    quarterScores: [],
+    // opponent_score_eventsが記録されている試合のみ、クォーター別得点をDERIVABLEにする。
+    // イベントが1件も無い試合(この機能導入前の試合)は空配列のまま(NOT_RECORDED)。
+    quarterScores: opponentEvents.length > 0 ? buildQuarterScores(opponentPointsByQuarter, lastPeriod) : [],
     finalScore: finalScoreOpponent,
   }
 

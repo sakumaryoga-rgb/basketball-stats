@@ -95,8 +95,8 @@
  *   カウンターで、過去クォーターの履歴を保持しないため使用しない)
  * @property {number[]} quarterScores - 到達したクォーターの数だけ要素を持つ。
  *   自チームはDERIVABLE(stat_eventsの得点をクォーター別に集計)。
- *   相手チームは常に空配列(NOT_RECORDED。opponent_scoreは試合を通じた単一の累計値のみで、
- *   クォーター別の内訳を持たない)
+ *   相手チームはopponent_score_eventsが1件でも記録されていればDERIVABLE
+ *   (同様にクォーター別集計)、無ければ空配列(NOT_RECORDED。この機能導入前の試合等)
  * @property {number} finalScore
  */
 
