@@ -281,16 +281,40 @@ export function ScoreSheet() {
   const [vm, setVm] = useState(null)
   // window.print()は「印刷 / PDF保存」ボタンのクリック(=ユーザー操作)からのみ呼び出す。
   // useEffect・route遷移・タイマー・クエリパラメータ等から自動実行することは無い。
-  // このrefは、同一操作中の二重発火(ダブルタップ等)でwindow.print()が短時間に
-  // 複数回呼ばれるのを防ぐためだけのガード(1秒間の再入禁止)。
+  // このrefは、印刷ダイアログが開いている間の二重発火(連打等)でwindow.print()が
+  // 複数回呼ばれるのを防ぐガード。afterprintイベント(印刷ダイアログが閉じた
+  // タイミングで発火)を検知できたらそこで解除する。iOS SafariはAirPrintの
+  // 共有シート経由になる関係でafterprintの発火が不安定なことがあるため、
+  // 発火しなかった場合に備えてフォールバックのタイムアウトも用意し、
+  // ボタンが永久に押せなくなることは無いようにする。
   const printingRef = useRef(false)
+  const printingFallbackTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    function handleAfterPrint() {
+      printingRef.current = false
+      if (printingFallbackTimeoutRef.current) {
+        clearTimeout(printingFallbackTimeoutRef.current)
+        printingFallbackTimeoutRef.current = null
+      }
+    }
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint)
+      if (printingFallbackTimeoutRef.current) clearTimeout(printingFallbackTimeoutRef.current)
+    }
+  }, [])
+
   const handlePrintClick = () => {
     if (printingRef.current) return
     printingRef.current = true
     window.print()
-    setTimeout(() => {
+    // afterprintがどうしても発火しない環境へのフォールバックのみ。
+    // afterprintが先に発火した場合はこのタイマー自体をクリアする。
+    printingFallbackTimeoutRef.current = setTimeout(() => {
       printingRef.current = false
-    }, 1000)
+      printingFallbackTimeoutRef.current = null
+    }, 10000)
   }
 
   useEffect(() => {
