@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
   formatQuarterHeader,
   FOUL_BOX_COUNT,
@@ -302,6 +303,18 @@ function SspScoreCard({ vm }) {
 }
 
 export function ScoreSheetPrint({ vm }) {
+  // ScoreSheetPrint.cssはこのコンポーネントがマウントされた時にimportされ、
+  // SPA内で他の画面に遷移してもスタイルシート自体はドキュメントに残り続ける
+  // (Reactはstyleタグ/リンクをアンマウント時に取り除かない)。そのCSS内の
+  // html/body/#rootの高さリセット(@media print)が他画面の印刷にまで
+  // 意図せず効いてしまわないよう、このコンポーネントがマウントされている間だけ
+  // <html>にスコープ用クラスを付与し、CSS側もそのクラスが付いている時だけ
+  // 適用されるようにする(ScoreSheetPrint.css参照)。
+  useEffect(() => {
+    document.documentElement.classList.add('ssp-print-scope')
+    return () => document.documentElement.classList.remove('ssp-print-scope')
+  }, [])
+
   if (!vm) return null
   const { game, teamA, teamB, scoringEvents, opponentScoringEvents, officials } = vm
   // 出場人数がTeam A/Bどちらか一方でも12人を超える場合のみ、13人目以降をまとめた

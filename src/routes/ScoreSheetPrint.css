@@ -44,10 +44,17 @@
      挙動になり、2ページ目に送られるはずのbreak-before:page指定の内容が
      ページとして生成されず、そのまま切り落とされてしまう(自然な改ページで
      内容量が1ページを超えた場合も同様)。@media print内だけこの高さ指定を
-     解除し、内容量に応じて何ページでも自然に生成されるようにする。 */
-  html,
-  body,
-  #root {
+     解除し、内容量に応じて何ページでも自然に生成されるようにする。
+     ただし、このCSS自体はScoreSheetPrint.jsxがマウントされた時にimportされ、
+     SPA内で他画面に遷移してもドキュメントから取り除かれずに残り続ける
+     (Reactはstyleタグをアンマウント時に除去しない)。そのため無条件に
+     html/body/#rootへ適用すると、後で別画面を印刷した際にまで意図せず
+     高さリセットが効いてしまう。ScoreSheetPrint.jsx側でマウント中だけ
+     <html>に付与する.ssp-print-scopeが付いている時だけ適用することで、
+     このスコアシート画面を表示している間の印刷にだけ限定する。 */
+  html.ssp-print-scope,
+  html.ssp-print-scope body,
+  html.ssp-print-scope #root {
     height: auto !important;
     overflow: visible !important;
   }
