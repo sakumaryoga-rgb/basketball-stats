@@ -1,0 +1,426 @@
+/* ScoreSheetPrint.jsx専用のスタイル。印刷/PDF出力の帳票レイアウトを、画面表示用の
+   レスポンシブUI(ScoreSheet.css)から完全に独立させている。
+
+   【設計方針】
+   - Tailwindのユーティリティクラス(sm:/md:等のレスポンシブクラスを含む)は
+     一切使わない。全てこのファイル内のプレーンなCSSクラスとして定義する。
+   - 幅は%またはmm、フォントサイズ・余白はptで固定値として明示する。
+     viewport幅に応じて値が変わるプロパティ(vw, sm:等のmedia query)は
+     このファイル内に一つも存在しない。
+   - 画面表示中は.ssp-root自体をdisplay:noneにして完全に非表示にする
+     (レイアウト・イベントとも一切関与しない)。@media print内でのみ
+     display:blockに切り替える。
+   - 高さは常にauto。max-height/固定heightは使わない。内容がA4 1枚を
+     超える場合は自然な改ページに任せる(overflow:hiddenで内容を
+     切り落とすことはしない)。
+   - iOS Safariの自動テキストサイズ調整(text-size-adjust)による見た目の
+     ズレを防ぐため、-webkit-text-size-adjust: 100%を明示する。 */
+
+.ssp-root {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* 画面表示用のレスポンシブDOM(ScoreSheet.jsx本体)は印刷時に非表示にする。
+     こちらはTailwindの通常クラスなので、印刷時にどう解釈されても
+     表示されないため影響しない。 */
+  .scoresheet-screen-only {
+    display: none !important;
+  }
+
+  .ssp-root {
+    display: block;
+    box-sizing: border-box;
+    width: 194mm; /* A4(210mm) - 左右マージン(8mm×2)。版面幅の目安として使うのみで、
+                     このコンポーネント内に幅に応じて構成が変わる箇所は無い。 */
+    margin: 0 auto;
+    padding: 0;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    background: #fff;
+    color: #000;
+    font-size: 8pt;
+    line-height: 1.35;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  .ssp-root *,
+  .ssp-root *::before,
+  .ssp-root *::after {
+    box-sizing: border-box;
+  }
+
+  .ssp-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2pt;
+    margin-bottom: 6pt;
+  }
+
+  .ssp-brand {
+    display: flex;
+    align-items: center;
+    gap: 3pt;
+  }
+
+  .ssp-logo {
+    width: 12pt;
+    height: 12pt;
+    flex: 0 0 auto;
+  }
+
+  .ssp-brand-name {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .ssp-doctype {
+    font-size: 6pt;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #555;
+  }
+
+  .ssp-title {
+    font-size: 13pt;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .ssp-card {
+    border: 0.75pt solid #000;
+    padding: 4pt 5pt;
+    margin-bottom: 4pt;
+    height: auto;
+    overflow: visible;
+  }
+
+  .ssp-card-title {
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0 0 3pt;
+  }
+
+  .ssp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 1pt;
+  }
+
+  .ssp-field-label {
+    font-size: 6pt;
+    color: #555;
+  }
+
+  .ssp-field-value {
+    font-size: 7pt;
+  }
+
+  .ssp-status-badge {
+    display: inline-block;
+    padding: 0.5pt 4pt;
+    border: 0.5pt solid #000;
+    border-radius: 6pt;
+    font-size: 6.5pt;
+    font-weight: 700;
+  }
+
+  /* GAME INFORMATION・OFFICIALSの列数は常に固定(3列/4列)。ビューポート幅に
+     応じて列数が変わるTailwindのsm:grid-cols-*等は使わないため、
+     印刷を実行した端末に関わらず常に同じ列数になる。 */
+  .ssp-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    column-gap: 8pt;
+    row-gap: 3pt;
+  }
+
+  .ssp-officials-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    column-gap: 8pt;
+    row-gap: 3pt;
+  }
+
+  /* 左(チーム情報・選手表)を右(ランニングスコア)よりやや広く配分する。
+     常に3fr:2fr固定で、viewport幅によって比率が変わることはない。 */
+  .ssp-grid {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    column-gap: 4pt;
+    align-items: start;
+  }
+
+  .ssp-grid-left,
+  .ssp-grid-right {
+    display: flex;
+    flex-direction: column;
+    gap: 4pt;
+    min-width: 0;
+  }
+
+  /* タイムアウト・チームファウルを横並びにして上下幅を節約する。
+     画面表示(ScoreSheet.jsx側)は別コンポーネントで縦積みのまま。 */
+  .ssp-meta-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8pt;
+    margin-bottom: 3pt;
+    font-size: 7pt;
+  }
+
+  .ssp-meta-label {
+    color: #555;
+    margin-right: 3pt;
+  }
+
+  .ssp-timeout-line {
+    display: flex;
+    align-items: center;
+  }
+
+  .ssp-foul-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5pt;
+    align-items: flex-end;
+  }
+
+  .ssp-foul-grid-row {
+    display: flex;
+    gap: 6pt;
+  }
+
+  .ssp-foul-grid-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 2pt;
+  }
+
+  .ssp-foul-grid-label {
+    color: #555;
+    min-width: 10pt;
+  }
+
+  .ssp-boxes {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.5pt;
+  }
+
+  .ssp-box {
+    display: inline-block;
+    width: 5pt;
+    height: 5pt;
+    border: 0.75pt solid #000;
+    background: transparent;
+  }
+
+  .ssp-box-filled {
+    background: #000 !important;
+    border-color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .ssp-box-overflow {
+    margin-left: 1pt;
+    font-size: 6pt;
+    font-weight: 700;
+  }
+
+  /* 選手名簿テーブル。Licence No.列は無し。table-layout: fixedと明示的な
+     colgroup幅により、端末に関わらず常に同じ列幅になる。 */
+  .ssp-roster-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 6.5pt;
+  }
+
+  .ssp-col-no {
+    width: 5%;
+  }
+  .ssp-col-name {
+    width: 41%;
+  }
+  .ssp-col-number {
+    width: 7%;
+  }
+  .ssp-col-starter {
+    width: 9%;
+  }
+  .ssp-col-foul {
+    width: 6%;
+  }
+  .ssp-col-pts {
+    width: 8%;
+  }
+
+  .ssp-roster-table th,
+  .ssp-roster-table td {
+    border: 0.5pt solid #000;
+    padding: 0.5pt 2pt;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .ssp-roster-table tr {
+    break-inside: avoid;
+  }
+
+  .ssp-col-name-align {
+    text-align: left !important;
+    white-space: normal !important;
+    word-break: break-word;
+  }
+
+  .ssp-guest-tag {
+    margin-left: 2pt;
+    font-size: 5.5pt;
+    color: #555;
+  }
+
+  .ssp-roster-table thead th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .ssp-foul-col-header {
+    text-align: center !important;
+    font-size: 5.5pt;
+    color: #555;
+  }
+
+  .ssp-foul-box-cell {
+    text-align: center !important;
+  }
+
+  .ssp-coach-row {
+    display: flex;
+    gap: 10mm;
+    margin-top: 3pt;
+    font-size: 7pt;
+  }
+
+  .ssp-blank {
+    display: inline-block;
+    min-width: 10mm;
+    min-height: 0.9em;
+    border-bottom: 0.5pt solid #000;
+  }
+
+  /* RUNNING SCORE: 得点順のラダー。ブロック(1〜40点等)を右カラムの幅に
+     収まるだけ折り返して並べる。ブロック数はスコアに応じて可変だが、
+     各ブロック自体のセル幅は固定(pt)。 */
+  .ssp-ladder-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2pt;
+  }
+
+  .ssp-ladder-table {
+    border-collapse: collapse;
+    font-size: 5.5pt;
+  }
+
+  .ssp-ladder-table th,
+  .ssp-ladder-table td {
+    border: 0.5pt solid #000;
+    padding: 0.3pt 1pt;
+    text-align: center;
+    min-width: 8pt;
+  }
+
+  .ssp-ladder-table thead th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .ssp-ladder-value {
+    color: #555;
+  }
+
+  .ssp-ladder-period-end {
+    border-bottom: 1.5pt solid #000;
+  }
+
+  .ssp-ladder-game-end {
+    border-bottom: 2pt double #000;
+  }
+
+  .ssp-shot-3pt {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 8pt;
+    border: 1pt solid #000;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+
+  .ssp-shot-ft {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 8pt;
+    border-radius: 999px;
+    background: #000 !important;
+    color: #fff !important;
+    font-weight: 700;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .ssp-shot-2pt-mark {
+    font-weight: 700;
+  }
+
+  .ssp-score-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 6.5pt;
+    margin-bottom: 3pt;
+  }
+
+  .ssp-score-table th,
+  .ssp-score-table td {
+    border: 0.5pt solid #000;
+    padding: 0.5pt 2pt;
+    text-align: right;
+  }
+
+  .ssp-score-table thead th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .ssp-result-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2pt;
+    font-size: 7pt;
+  }
+}

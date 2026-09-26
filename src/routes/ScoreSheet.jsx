@@ -3,24 +3,36 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, Printer } from 'lucide-react'
 import { buildScoreSheetViewModel, ScoreSheetAccessError } from '@/lib/scoreSheet/buildScoreSheetViewModel'
 import { isTeamInTestGroup } from '@/lib/testTeamConfig'
-import { formatQuarter } from '@/lib/stats'
+import {
+  formatQuarterHeader,
+  FOUL_BOX_COUNT,
+  MIN_BLANK_ROSTER_ROWS,
+  LADDER_BLOCK_SIZE,
+  groupPeriodsForFoulGrid,
+  periodEndMap,
+} from '@/lib/scoreSheet/scoreSheetLayout'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ScoreSheetPrint } from './ScoreSheetPrint'
 import './ScoreSheet.css'
 
 // 運営者・チーム関係者向けの試合スコアシート(JBA/FIBAの記録形式、および実際に
 // 現場で使われている非公式スコアシート様式を参考にしたBASKETBALL STATS独自の
 // デジタル帳票)。閲覧のみ(Read Only)。現状はTokyo Comets(検証チーム)限定で
-// 有効化している(testTeamConfig.js参照)。通常画面はレスポンシブ表示、印刷時のみ
-// A4 1枚に収まるレイアウトへ切り替わる(ScoreSheet.css参照)。
-// BASKETBALL STATSに保存されていない項目は空欄(手書き記入欄)として表示し、
-// 「未記録」等の注記は付けない(印刷して実際に手書きで使えることを優先する)。
-
-function formatQuarterHeader(period, periodSystem) {
-  return formatQuarter(period, periodSystem)
-}
+// 有効化している(testTeamConfig.js参照)。
+//
+// 画面表示(このファイル)と印刷/PDF出力(ScoreSheetPrint.jsx)は、同じ
+// ScoreSheetViewModelを使う完全に別々のコンポーネント・CSSに分離している。
+// 以前は1つのレスポンシブDOMを@media printで大量に上書きしていたが、
+// Tailwindのsm:/md:等のレスポンシブクラスは「そのDOMが置かれた要素の幅」ではなく
+// 「viewport(印刷時はpage box)の幅」を基準に評価されるため、印刷を実行した
+// 端末によって適用されるクラスが変わり得る(モバイルから印刷すると画面表示相当の
+// 狭いレイアウトのまま出力される)という問題があった。ScoreSheetPrint.jsxは
+// Tailwindのレスポンシブユーティリティを一切使わず、列数・幅を全て固定値
+// (%/mm/pt)で明示することで、印刷を実行した端末に関わらず常に同一のA4帳票に
+// なるようにしている。
 
 function Section({ title, children }) {
   return (
@@ -51,22 +63,6 @@ function Boxes({ used, total }) {
       {overflow > 0 && <span className="scoresheet-pip-overflow">+{overflow}</span>}
     </span>
   )
-}
-
-// チームファウルのマス目を「1Q・2Q」「3Q・4Q」「OT」のように2区分ずつまとめる。
-function groupPeriodsForFoulGrid(lastPeriod, periodSystem) {
-  const regular = periodSystem === '2q' ? 2 : 4
-  const regularCount = Math.min(lastPeriod, regular)
-  const rows = []
-  for (let i = 1; i <= regularCount; i += 2) {
-    const pair = [i]
-    if (i + 1 <= regularCount) pair.push(i + 1)
-    rows.push(pair)
-  }
-  const otPeriods = []
-  for (let p = regular + 1; p <= lastPeriod; p++) otPeriods.push(p)
-  if (otPeriods.length > 0) rows.push(otPeriods)
-  return rows
 }
 
 function TeamTimeoutsLine({ team }) {
@@ -118,11 +114,6 @@ function TeamCoachLine({ team }) {
     </div>
   )
 }
-
-const FOUL_BOX_COUNT = 5
-// 相手チームの選手名簿はBASKETBALL STATSで管理していないため、自チームの
-// 人数に合わせた空欄の行を用意し、手書きで記入できるようにする
-const MIN_BLANK_ROSTER_ROWS = 5
 
 function TeamRosterTable({ team, periodSystem, blankRowCount }) {
   const rows = team.players.length > 0 ? team.players : Array.from({ length: Math.max(blankRowCount, MIN_BLANK_ROSTER_ROWS) })
@@ -183,17 +174,8 @@ function TeamRosterTable({ team, periodSystem, blankRowCount }) {
 // 必要なブロック数だけ表示する。自チーム(A)は得点イベントに選手の背番号が
 // 紐づくため番号を記入できるが、相手チーム(B)は選手名簿を持たないため、
 // ショット種別のマーク(2P/3P/FT)のみを記入する。
-const LADDER_BLOCK_SIZE = 40
-
 function shotClass(type) {
   return type === '3PT' ? 'scoresheet-shot-3pt' : type === 'FT' ? 'scoresheet-shot-ft' : ''
-}
-
-function periodEndMap(events) {
-  const lastEventIdInPeriod = new Map()
-  for (const e of events) lastEventIdInPeriod.set(e.period, e.id)
-  const lastEventId = events.length > 0 ? events[events.length - 1].id : null
-  return { lastEventIdInPeriod, lastEventId }
 }
 
 function RunningScoreBlocks({ scoringEvents, opponentScoringEvents, teamA, teamB }) {
@@ -374,7 +356,10 @@ export function ScoreSheet() {
 
   return (
     <div className="scoresheet-page">
-      <div className="scoresheet-container">
+      {/* 画面表示用のレスポンシブDOM。印刷時はscoresheet-screen-onlyにより非表示にし、
+          代わりにScoreSheetPrint(Tailwindのレスポンシブクラスを一切使わない、
+          A4固定レイアウト専用の完全に独立したコンポーネント)を印刷する。 */}
+      <div className="scoresheet-container scoresheet-screen-only">
         <div className="no-print flex items-center justify-between pt-[env(safe-area-inset-top)]">
           <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-muted-foreground">
             <ChevronLeft className="size-4" />
@@ -521,6 +506,8 @@ export function ScoreSheet() {
           </div>
         </Section>
       </div>
+
+      <ScoreSheetPrint vm={vm} />
     </div>
   )
 }
