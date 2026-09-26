@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, Printer } from 'lucide-react'
 import { buildScoreSheetViewModel, ScoreSheetAccessError } from '@/lib/scoreSheet/buildScoreSheetViewModel'
@@ -279,6 +279,19 @@ export function ScoreSheet() {
   const navigate = useNavigate()
   const [status, setStatus] = useState('loading') // loading | ready | not-found | disabled | error
   const [vm, setVm] = useState(null)
+  // window.print()は「印刷 / PDF保存」ボタンのクリック(=ユーザー操作)からのみ呼び出す。
+  // useEffect・route遷移・タイマー・クエリパラメータ等から自動実行することは無い。
+  // このrefは、同一操作中の二重発火(ダブルタップ等)でwindow.print()が短時間に
+  // 複数回呼ばれるのを防ぐためだけのガード(1秒間の再入禁止)。
+  const printingRef = useRef(false)
+  const handlePrintClick = () => {
+    if (printingRef.current) return
+    printingRef.current = true
+    window.print()
+    setTimeout(() => {
+      printingRef.current = false
+    }, 1000)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -365,7 +378,7 @@ export function ScoreSheet() {
             <ChevronLeft className="size-4" />
             戻る
           </button>
-          <Button size="sm" onClick={() => window.print()}>
+          <Button size="sm" onClick={handlePrintClick}>
             <Printer className="size-4" />
             印刷 / PDF保存
           </Button>

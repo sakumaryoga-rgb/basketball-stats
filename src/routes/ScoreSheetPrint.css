@@ -169,14 +169,33 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     column-gap: 8pt;
-    row-gap: 4pt;
+    row-gap: 8pt;
   }
 
   .ssp-officials-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     column-gap: 8pt;
-    row-gap: 4pt;
+    row-gap: 8pt;
+  }
+
+  /* GAME INFORMATION・OFFICIALSのみ、列構成・横幅は変えずに縦方向の余白だけ
+     少し広げる(A4下部に残っていた余白を自然に使い切るため)。他のcard
+     (TEAM A/B・RUNNING SCORE・SCORE)には影響しない。 */
+  .ssp-card-game-info,
+  .ssp-card-officials {
+    padding-top: 9pt;
+    padding-bottom: 9pt;
+  }
+
+  .ssp-info-grid .ssp-field,
+  .ssp-officials-grid .ssp-field {
+    gap: 3pt;
+  }
+
+  /* OFFICIALSは手書きで記入する欄のため、下線の上の空間を他より少し広めに取る。 */
+  .ssp-officials-grid .ssp-blank {
+    min-height: 1.6em;
   }
 
   /* 左(チーム情報・選手表)を右(ランニングスコア)よりやや広く配分する。
@@ -298,7 +317,7 @@
 
   .ssp-roster-table th,
   .ssp-roster-table td {
-    border: 0.5pt solid #000;
+    border: 0.6pt solid #000;
     padding: 1pt 2pt;
     text-align: right;
     white-space: nowrap;

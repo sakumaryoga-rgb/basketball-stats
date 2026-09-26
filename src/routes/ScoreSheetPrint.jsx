@@ -342,7 +342,7 @@ export function ScoreSheetPrint({ vm }) {
         </h1>
       </div>
 
-      <div className="ssp-card">
+      <div className="ssp-card ssp-card-game-info">
         <div className="ssp-card-title">GAME INFORMATION</div>
         <div className="ssp-info-grid">
           <SspField label="Competition">
@@ -384,7 +384,7 @@ export function ScoreSheetPrint({ vm }) {
         </div>
       </div>
 
-      <div className="ssp-card">
+      <div className="ssp-card ssp-card-officials">
         <div className="ssp-card-title">OFFICIALS</div>
         <div className="ssp-officials-grid">
           <SspField label="スコアラー">
