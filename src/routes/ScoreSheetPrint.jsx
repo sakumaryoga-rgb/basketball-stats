@@ -209,16 +209,20 @@ function SspRunningScore({ scoringEvents, opponentScoringEvents, teamA, teamB })
   const { lastEventIdInPeriod: lastA, lastEventId: lastGameA } = periodEndMap(scoringEvents)
   const { lastEventIdInPeriod: lastB, lastEventId: lastGameB } = periodEndMap(opponentScoringEvents)
 
-  const blockCount = Math.max(1, Math.ceil(maxScore / LADDER_BLOCK_SIZE))
+  // JBA公式シート(109.jpg)と同様、1-40/41-80/81-120/121-160の4ブロックを
+  // 実際の得点に関わらず常に固定で表示する(得点が低い試合でも121-160の
+  // ブロックを空欄のまま残す)。得点に応じて列数・ブロック数を最適化する
+  // ことが目的ではなく、常に同じ固定帳票として枠いっぱいに配置することが
+  // 目的なため、下限を4ブロックに固定している。160点を超えた場合のみ、
+  // 161点以降の追加ブロックが自然な改ページで継続される。
+  const blockCount = Math.max(4, Math.ceil(maxScore / LADDER_BLOCK_SIZE))
   const blockStarts = Array.from({ length: blockCount }, (_, b) => b * LADDER_BLOCK_SIZE + 1)
 
   return (
     <div className="ssp-card">
       <div className="ssp-card-title">RUNNING SCORE</div>
-      {/* JBA公式シートに合わせ列数の基準は4列だが、ブロック数がそれ未満の
-          (=よくある)場合は実際のブロック数ぶんの列数にして、枠の横幅を
-          隙間なく使う(4列固定のままだと3ブロックの時に右側の1列ぶんが
-          空いたままになってしまうため)。5ブロック以上は4列のまま折り返す。 */}
+      {/* 4ブロック固定のため、通常は常に4列グリッドで枠の横幅を隙間なく使う。
+          160点を超えて5ブロック以上になった場合だけ4列のまま折り返す。 */}
       <div className="ssp-ladder-grid" style={{ gridTemplateColumns: `repeat(${Math.min(blockCount, 4)}, 1fr)` }}>
         {blockStarts.map((start) => (
           <table key={start} className="ssp-ladder-table">
