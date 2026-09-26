@@ -7,7 +7,6 @@ import { useGameStats } from '@/hooks/useGameStats'
 import { useGameLineups } from '@/hooks/useGameLineups'
 import { useOpponentScoreEvents } from '@/hooks/useOpponentScoreEvents'
 import { STAT_CATEGORIES, STAT_KEY_LABEL, quarterOptions, formatClock, formatQuarter } from '@/lib/stats'
-import { isTeamInTestGroup } from '@/lib/testTeamConfig'
 import { snapToZoneCategory } from '@/lib/hotZones'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -193,10 +192,6 @@ const EMPTY_STATS = {
 export function GameDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  // タイマー自動停止・±時間調整ボタンは、Tokyo Comets(検証チーム)で先行検証してから
-  // 他チームへ展開する(スコアシート機能と同じ仕組みを再利用)。横スクロール修正は
-  // 全チームで発生する不具合だったため、チーム判定と切り離して常時適用にしている。
-  const isTestTeam = isTeamInTestGroup(teamId)
   const { players, addPlayer } = usePlayers(teamId)
   const { games, updateGame, deleteGame, refresh: refreshGames } = useGames(teamId)
   const game = games.find((g) => g.id === id)
@@ -247,10 +242,10 @@ export function GameDetail({ teamId }) {
     if (!clockRunning) return
     const timer = setInterval(() => {
       setSecondsLeft((s) => {
-        // Tokyo Comets(検証チーム)限定: 0に到達したら自動停止し、これ以上
-        // 出場時間を加算しない。念のため既に0の状態でtickが来た場合も同様に扱う
-        // (二重にsetClockRunning(false)を呼んでも副作用は無い)。
-        if (isTestTeam && s <= 0) {
+        // 0に到達したら自動停止し、これ以上出場時間を加算しない。念のため
+        // 既に0の状態でtickが来た場合も同様に扱う(二重にsetClockRunning(false)を
+        // 呼んでも副作用は無い)。
+        if (s <= 0) {
           setClockRunning(false)
           return 0
         }
@@ -262,7 +257,7 @@ export function GameDetail({ teamId }) {
           pendingSecondsRef.current = 0
           incrementSeconds(delta)
         }
-        if (isTestTeam && next === 0) {
+        if (next === 0) {
           setClockRunning(false)
         }
         return next
@@ -276,7 +271,7 @@ export function GameDetail({ teamId }) {
         incrementSeconds(delta)
       }
     }
-  }, [clockRunning, incrementSeconds, isTestTeam])
+  }, [clockRunning, incrementSeconds])
 
   const onCourtIds = useMemo(() => new Set(lineups.filter((l) => l.on_court).map((l) => l.player_id)), [lineups])
   const lineupByPlayer = useMemo(() => new Map(lineups.map((l) => [l.player_id, l])), [lineups])
@@ -535,11 +530,6 @@ export function GameDetail({ teamId }) {
         )}
 
         <div className="flex items-center justify-center gap-3">
-          {!isTestTeam && (
-            <Button variant="outline" size="icon-sm" onClick={() => adjustClock(-1)}>
-              <Minus className="size-3.5" />
-            </Button>
-          )}
           <button onClick={toggleClock} aria-label={clockRunning ? '一時停止' : '開始'} className="shrink-0">
             {clockRunning ? <Pause className="size-5 text-primary" /> : <Play className="size-5 text-primary" />}
           </button>
@@ -552,28 +542,21 @@ export function GameDetail({ teamId }) {
           >
             {formatClock(secondsLeft)}
           </button>
-          {!isTestTeam && (
-            <Button variant="outline" size="icon-sm" onClick={() => adjustClock(1)}>
-              <Plus className="size-3.5" />
-            </Button>
-          )}
         </div>
 
-        {isTestTeam && (
-          <div className="flex items-center justify-center gap-1.5">
-            {[-10, -5, -1, 1, 5, 10].map((delta) => (
-              <Button
-                key={delta}
-                variant="outline"
-                size="sm"
-                className="min-w-11 tabular-nums"
-                onClick={() => adjustClock(delta)}
-              >
-                {delta > 0 ? `+${delta}` : delta}
-              </Button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center justify-center gap-1.5">
+          {[-10, -5, -1, 1, 5, 10].map((delta) => (
+            <Button
+              key={delta}
+              variant="outline"
+              size="sm"
+              className="min-w-11 tabular-nums"
+              onClick={() => adjustClock(delta)}
+            >
+              {delta > 0 ? `+${delta}` : delta}
+            </Button>
+          ))}
+        </div>
 
         <TimePickerDialog
           open={timePickerOpen}
