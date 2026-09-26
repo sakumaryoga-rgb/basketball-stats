@@ -312,7 +312,7 @@ export function PlayerDetail({ teamId }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 max-w-full overflow-x-hidden overscroll-x-none">
       <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ChevronLeft className="size-4" />
         戻る

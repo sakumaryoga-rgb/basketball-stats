@@ -193,8 +193,9 @@ const EMPTY_STATS = {
 export function GameDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
-  // タイマー自動停止・±時間調整ボタン・横スクロール修正は、Tokyo Comets(検証チーム)で
-  // 先行検証してから他チームへ展開する(スコアシート機能と同じ仕組みを再利用)。
+  // タイマー自動停止・±時間調整ボタンは、Tokyo Comets(検証チーム)で先行検証してから
+  // 他チームへ展開する(スコアシート機能と同じ仕組みを再利用)。横スクロール修正は
+  // 全チームで発生する不具合だったため、チーム判定と切り離して常時適用にしている。
   const isTestTeam = isTeamInTestGroup(teamId)
   const { players, addPlayer } = usePlayers(teamId)
   const { games, updateGame, deleteGame, refresh: refreshGames } = useGames(teamId)
@@ -500,7 +501,7 @@ export function GameDetail({ teamId }) {
   }
 
   return (
-    <div className={cn('flex flex-col gap-4', isTestTeam && 'max-w-full overflow-x-hidden overscroll-x-none')}>
+    <div className="flex flex-col gap-4 max-w-full overflow-x-hidden overscroll-x-none">
       <button onClick={() => navigate(listPath)} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ChevronLeft className="size-4" />
         {game.game_type === 'official' ? '試合一覧' : 'PRACTICE一覧'}
