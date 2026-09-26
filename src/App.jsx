@@ -36,8 +36,8 @@ function FullScreenLoader() {
 // 通常のバンドルには含めずlazyで分割する(/adminを開いた時だけ読み込む)。
 const AdminDashboard = lazy(() => import('@/routes/AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
 
-// ScoreSheetは印刷専用CSS(@media print)を含み、現状は一部チームのみの検証機能
-// (scoreSheetConfig.js参照)のため、通常バンドルには含めずlazyで分割する。
+// ScoreSheetは印刷専用CSS(@media print)を含み、スコアシートを開いた時だけ
+// 必要な機能のため、通常バンドルには含めずlazyで分割する。
 const ScoreSheet = lazy(() => import('@/routes/ScoreSheet').then((m) => ({ default: m.ScoreSheet })))
 
 // 運営者専用の/adminは、匿名認証・チームセッション(useSession/useTeams)を一切使わない

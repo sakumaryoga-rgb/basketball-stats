@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, Printer } from 'lucide-react'
 import { buildScoreSheetViewModel, ScoreSheetAccessError } from '@/lib/scoreSheet/buildScoreSheetViewModel'
-import { isTeamInTestGroup } from '@/lib/testTeamConfig'
 import {
   formatQuarterHeader,
   FOUL_BOX_COUNT,
@@ -20,8 +19,8 @@ import './ScoreSheet.css'
 
 // 運営者・チーム関係者向けの試合スコアシート(JBA/FIBAの記録形式、および実際に
 // 現場で使われている非公式スコアシート様式を参考にしたBASKETBALL STATS独自の
-// デジタル帳票)。閲覧のみ(Read Only)。現状はTokyo Comets(検証チーム)限定で
-// 有効化している(testTeamConfig.js参照)。
+// デジタル帳票)。閲覧のみ(Read Only)。Tokyo Comets限定のテスト運用を経て、
+// 全チームで利用可能にしている。
 //
 // 画面表示(このファイル)と印刷/PDF出力(ScoreSheetPrint.jsx)は、同じ
 // ScoreSheetViewModelを使う完全に別々のコンポーネント・CSSに分離している。
@@ -277,7 +276,7 @@ function TeamSection({ team, label, game }) {
 export function ScoreSheet() {
   const { gameId } = useParams()
   const navigate = useNavigate()
-  const [status, setStatus] = useState('loading') // loading | ready | not-found | disabled | error
+  const [status, setStatus] = useState('loading') // loading | ready | not-found | unsupported-game-type | error
   const [vm, setVm] = useState(null)
   // window.print()は「印刷 / PDF保存」ボタンのクリック(=ユーザー操作)からのみ呼び出す。
   // useEffect・route遷移・タイマー・クエリパラメータ等から自動実行することは無い。
@@ -327,10 +326,6 @@ export function ScoreSheet() {
           setStatus('unsupported-game-type')
           return
         }
-        if (!isTeamInTestGroup(result.teamA.teamId)) {
-          setStatus('disabled')
-          return
-        }
         setVm(result)
         setStatus('ready')
       })
@@ -361,16 +356,6 @@ export function ScoreSheet() {
     return (
       <div className="scoresheet-page flex min-h-svh flex-col items-center justify-center gap-3 text-center px-4">
         <p className="text-muted-foreground">シューティング記録にはスコアシート機能は対応していません。</p>
-        <Button variant="outline" onClick={() => navigate(-1)}>
-          戻る
-        </Button>
-      </div>
-    )
-  }
-  if (status === 'disabled') {
-    return (
-      <div className="scoresheet-page flex min-h-svh flex-col items-center justify-center gap-3 text-center px-4">
-        <p className="text-muted-foreground">この機能は現在テスト運用中のため、一部チームのみご利用いただけます。</p>
         <Button variant="outline" onClick={() => navigate(-1)}>
           戻る
         </Button>

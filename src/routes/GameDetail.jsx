@@ -661,7 +661,7 @@ export function GameDetail({ teamId }) {
           <Button variant="ghost" className="text-destructive" onClick={() => setConfirmDelete(true)}>削除</Button>
         </div>
 
-        {game.game_type !== 'shooting' && isTeamInTestGroup(game.team_id) && (
+        {game.game_type !== 'shooting' && (
           <Button variant="outline" className="w-full" render={<Link to={`/scoresheet/${game.id}`} />}>
             <FileText className="size-4" />
             スコアシートを表示
