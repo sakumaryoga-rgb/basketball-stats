@@ -38,6 +38,20 @@
     display: none !important;
   }
 
+  /* 重要: index.cssがhtml/body/#rootにheight:100%を指定している(モバイルの
+     アプリシェル用)。これを印刷時にも引き継いだままだと、Chromiumの実際の
+     PDF生成(page.pdf())ではheight:100%が「1ページぶんの高さで固定」される
+     挙動になり、2ページ目に送られるはずのbreak-before:page指定の内容が
+     ページとして生成されず、そのまま切り落とされてしまう(自然な改ページで
+     内容量が1ページを超えた場合も同様)。@media print内だけこの高さ指定を
+     解除し、内容量に応じて何ページでも自然に生成されるようにする。 */
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
   .ssp-root {
     display: block;
     box-sizing: border-box;
@@ -422,5 +436,20 @@
     flex-direction: column;
     gap: 2pt;
     font-size: 7pt;
+  }
+
+  /* 13人目以降の継続ページ。1ページ目のOFFICIALSまでの内容がどれだけ余白を
+     残していても、常に新しいページから開始する(自然な流し込みに任せない)。 */
+  .ssp-page2 {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .ssp-header-continued {
+    margin-bottom: 6pt;
+  }
+
+  .ssp-header-continued .ssp-title {
+    font-size: 10pt;
   }
 }

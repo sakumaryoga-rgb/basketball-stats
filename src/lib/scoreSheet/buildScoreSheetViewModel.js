@@ -203,8 +203,14 @@ export async function buildScoreSheetViewModel(gameId) {
     opponentPointsByQuarter.set(e.quarter, (opponentPointsByQuarter.get(e.quarter) ?? 0) + pts)
   }
 
-  // --- 選手一覧(自チームのみ。相手チームは選手名簿がDBに存在しない) ---
-  const players = gamePlayers.map((p) => {
+  // --- 選手一覧(自チームのみ。相手チームは選手名簿がDBに存在しない)。
+  // 「チームに所属する全選手」ではなく「この試合に出場した選手」のみを対象にする。
+  // boxByPlayerはplayer_game_stats/player_practice_game_statsビュー由来で、
+  // stat_eventsがある、または出場時間(seconds_played)が1秒でもある選手のみ行を持つ
+  // (migrations/030_appeared_players_stats.sql参照。GameDetail.jsxのrows算出と同じ判定)。
+  // gamePlayers自体はチーム全所属選手+この試合限定のゲストなので、フィルタせずに
+  // 使うと出場していないベンチ外の選手までスコアシートに載ってしまう。
+  const players = gamePlayers.filter((p) => boxByPlayer.has(p.id)).map((p) => {
     const quarterFoulMap = playerFoulsByQuarterByPlayer.get(p.id) ?? new Map()
     const foulsByPeriod = []
     for (let q = 1; q <= lastPeriod; q++) foulsByPeriod.push({ period: q, count: quarterFoulMap.get(q) ?? 0 })

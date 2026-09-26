@@ -1,10 +1,11 @@
 import {
   formatQuarterHeader,
   FOUL_BOX_COUNT,
-  MIN_BLANK_ROSTER_ROWS,
+  PRINT_ROSTER_ROW_COUNT,
   LADDER_BLOCK_SIZE,
   groupPeriodsForFoulGrid,
   periodEndMap,
+  buildRosterPageRows,
 } from '@/lib/scoreSheet/scoreSheetLayout'
 import { formatDate } from '@/lib/format'
 import './ScoreSheetPrint.css'
@@ -93,8 +94,7 @@ function SspFoulsGrid({ team, lastPeriod, periodSystem }) {
   )
 }
 
-function SspRosterTable({ team, periodSystem, blankRowCount }) {
-  const rows = team.players.length > 0 ? team.players : Array.from({ length: Math.max(blankRowCount, MIN_BLANK_ROSTER_ROWS) })
+function SspRosterTable({ rows, startIndex, periodSystem }) {
   return (
     <table className="ssp-roster-table">
       <colgroup>
@@ -128,8 +128,8 @@ function SspRosterTable({ team, periodSystem, blankRowCount }) {
       </thead>
       <tbody>
         {rows.map((p, i) => (
-          <tr key={p?.id ?? i}>
-            <td>{i + 1}</td>
+          <tr key={p?.id ?? `blank-${startIndex + i}`}>
+            <td>{startIndex + i + 1}</td>
             <td className="ssp-col-name-align">
               {p ? (
                 <>
@@ -169,6 +169,9 @@ function SspCoachRow({ team }) {
 }
 
 function SspTeamSection({ team, label, game }) {
+  // 1ページ目は常にPRINT_ROSTER_ROW_COUNT(12)行固定。出場人数が12人を超える分
+  // (13人目以降)はこのページには含めず、2ページ目(SspOverflowSection)に回す。
+  const page1Rows = buildRosterPageRows(team.players.slice(0, PRINT_ROSTER_ROW_COUNT), PRINT_ROSTER_ROW_COUNT)
   return (
     <div className="ssp-card">
       <div className="ssp-card-title">
@@ -178,8 +181,23 @@ function SspTeamSection({ team, label, game }) {
         <SspTimeoutsLine team={team} />
         <SspFoulsGrid team={team} lastPeriod={game.lastPeriod} periodSystem={game.periodSystem} />
       </div>
-      <SspRosterTable team={team} periodSystem={game.periodSystem} blankRowCount={game.teamAPlayerCount} />
+      <SspRosterTable rows={page1Rows} startIndex={0} periodSystem={game.periodSystem} />
       <SspCoachRow team={team} />
+    </div>
+  )
+}
+
+// 13人目以降の出場者を継続表示する2ページ目のセクション。出場人数が12人以下の
+// チームは対象外(呼び出し側でnullを返して非表示にする)。
+function SspOverflowSection({ team, label, game }) {
+  const overflowPlayers = team.players.slice(PRINT_ROSTER_ROW_COUNT)
+  if (overflowPlayers.length === 0) return null
+  return (
+    <div className="ssp-card">
+      <div className="ssp-card-title">
+        {label} — {team.name}(13人目以降)
+      </div>
+      <SspRosterTable rows={overflowPlayers} startIndex={PRINT_ROSTER_ROW_COUNT} periodSystem={game.periodSystem} />
     </div>
   )
 }
@@ -286,7 +304,11 @@ function SspScoreCard({ vm }) {
 export function ScoreSheetPrint({ vm }) {
   if (!vm) return null
   const { game, teamA, teamB, scoringEvents, opponentScoringEvents, officials } = vm
-  const gameWithRosterCount = { ...game, teamAPlayerCount: teamA.players.length }
+  // 出場人数がTeam A/Bどちらか一方でも12人を超える場合のみ、13人目以降をまとめた
+  // 2ページ目を生成する(超過が無い場合は2ページ目自体を作らない)。
+  const overflowA = teamA.players.length > PRINT_ROSTER_ROW_COUNT
+  const overflowB = teamB.players.length > PRINT_ROSTER_ROW_COUNT
+  const hasOverflow = overflowA || overflowB
 
   return (
     <div className="ssp-root">
@@ -334,8 +356,8 @@ export function ScoreSheetPrint({ vm }) {
 
       <div className="ssp-grid">
         <div className="ssp-grid-left">
-          <SspTeamSection team={teamA} label="TEAM A" game={gameWithRosterCount} />
-          <SspTeamSection team={teamB} label="TEAM B" game={gameWithRosterCount} />
+          <SspTeamSection team={teamA} label="TEAM A" game={game} />
+          <SspTeamSection team={teamB} label="TEAM B" game={game} />
         </div>
         <div className="ssp-grid-right">
           <SspRunningScore scoringEvents={scoringEvents} opponentScoringEvents={opponentScoringEvents} teamA={teamA} teamB={teamB} />
@@ -360,6 +382,23 @@ export function ScoreSheetPrint({ vm }) {
           </SspField>
         </div>
       </div>
+
+      {hasOverflow && (
+        <div className="ssp-page2">
+          <div className="ssp-header ssp-header-continued">
+            <div className="ssp-brand">
+              <img src="/icons/icon-512.png" alt="" className="ssp-logo" />
+              <span className="ssp-brand-name">BASKETBALL STATS</span>
+            </div>
+            <div className="ssp-doctype">GAME SCORESHEET CONTINUED</div>
+            <h1 className="ssp-title">
+              {teamA.name} vs {teamB.name}
+            </h1>
+          </div>
+          {overflowA && <SspOverflowSection team={teamA} label="TEAM A" game={game} />}
+          {overflowB && <SspOverflowSection team={teamB} label="TEAM B" game={game} />}
+        </div>
+      )}
     </div>
   )
 }

@@ -82,7 +82,9 @@
  * @property {string|null} teamId - 自チームはteams.id。相手チームは選手管理が無いためnull
  * @property {string} name
  * @property {boolean} isSelf - 自チーム(home)かどうか
- * @property {ScoreSheetPlayer[]} players - 相手チームは常に空配列(NOT_RECORDED。相手の選手名簿はDBに存在しない)
+ * @property {ScoreSheetPlayer[]} players - この試合に出場した選手のみ(チーム全体の所属人数ではない。
+ *   boxByPlayer=player_game_stats/player_practice_game_statsビューに行がある選手=stat_eventsがある、
+ *   または出場時間が1秒でもある選手)。相手チームは常に空配列(NOT_RECORDED。相手の選手名簿はDBに存在しない)
  * @property {string|null} coach - 常にnull(NOT_RECORDED。コーチ氏名を入力する仕組みがアプリに無い)
  * @property {string|null} assistantCoach - 常にnull(NOT_RECORDED)
  * @property {number} timeoutsRemaining - games.home/away_timeouts_remaining(最終時点の残数)

@@ -15,7 +15,23 @@ export const FOUL_BOX_COUNT = 5
 
 // 相手チームの選手名簿はBASKETBALL STATSで管理していないため、自チームの人数に
 // 合わせた空欄の行を用意し、手書きで記入できるようにする際の最低行数
+// (画面表示用ScoreSheet.jsxのみで使用)
 export const MIN_BLANK_ROSTER_ROWS = 5
+
+// 印刷用スコアシート(ScoreSheetPrint.jsx)の1ページ目のTeam A/Bの選手表は、
+// 出場人数に関わらず常にこの行数で固定する(Team A/Bとも同じ行数にし、出場人数が
+// 少なくてもカードの高さを縮めない。これによりA4のレイアウトが出場人数によって
+// 上下に動かず、PC/モバイルどちらで出力しても1ページ目の帳票高さが一定になる)。
+// 出場人数がこれを超える場合は切り捨てず、13人目以降を2ページ目に継続表示する。
+export const PRINT_ROSTER_ROW_COUNT = 12
+
+// 選手表1ページぶんの行データを作る。playersがrowCount未満の場合は残りをnull
+// (空欄=手書き記入欄)で埋める。呼び出し側であらかじめ1ページぶんにslice済みの
+// playersを渡す想定(2ページ目の継続表示にはrowCountを渡さず、実人数のみ表示する)。
+export function buildRosterPageRows(players, rowCount) {
+  const count = Math.max(players.length, rowCount)
+  return Array.from({ length: count }, (_, i) => players[i] ?? null)
+}
 
 // RUNNING SCOREの1ブロックあたりの点数(1〜40, 41〜80, ...)
 export const LADDER_BLOCK_SIZE = 40
