@@ -160,6 +160,14 @@
   min-width: 2em;
 }
 
+/* タイムアウト・チームファウルの行。印刷時のみ横並びにして上下幅を節約する
+   (@media print参照)。画面表示では縦積みのまま(タップしやすさ優先)。 */
+.scoresheet-team-meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 /* 選手名簿テーブルのファウル欄(5マス)。種別コード(P/T/U/D)の代わりに
    発生クォーター番号を記入する */
 .scoresheet-foul-col-header {
@@ -238,16 +246,37 @@
     color: #000;
   }
 
+  /* 【最重要】画面幅(モバイル/PC)に関わらず印刷レイアウトを完全に同一にするための
+     核心の修正。widthをmm(物理単位)で固定することで、レイアウト計算の基準を
+     「その端末のビューポート幅」から「A4用紙の版面幅」に強制的に切り替える。
+     これをしないと、sm:/md:等のTailwindレスポンシブ指定がビューポート幅を基準に
+     評価されてしまい、モバイル端末から印刷した場合だけ画面表示相当の狭いレイアウト
+     (例: GAME INFORMATIONが2列のまま)になり、縦に間延びしてページ下部が
+     溢れる原因になっていた。194mm = A4(210mm) - 左右マージン(8mm×2)。 */
   .scoresheet-container {
-    max-width: none;
+    width: 194mm;
+    max-width: 194mm;
+    margin: 0;
     padding: 0;
     gap: 4pt;
     font-size: 8pt;
   }
 
+  /* sm:grid-cols-3 / sm:grid-cols-4 はビューポート幅で評価されるため、
+     モバイル端末からの印刷では効かないことがある。印刷時は列数を固定で強制する。 */
+  .scoresheet-info-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .scoresheet-officials-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+
+  /* 左(チーム情報、選手表が横に広い)と右(ランニングスコア、細い数字列の集合)で
+     必要な幅が異なるため、左をやや広く・右を狭く配分する(50/50ではなく60/40)。 */
   .scoresheet-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 3fr 2fr;
     align-items: start;
     gap: 4pt;
   }
@@ -257,12 +286,18 @@
     gap: 4pt;
   }
 
+  .scoresheet-team-meta-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8pt;
+  }
+
   .scoresheet-card {
     --card-spacing: 4pt;
     border: 0.75pt solid #000 !important;
     box-shadow: none !important;
     border-radius: 0 !important;
-    break-inside: avoid;
   }
 
   .scoresheet-card [data-slot='card-content'] {
@@ -289,10 +324,64 @@
     color: #000;
   }
 
+  /* カード自体は(13人分のロスター等で1ページを超える場合に備え)自然に
+     改ページできるようにするが、行の途中で割れるのは見た目が悪いため行単位では
+     break-inside: avoidにする(1ページに収まる通常ケースでは見た目に影響しない)。 */
+  .scoresheet-table tr {
+    break-inside: avoid;
+  }
+
   .scoresheet-table thead th {
     background: #eee !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* Licence No.列を廃止して空いた幅を選手氏名・背番号・STARTER・ファウルへ
+     再配分する(table-layout: fixedで端末に依存しない一定の列幅にする)。
+     選手氏名だけはnowrapを解除し、長い名前でも省略せず折り返して表示する。 */
+  .scoresheet-roster-table {
+    table-layout: fixed;
+  }
+
+  .scoresheet-roster-table th:nth-child(1),
+  .scoresheet-roster-table td:nth-child(1) {
+    width: 5%;
+  }
+
+  .scoresheet-roster-table th:nth-child(2),
+  .scoresheet-roster-table td:nth-child(2) {
+    width: 41%;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .scoresheet-roster-table th:nth-child(3),
+  .scoresheet-roster-table td:nth-child(3) {
+    width: 7%;
+  }
+
+  .scoresheet-roster-table th:nth-child(4),
+  .scoresheet-roster-table td:nth-child(4) {
+    width: 9%;
+  }
+
+  .scoresheet-roster-table th:nth-child(5),
+  .scoresheet-roster-table td:nth-child(5),
+  .scoresheet-roster-table th:nth-child(6),
+  .scoresheet-roster-table td:nth-child(6),
+  .scoresheet-roster-table th:nth-child(7),
+  .scoresheet-roster-table td:nth-child(7),
+  .scoresheet-roster-table th:nth-child(8),
+  .scoresheet-roster-table td:nth-child(8),
+  .scoresheet-roster-table th:nth-child(9),
+  .scoresheet-roster-table td:nth-child(9) {
+    width: 6%;
+  }
+
+  .scoresheet-roster-table th:nth-child(10),
+  .scoresheet-roster-table td:nth-child(10) {
+    width: 8%;
   }
 
   .scoresheet-blank {
@@ -307,8 +396,16 @@
   .scoresheet-ladder-table th,
   .scoresheet-ladder-table td {
     border-color: #000;
-    padding: 0.3pt 1.5pt;
+    padding: 0.3pt 1pt;
     color: #000;
+  }
+
+  /* 右カラム(40%幅)に収まるよう、値・A・B列とも最小幅を切り詰める
+     (画面表示用のmin-width: 2emは残したまま印刷時だけ上書きする)。 */
+  .scoresheet-ladder-value,
+  .scoresheet-ladder-a,
+  .scoresheet-ladder-b {
+    min-width: 1.2em;
   }
 
   .scoresheet-ladder-table thead th {
@@ -318,7 +415,7 @@
   }
 
   .scoresheet-ladder-grid {
-    gap: 3pt;
+    gap: 2pt;
   }
 
   .scoresheet-box {

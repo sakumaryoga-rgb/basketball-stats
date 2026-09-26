@@ -132,7 +132,6 @@ function TeamRosterTable({ team, periodSystem, blankRowCount }) {
         <thead>
           <tr>
             <th>No.</th>
-            <th>License</th>
             <th>選手氏名</th>
             <th>#</th>
             <th>STARTER</th>
@@ -140,7 +139,7 @@ function TeamRosterTable({ team, periodSystem, blankRowCount }) {
             <th>PTS</th>
           </tr>
           <tr>
-            <th colSpan={5}></th>
+            <th colSpan={4}></th>
             {Array.from({ length: FOUL_BOX_COUNT }, (_, i) => (
               <th key={i} className="scoresheet-foul-col-header">
                 {i + 1}
@@ -153,9 +152,6 @@ function TeamRosterTable({ team, periodSystem, blankRowCount }) {
           {rows.map((p, i) => (
             <tr key={p?.id ?? i}>
               <td className="tabular-nums">{i + 1}</td>
-              <td>
-                <Blank value={null} minWidth="3em" />
-              </td>
               <td>
                 {p ? (
                   <>
@@ -286,8 +282,10 @@ function ScoreTable({ vm }) {
 function TeamSection({ team, label, game }) {
   return (
     <Section title={`${label} — ${team.name}`}>
-      <TeamTimeoutsLine team={team} />
-      <TeamFoulsGrid team={team} lastPeriod={game.lastPeriod} periodSystem={game.periodSystem} />
+      <div className="scoresheet-team-meta-row">
+        <TeamTimeoutsLine team={team} />
+        <TeamFoulsGrid team={team} lastPeriod={game.lastPeriod} periodSystem={game.periodSystem} />
+      </div>
       <TeamRosterTable team={team} periodSystem={game.periodSystem} blankRowCount={game.teamAPlayerCount} />
       <TeamCoachLine team={team} />
     </Section>
@@ -400,7 +398,7 @@ export function ScoreSheet() {
         </div>
 
         <Section title="GAME INFORMATION">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+          <div className="scoresheet-info-grid grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
             <div>
               <div className="text-xs text-muted-foreground">Competition</div>
               <div>
@@ -506,7 +504,7 @@ export function ScoreSheet() {
         </div>
 
         <Section title="OFFICIALS">
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+          <div className="scoresheet-officials-grid grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
             {[
               ['スコアラー', officials.scorer],
               ['Aスコアラー', officials.assistantScorer],
