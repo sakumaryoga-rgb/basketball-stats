@@ -288,10 +288,15 @@ export function ScoreSheet() {
   // ボタンが永久に押せなくなることは無いようにする。
   const printingRef = useRef(false)
   const printingFallbackTimeoutRef = useRef(null)
+  // ブラウザの「PDFに保存」は既定でdocument.titleをファイル名候補にするため、
+  // 印刷直前だけ「vs対戦相手名_試合日」に変更し、印刷完了後に元のタイトル
+  // (アプリ起動時のもの)へ戻す。
+  const originalTitleRef = useRef(document.title)
 
   useEffect(() => {
     function handleAfterPrint() {
       printingRef.current = false
+      document.title = originalTitleRef.current
       if (printingFallbackTimeoutRef.current) {
         clearTimeout(printingFallbackTimeoutRef.current)
         printingFallbackTimeoutRef.current = null
@@ -301,17 +306,24 @@ export function ScoreSheet() {
     return () => {
       window.removeEventListener('afterprint', handleAfterPrint)
       if (printingFallbackTimeoutRef.current) clearTimeout(printingFallbackTimeoutRef.current)
+      // 印刷ダイアログが開いたまま画面を離れた場合でも、タイトルを変更したままに
+      // しない(戻る操作等でこのコンポーネント自体がアンマウントされるケース)
+      document.title = originalTitleRef.current
     }
   }, [])
 
   const handlePrintClick = () => {
-    if (printingRef.current) return
+    if (printingRef.current || !vm) return
     printingRef.current = true
+    // ファイル名として使えない記号(/ \ : * ? " < > |)は除去する
+    const opponent = (vm.teamB.name || '').replace(/[\\/:*?"<>|]/g, '').trim()
+    document.title = `vs${opponent}_${vm.game.date}`
     window.print()
     // afterprintがどうしても発火しない環境へのフォールバックのみ。
     // afterprintが先に発火した場合はこのタイマー自体をクリアする。
     printingFallbackTimeoutRef.current = setTimeout(() => {
       printingRef.current = false
+      document.title = originalTitleRef.current
       printingFallbackTimeoutRef.current = null
     }, 10000)
   }
