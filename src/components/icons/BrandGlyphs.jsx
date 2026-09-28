@@ -26,7 +26,7 @@ export function ThreadsGlyphIcon(props) {
   // なぞる代わりに@マークで簡略化している(noteの"n"と同じ文字ベースの方式)。
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <text x="12" y="17.5" textAnchor="middle" fontSize="15" fontWeight="700">
+      <text x="12" y="18.5" textAnchor="middle" fontSize="22" fontWeight="700">
         @
       </text>
     </svg>
@@ -36,7 +36,7 @@ export function ThreadsGlyphIcon(props) {
 export function NoteGlyphIcon(props) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <text x="12" y="17.5" textAnchor="middle" fontSize="15" fontWeight="700" fontFamily="Georgia, serif">
+      <text x="12" y="18" textAnchor="middle" fontSize="21" fontWeight="700" fontFamily="Georgia, serif">
         n
       </text>
     </svg>
