@@ -1,9 +1,11 @@
 import { useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu, Megaphone, HelpCircle, Mail, Shield, FileText, Info, Link2, ChevronRight, RefreshCw, BadgeCheck } from 'lucide-react'
+import { Menu, Megaphone, HelpCircle, Mail, Shield, FileText, Info, Link2, ChevronRight, ChevronDown, RefreshCw, BadgeCheck } from 'lucide-react'
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { RelatedSitesList } from '@/components/RelatedSitesList'
 import { APP_VERSION } from '@/lib/appVersion'
 import { applyUpdate, getState, subscribe } from '@/lib/swUpdate'
 
@@ -39,6 +41,25 @@ function MenuLink({ icon: Icon, label, to, href }) {
     <SheetClose render={<Link to={to} className={className} />}>
       {content}
     </SheetClose>
+  )
+}
+
+// ハンバーガーメニュー内でその場に展開・折りたたみできる「関連サイト」。
+// リンク情報自体(relatedSites.js)と一覧表示(RelatedSitesList)は将来の
+// 専用ページでも再利用できるよう切り出してあり、ここではメニュー内での
+// 開閉トグルの見た目だけを担当する。
+function RelatedSitesMenuItem() {
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className="group flex w-full items-center gap-3 rounded-lg px-4 py-3 hover:bg-muted">
+        <Link2 className="size-4 shrink-0" />
+        <span className="flex-1 text-sm text-left">関連サイト</span>
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-panel-open:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <RelatedSitesList className="pt-0.5 pb-1" />
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -97,7 +118,7 @@ export function HamburgerMenu() {
           <MenuLink icon={Shield} label="プライバシーポリシー" to="/privacy-policy" />
           <MenuLink icon={FileText} label="利用規約" to="/terms" />
           <MenuLink icon={Info} label="運用元情報" to="/operator" />
-          <ComingSoonItem icon={Link2} label="関連サイト" />
+          <RelatedSitesMenuItem />
         </nav>
         <VersionFooter />
       </SheetContent>

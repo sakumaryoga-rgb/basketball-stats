@@ -26,7 +26,7 @@ export function OperatorInfo() {
 
       <div className="rounded-lg border px-4">
         <Row label="サービス名">BASKETBALL STATS(バスケスタッツ)</Row>
-        <Row label="運営者">個人開発</Row>
+        <Row label="運営者">個人開発(ryogasakuma)</Row>
         <Row label="お問い合わせ">
           <a href={`mailto:${CONTACT_EMAIL}`} className="text-primary hover:underline">
             {CONTACT_EMAIL}
