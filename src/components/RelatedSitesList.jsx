@@ -1,14 +1,17 @@
-import { BookOpen, MessageCircle, AtSign, ExternalLink } from "lucide-react"
+import { ExternalLink } from "lucide-react"
+import { XGlyphIcon, ThreadsGlyphIcon, NoteGlyphIcon } from "@/components/icons/BrandGlyphs"
 import { RELATED_SITES } from "@/lib/relatedSites"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 // キー→アイコンの対応。アイコンは表示上の関心事のためデータ(relatedSites.js)
-// ではなくここで管理する(URLだけを差し替えられる状態を保つため)。
+// ではなくここで管理する(URLだけを差し替えられる状態を保つため)。各社の
+// 公式ロゴをそのまま複製せず、簡略化(デフォルメ)した独自マークを使っている
+// (BrandGlyphs.jsx参照)。
 const ICON_BY_KEY = {
-  "note-guide": BookOpen,
-  threads: MessageCircle,
-  x: AtSign,
+  "note-guide": NoteGlyphIcon,
+  threads: ThreadsGlyphIcon,
+  x: XGlyphIcon,
 }
 
 // ハンバーガーメニューのトグル展開・将来の専用ページの両方から使い回せる、

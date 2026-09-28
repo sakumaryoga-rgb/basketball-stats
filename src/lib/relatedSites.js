@@ -1,22 +1,22 @@
 // ハンバーガーメニュー内「関連サイト」に表示する外部リンクの一覧。
-// 現時点ではURLが未確定のため空文字のままにしている。存在しないURLを
-// 推測して埋めることはせず、運営者が確定した時点でここのurlだけを
-// 書き換えれば、ハンバーガーメニュー・将来の専用ページの両方に反映される
-// (UIコンポーネント側にリンク先をベタ書きしない)。
+// URLはUIコンポーネント側にベタ書きせず、ここに集約している(将来
+// 差し替える場合もこのファイルのurlを書き換えるだけでよい)。
+// 各URLは運営者から共有された共有リンクから、SNS共有用のトラッキング
+// クエリパラメータ(?sub_rt=, ?igshid=, ?s=&t= 等)を取り除いた正規URL。
 export const RELATED_SITES = [
   {
     key: "note-guide",
     label: "note「使い方完全ガイド」",
-    url: "",
+    url: "https://note.com/whatisthematrix/n/na27258f50f58",
   },
   {
     key: "threads",
     label: "Threads公式アカウント",
-    url: "",
+    url: "https://www.threads.com/@basketballstats.app",
   },
   {
     key: "x",
     label: "X公式アカウント",
-    url: "",
+    url: "https://x.com/bballstasapp",
   },
 ]
