@@ -81,11 +81,13 @@ export function usePracticeStats(teamId, playerId) {
   const practiceTotals = practiceGames.reduce(
     (acc, row) => ({
       fgm: acc.fgm + row.fgm, fga: acc.fga + row.fga, tpm: acc.tpm + row.tpm, tpa: acc.tpa + row.tpa,
+      ftm: acc.ftm + row.ftm, fta: acc.fta + row.fta,
     }),
-    { ...EMPTY_TOTALS }
+    { ...EMPTY_TOTALS, ftm: 0, fta: 0 }
   )
   practiceTotals.fgPct = pct(practiceTotals.fgm, practiceTotals.fga)
   practiceTotals.tpPct = pct(practiceTotals.tpm, practiceTotals.tpa)
+  practiceTotals.ftPct = pct(practiceTotals.ftm, practiceTotals.fta)
 
   const shootingTotals = shootingTallies.reduce(
     (acc, t) => {
@@ -107,9 +109,14 @@ export function usePracticeStats(teamId, playerId) {
     fga: practiceTotals.fga + shootingTotals.fga,
     tpm: practiceTotals.tpm + shootingTotals.tpm,
     tpa: practiceTotals.tpa + shootingTotals.tpa,
+    // シューティング(shooting_entries)はゾーン単位のタリーのみでフリースロー
+    // 概念自体を持たないため、FTはスクリメージ側のみが寄与する
+    ftm: practiceTotals.ftm,
+    fta: practiceTotals.fta,
   }
   summary.fgPct = pct(summary.fgm, summary.fga)
   summary.tpPct = pct(summary.tpm, summary.tpa)
+  summary.ftPct = pct(summary.ftm, summary.fta)
 
   const scrimmageHotZones = aggregateHotZones(practiceShots)
   const shootingHotZones = aggregateHotZonesFromTallies(shootingTallies)

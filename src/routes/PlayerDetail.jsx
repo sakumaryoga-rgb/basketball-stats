@@ -535,9 +535,14 @@ export function PlayerDetail({ teamId }) {
 
             <div className="rounded-lg border p-4">
               <p className="text-xs text-muted-foreground mb-3">シュート成功率 ・ {practiceSourceLabel}</p>
-              <div className="grid grid-cols-2 gap-y-4">
+              <div className={cn('grid gap-y-4', practiceSourceMode === 'shooting' ? 'grid-cols-2' : 'grid-cols-3')}>
                 <StatBlock label="FG%" value={formatPct(activePracticeSource.totals.fgPct)} />
                 <StatBlock label="3P%" value={formatPct(activePracticeSource.totals.tpPct)} />
+                {/* シューティング(shooting_entries)はゾーン単位のタリーのみでフリースロー
+                    概念自体を持たないため、FT%はスクリメージ・合計でのみ表示する */}
+                {practiceSourceMode !== 'shooting' && (
+                  <StatBlock label="FT%" value={formatPct(activePracticeSource.totals.ftPct)} />
+                )}
               </div>
             </div>
 
