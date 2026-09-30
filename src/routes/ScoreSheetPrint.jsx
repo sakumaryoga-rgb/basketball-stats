@@ -6,7 +6,7 @@ import {
   LADDER_BLOCK_SIZE,
   groupPeriodsForFoulGrid,
   periodEndMap,
-  ladderValueMarkType,
+  ladderMarkType,
   buildRosterPageRows,
 } from '@/lib/scoreSheet/scoreSheetLayout'
 import { formatDate } from '@/lib/format'
@@ -231,9 +231,8 @@ function SspRunningScore({ scoringEvents, opponentScoringEvents, teamA, teamB })
           <table key={start} className="ssp-ladder-table">
             <thead>
               <tr>
-                <th></th>
-                <th>A</th>
-                <th>B</th>
+                <th colSpan={2}>A</th>
+                <th colSpan={2}>B</th>
               </tr>
             </thead>
             <tbody>
@@ -241,16 +240,22 @@ function SspRunningScore({ scoringEvents, opponentScoringEvents, teamA, teamB })
                 const value = start + i
                 const eventA = eventByTotalA.get(value)
                 const eventB = eventByTotalB.get(value)
+                // クォーター終了時点/試合終了時点の区切り線は、得点者セル・累計点セルの
+                // 両方に同じクラスを適用する(その行の「A側」または「B側」全体を
+                // 太線/二重線で区切る)。
                 const cellClassA = eventA && eventA.id === lastGameA ? 'ssp-ladder-game-end' : eventA && lastA.get(eventA.period) === eventA.id ? 'ssp-ladder-period-end' : ''
                 const cellClassB = eventB && eventB.id === lastGameB ? 'ssp-ladder-game-end' : eventB && lastB.get(eventB.period) === eventB.id ? 'ssp-ladder-period-end' : ''
-                const markType = ladderValueMarkType(eventA, eventB)
-                const valueClass = markType ? `ssp-ladder-value ssp-ladder-value-${markType}` : 'ssp-ladder-value'
+                const markA = ladderMarkType(eventA)
+                const markB = ladderMarkType(eventB)
+                const valueClassA = ['ssp-ladder-value', markA && `ssp-ladder-value-${markA}`, cellClassA].filter(Boolean).join(' ')
+                const valueClassB = ['ssp-ladder-value', markB && `ssp-ladder-value-${markB}`, cellClassB].filter(Boolean).join(' ')
                 return (
                   <tr key={value}>
-                    <td className={valueClass}>{value}</td>
                     <td className={cellClassA}>{eventA ? <span className={sspShotClass(eventA.type)}>{eventA.playerLabel}</span> : ''}</td>
+                    <td className={valueClassA}>{value}</td>
+                    <td className={valueClassB}>{value}</td>
                     {/* 相手チームは選手番号を保持していないため(NOT_RECORDED)、
-                        推測で番号や記号を書き込まない。得点種別は左の累計点セルの
+                        推測で番号や記号を書き込まない。得点種別は隣の累計点セルの
                         マーク(斜線/黒丸塗り)で表現済み。 */}
                     <td className={cellClassB}></td>
                   </tr>

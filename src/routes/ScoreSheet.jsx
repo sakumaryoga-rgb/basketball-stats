@@ -9,7 +9,7 @@ import {
   LADDER_BLOCK_SIZE,
   groupPeriodsForFoulGrid,
   periodEndMap,
-  ladderValueMarkType,
+  ladderMarkType,
 } from '@/lib/scoreSheet/scoreSheetLayout'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -169,12 +169,13 @@ function TeamRosterTable({ team, periodSystem, blankRowCount }) {
   )
 }
 
-// RUNNING SCORE: 得点した選手の背番号を、あらかじめ1,2,3...と昇順に並んだマスへ
-// 書き込む形式。1ブロック40点分(A/B列)を1単位とし、両チームの到達点数に応じて
-// 必要なブロック数だけ表示する。JBA/FIBA公式の記法に合わせ、2P/3P成功は累計点
-// セル(左列)に斜線、FT成功は黒丸で塗って示す。自チーム(A)は得点イベントに
-// 選手の背番号が紐づくため、3P成功時のみ背番号を丸で囲む。相手チーム(B)は
-// 選手名簿を持たないため番号を記入せず、累計点セルのマークのみで示す。
+// RUNNING SCORE: A得点者|A累計得点|B累計得点|B得点者の4列構成(JBA/FIBA公式
+// スコアシートの様式)。Team A/Bそれぞれが独立した累計得点列を持ち、1ブロック
+// 40点分を1単位として両チームの到達点数に応じて必要なブロック数だけ表示する。
+// 2P/3P成功は自チームの累計得点セルに斜線、FT成功は黒丸で塗って示す。
+// 自チーム(A)は得点イベントに選手の背番号が紐づくため、3P成功時のみ背番号を
+// 丸で囲む。相手チーム(B)は選手名簿を持たないため番号を記入せず、累計得点
+// セルのマークのみで示す。
 function shotClass(type) {
   return type === '3PT' ? 'scoresheet-shot-3pt' : ''
 }
@@ -196,9 +197,8 @@ function RunningScoreBlocks({ scoringEvents, opponentScoringEvents, teamA, teamB
         <table key={start} className="scoresheet-ladder-table">
           <thead>
             <tr>
-              <th></th>
-              <th>A</th>
-              <th>B</th>
+              <th colSpan={2}>A</th>
+              <th colSpan={2}>B</th>
             </tr>
           </thead>
           <tbody>
@@ -206,20 +206,24 @@ function RunningScoreBlocks({ scoringEvents, opponentScoringEvents, teamA, teamB
               const value = start + i
               const eventA = eventByTotalA.get(value)
               const eventB = eventByTotalB.get(value)
+              // クォーター終了時点/試合終了時点の区切り線は、得点者セル・累計点セルの
+              // 両方に同じクラスを適用する(その行の「A側」または「B側」全体を
+              // 太線/二重線で区切る)。
               const cellClassA = eventA && eventA.id === lastGameA ? 'scoresheet-ladder-game-end' : eventA && lastA.get(eventA.period) === eventA.id ? 'scoresheet-ladder-period-end' : ''
               const cellClassB = eventB && eventB.id === lastGameB ? 'scoresheet-ladder-game-end' : eventB && lastB.get(eventB.period) === eventB.id ? 'scoresheet-ladder-period-end' : ''
-              const markType = ladderValueMarkType(eventA, eventB)
-              const valueClass = markType
-                ? `scoresheet-ladder-value tabular-nums scoresheet-ladder-value-${markType}`
-                : 'scoresheet-ladder-value tabular-nums'
+              const markA = ladderMarkType(eventA)
+              const markB = ladderMarkType(eventB)
+              const valueClassA = ['scoresheet-ladder-value', 'tabular-nums', markA && `scoresheet-ladder-value-${markA}`, cellClassA].filter(Boolean).join(' ')
+              const valueClassB = ['scoresheet-ladder-value', 'tabular-nums', markB && `scoresheet-ladder-value-${markB}`, cellClassB].filter(Boolean).join(' ')
               return (
                 <tr key={value}>
-                  <td className={valueClass}>{value}</td>
                   <td className={`scoresheet-ladder-a ${cellClassA}`}>
                     {eventA ? <span className={shotClass(eventA.type)}>{eventA.playerLabel}</span> : ''}
                   </td>
+                  <td className={valueClassA}>{value}</td>
+                  <td className={valueClassB}>{value}</td>
                   {/* 相手チームは選手番号を保持していないため(NOT_RECORDED)、
-                      推測で番号や記号を書き込まない。得点種別は左の累計点セルの
+                      推測で番号や記号を書き込まない。得点種別は隣の累計点セルの
                       マーク(斜線/黒丸塗り)で表現済み。 */}
                   <td className={`scoresheet-ladder-b ${cellClassB}`}></td>
                 </tr>
