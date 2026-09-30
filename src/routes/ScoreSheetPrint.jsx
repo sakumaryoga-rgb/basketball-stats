@@ -243,7 +243,7 @@ function SspRunningScore({ scoringEvents, opponentScoringEvents, teamA, teamB })
                 return (
                   <tr key={value}>
                     <td className="ssp-ladder-value">{value}</td>
-                    <td className={cellClassA}>{eventA ? <span className={sspShotClass(eventA.type)}>{eventA.playerNumber ?? ''}</span> : ''}</td>
+                    <td className={cellClassA}>{eventA ? <span className={sspShotClass(eventA.type)}>{eventA.playerLabel}</span> : ''}</td>
                     <td className={cellClassB}>
                       {eventB ? (
                         eventB.type === '2PT' ? (
