@@ -547,7 +547,7 @@ export function PlayerDetail({ teamId }) {
               )}
             </div>
 
-            {practiceStats.practiceGames.length > 0 && (
+            {practiceSourceMode === 'scrimmage' && practiceStats.practiceGames.length > 0 && (
               <div className="flex flex-col gap-2">
                 <p className="text-sm font-medium">スクリメージ (直近5試合)</p>
                 <div className="overflow-x-auto -mx-4 px-4">
@@ -588,7 +588,7 @@ export function PlayerDetail({ teamId }) {
               </div>
             )}
 
-            {practiceStats.shootingSessions.length > 0 && (
+            {practiceSourceMode === 'shooting' && practiceStats.shootingSessions.length > 0 && (
               <div className="flex flex-col gap-2">
                 <p className="text-sm font-medium">シューティング</p>
                 <ul className="flex flex-col gap-2">
