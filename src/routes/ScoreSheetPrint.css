@@ -422,18 +422,22 @@
   /* JBA/FIBA公式の記法: 2P/3P成功は累計点の数字に斜線、FT成功は黒丸で塗る。
      自チーム・相手チームは累計点をそれぞれ独立に加算するため、偶然同じ数値の
      行に両チームの得点が載ることがある(ladderValueMarkType参照)。その場合も
-     マークは1種類にまとめて表示する(どちらの得点かはA/B列の記載で判別できる)。 */
+     マークは1種類にまとめて表示する(どちらの得点かはA/B列の記載で判別できる)。
+     累計点セルはブロック幅の32%を占め横長(値は1行の高さしかない)のため、
+     セル全体(inset:0)にコーナー基準のlinear-gradientを敷く方式だと、
+     浅い角度の対角線になり帯の見た目の面積が数字を覆い隠すほど太くなって
+     しまう(セルの縦横比に応じて破綻する)。そのため、数字の上に重なる
+     固定長・固定太さの細い線(セル中央を基準に回転させた矩形)として描画し、
+     セルの縦横比に依存しないようにする。 */
   .ssp-ladder-value-slash::after {
     content: '';
     position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      to top right,
-      transparent calc(50% - 0.4pt),
-      #000 calc(50% - 0.4pt),
-      #000 calc(50% + 0.4pt),
-      transparent calc(50% + 0.4pt)
-    );
+    left: 50%;
+    top: 50%;
+    width: 1.3em;
+    height: 0.5pt;
+    background: #000;
+    transform: translate(-50%, -50%) rotate(-35deg);
   }
 
   .ssp-ladder-value-ft::after {
