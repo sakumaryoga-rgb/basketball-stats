@@ -9,6 +9,7 @@ import {
   LADDER_BLOCK_SIZE,
   groupPeriodsForFoulGrid,
   periodEndMap,
+  ladderValueMarkType,
 } from '@/lib/scoreSheet/scoreSheetLayout'
 import { formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -170,11 +171,12 @@ function TeamRosterTable({ team, periodSystem, blankRowCount }) {
 
 // RUNNING SCORE: 得点した選手の背番号を、あらかじめ1,2,3...と昇順に並んだマスへ
 // 書き込む形式。1ブロック40点分(A/B列)を1単位とし、両チームの到達点数に応じて
-// 必要なブロック数だけ表示する。自チーム(A)は得点イベントに選手の背番号が
-// 紐づくため番号を記入できるが、相手チーム(B)は選手名簿を持たないため、
-// ショット種別のマーク(2P/3P/FT)のみを記入する。
+// 必要なブロック数だけ表示する。JBA/FIBA公式の記法に合わせ、2P/3P成功は累計点
+// セル(左列)に斜線、FT成功は黒丸で塗って示す。自チーム(A)は得点イベントに
+// 選手の背番号が紐づくため、3P成功時のみ背番号を丸で囲む。相手チーム(B)は
+// 選手名簿を持たないため番号を記入せず、累計点セルのマークのみで示す。
 function shotClass(type) {
-  return type === '3PT' ? 'scoresheet-shot-3pt' : type === 'FT' ? 'scoresheet-shot-ft' : ''
+  return type === '3PT' ? 'scoresheet-shot-3pt' : ''
 }
 
 function RunningScoreBlocks({ scoringEvents, opponentScoringEvents, teamA, teamB }) {
@@ -206,23 +208,20 @@ function RunningScoreBlocks({ scoringEvents, opponentScoringEvents, teamA, teamB
               const eventB = eventByTotalB.get(value)
               const cellClassA = eventA && eventA.id === lastGameA ? 'scoresheet-ladder-game-end' : eventA && lastA.get(eventA.period) === eventA.id ? 'scoresheet-ladder-period-end' : ''
               const cellClassB = eventB && eventB.id === lastGameB ? 'scoresheet-ladder-game-end' : eventB && lastB.get(eventB.period) === eventB.id ? 'scoresheet-ladder-period-end' : ''
+              const markType = ladderValueMarkType(eventA, eventB)
+              const valueClass = markType
+                ? `scoresheet-ladder-value tabular-nums scoresheet-ladder-value-${markType}`
+                : 'scoresheet-ladder-value tabular-nums'
               return (
                 <tr key={value}>
-                  <td className="scoresheet-ladder-value tabular-nums">{value}</td>
+                  <td className={valueClass}>{value}</td>
                   <td className={`scoresheet-ladder-a ${cellClassA}`}>
                     {eventA ? <span className={shotClass(eventA.type)}>{eventA.playerLabel}</span> : ''}
                   </td>
-                  <td className={`scoresheet-ladder-b ${cellClassB}`}>
-                    {eventB ? (
-                      eventB.type === '2PT' ? (
-                        <span className="scoresheet-shot-2pt-mark">・</span>
-                      ) : (
-                        <span className={shotClass(eventB.type)}>&nbsp;</span>
-                      )
-                    ) : (
-                      ''
-                    )}
-                  </td>
+                  {/* 相手チームは選手番号を保持していないため(NOT_RECORDED)、
+                      推測で番号や記号を書き込まない。得点種別は左の累計点セルの
+                      マーク(斜線/黒丸塗り)で表現済み。 */}
+                  <td className={`scoresheet-ladder-b ${cellClassB}`}></td>
                 </tr>
               )
             })}

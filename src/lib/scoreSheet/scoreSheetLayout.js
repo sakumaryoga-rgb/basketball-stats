@@ -60,3 +60,17 @@ export function periodEndMap(events) {
   const lastEventId = events.length > 0 ? events[events.length - 1].id : null
   return { lastEventIdInPeriod, lastEventId }
 }
+
+// RUNNING SCOREの「累計点」セルに引く記法(JBA/FIBA公式準拠)を、その行に対応する
+// 自チーム/相手チームの得点イベントから決める。
+// - FT成功: 黒丸で塗る
+// - 2P/3P成功: 斜線を引く
+// 自チーム・相手チームの累計点はそれぞれ独立に加算されるため、偶然同じ数値の行に
+// 両チームの得点イベントが載ることがある。その場合でもマークは1種類しか置けないため、
+// FTを優先する(どちらのチーム・選手の得点かはA/B列の記載で判別できるため、
+// 累計点セル自体のマークが多少どちらか一方の種別を代表しても実用上問題ない)。
+export function ladderValueMarkType(eventA, eventB) {
+  if (eventA?.type === 'FT' || eventB?.type === 'FT') return 'ft'
+  if (eventA || eventB) return 'slash'
+  return null
+}
