@@ -18,15 +18,22 @@ const STAT_TYPE_LABEL = { fg2_make: '2PT', fg3_make: '3PT', ft_make: 'FT' }
 const DEFAULT_TIMEOUTS = 5
 
 // RUNNING SCOREのマスに書き込む識別ラベル。背番号があればそれを使うが、
-// ゲスト選手(guest_game_id付き)は背番号を持たないため、これまで空欄
-// (playerNumber ?? '')になり、得点が記録されていないように見えてしまっていた。
-// ゲストは名前が「ゲスト」「ゲスト2」「ゲスト3」...の連番のため、末尾の数字を
-// 使って「G」「G2」「G3」...のラベルにし、誰の得点か見分けられるようにする。
-function playerLadderLabel(player) {
+// 背番号が無い場合(ゲスト、または背番号をまだ割り当てていない通常の
+// ロスター選手)は空欄になり、得点が記録されていないように見えてしまう。
+// - ゲスト(guest_game_id付き)は名前が「ゲスト」「ゲスト2」「ゲスト3」...の
+//   連番のため、末尾の数字を使って「G」「G2」「G3」...のラベルにする。
+// - 通常のロスター選手はチーム内で背番号未設定のまま試合を記録している
+//   ケース(シーズン開始直後で背番号が決まっていない等)があるため、
+//   選手名簿(No.列、rosterIndex)の行番号を使って「P1」「P2」...とする。
+//   ゲストの「G」系と混同しないよう接頭辞を分けている。
+function playerLadderLabel(player, rosterIndex) {
   if (!player) return ''
   if (player.number != null) return String(player.number)
-  const match = /(\d+)\s*$/.exec(player.name ?? '')
-  return match ? `G${match[1]}` : 'G'
+  if (player.guest_game_id) {
+    const match = /(\d+)\s*$/.exec(player.name ?? '')
+    return match ? `G${match[1]}` : 'G'
+  }
+  return rosterIndex != null ? `P${rosterIndex}` : ''
 }
 
 function emptyStatLine() {
@@ -171,6 +178,14 @@ export async function buildScoreSheetViewModel(gameId) {
 
   // --- 自チームの得点イベント時系列(ランニングスコア) ---
   const playerById = new Map(gamePlayers.map((p) => [p.id, p]))
+  // 選手名簿(No.列)と同じ並び順・同じ行番号での行番号。背番号未設定の通常選手を
+  // RUNNING SCOREで見分けるためのフォールバックに使う。選手名簿(teamA.players)は
+  // 「この試合に出場した選手のみ」(boxByPlayerに行がある選手)に絞られるため、
+  // ここも同じ絞り込みをしないと行番号がズレる(出場していない選手を含めて数えて
+  // しまうと、印刷される選手名簿のNo.列と一致しなくなる)
+  const rosterIndexById = new Map(
+    gamePlayers.filter((p) => boxByPlayer.has(p.id)).map((p, i) => [p.id, i + 1])
+  )
   let runningTotal = 0
   let sequence = 0
   const scoringEvents = []
@@ -186,7 +201,7 @@ export async function buildScoreSheetViewModel(gameId) {
       period: e.quarter,
       playerId: e.player_id,
       playerNumber: player?.number ?? null,
-      playerLabel: playerLadderLabel(player),
+      playerLabel: playerLadderLabel(player, rosterIndexById.get(e.player_id)),
       playerName: player?.name ?? '(削除された選手)',
       type: STAT_TYPE_LABEL[e.stat_key],
       points: pts,
