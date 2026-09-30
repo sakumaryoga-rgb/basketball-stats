@@ -114,9 +114,10 @@
  * @property {string} playerId
  * @property {number|null} playerNumber
  * @property {string} playerLabel - RUNNING SCOREのマスに書き込む表示用ラベル。
- *   背番号があればその文字列、無い場合(ゲスト選手)は名前の連番から作る
- *   G/G2/G3...(常に空文字にはならない。playerNumberだけを使うと背番号を
- *   持たないゲストの得点が空欄になり、記録漏れに見えてしまうため用意した)
+ *   背番号があればその文字列。無い場合、ゲスト選手は名前の連番から作る
+ *   G/G2/G3...、通常のロスター選手(背番号未設定)は選手名簿の行番号から作る
+ *   P1/P2/P3...(常に空文字にはならない。playerNumberだけを使うと背番号を
+ *   持たない選手の得点が空欄になり、記録漏れに見えてしまうため用意した)
  * @property {string} playerName
  * @property {'FT'|'2PT'|'3PT'} type
  * @property {number} points - 1 | 2 | 3
