@@ -415,7 +415,35 @@
   }
 
   .ssp-ladder-value {
+    position: relative;
     color: #555;
+  }
+
+  /* JBA/FIBA公式の記法: 2P/3P成功は累計点の数字に斜線、FT成功は黒丸で塗る。
+     自チーム・相手チームは累計点をそれぞれ独立に加算するため、偶然同じ数値の
+     行に両チームの得点が載ることがある(ladderValueMarkType参照)。その場合も
+     マークは1種類にまとめて表示する(どちらの得点かはA/B列の記載で判別できる)。 */
+  .ssp-ladder-value-slash::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top right,
+      transparent calc(50% - 0.4pt),
+      #000 calc(50% - 0.4pt),
+      #000 calc(50% + 0.4pt),
+      transparent calc(50% + 0.4pt)
+    );
+  }
+
+  .ssp-ladder-value-ft::after {
+    content: '';
+    position: absolute;
+    inset: 8%;
+    border-radius: 999px;
+    background: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .ssp-ladder-period-end {
@@ -426,6 +454,8 @@
     border-bottom: 2pt double #000;
   }
 
+  /* 自チーム(A列)の背番号装飾。3P成功のみ丸で囲む(JBA/FIBA公式の記法)。
+     2P・FTは装飾なしの通常表示(FTは左の累計点セルを黒丸で塗ることで示す)。 */
   .ssp-shot-3pt {
     display: inline-flex;
     align-items: center;
@@ -433,23 +463,6 @@
     min-width: 8pt;
     border: 1pt solid #000;
     border-radius: 999px;
-    font-weight: 700;
-  }
-
-  .ssp-shot-ft {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 8pt;
-    border-radius: 999px;
-    background: #000 !important;
-    color: #fff !important;
-    font-weight: 700;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  .ssp-shot-2pt-mark {
     font-weight: 700;
   }
 

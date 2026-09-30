@@ -6,6 +6,7 @@ import {
   LADDER_BLOCK_SIZE,
   groupPeriodsForFoulGrid,
   periodEndMap,
+  ladderValueMarkType,
   buildRosterPageRows,
 } from '@/lib/scoreSheet/scoreSheetLayout'
 import { formatDate } from '@/lib/format'
@@ -53,8 +54,10 @@ function SspBoxes({ used, total }) {
   )
 }
 
+// JBA/FIBA公式の記法に合わせ、自チーム(A列)の背番号装飾は3P成功時の丸囲みのみ。
+// 2P・FTは装飾なしの通常表示にする(FTは累計点セル側を黒丸で塗ることで示す)。
 function sspShotClass(type) {
-  return type === '3PT' ? 'ssp-shot-3pt' : type === 'FT' ? 'ssp-shot-ft' : ''
+  return type === '3PT' ? 'ssp-shot-3pt' : ''
 }
 
 function SspField({ label, children }) {
@@ -240,21 +243,16 @@ function SspRunningScore({ scoringEvents, opponentScoringEvents, teamA, teamB })
                 const eventB = eventByTotalB.get(value)
                 const cellClassA = eventA && eventA.id === lastGameA ? 'ssp-ladder-game-end' : eventA && lastA.get(eventA.period) === eventA.id ? 'ssp-ladder-period-end' : ''
                 const cellClassB = eventB && eventB.id === lastGameB ? 'ssp-ladder-game-end' : eventB && lastB.get(eventB.period) === eventB.id ? 'ssp-ladder-period-end' : ''
+                const markType = ladderValueMarkType(eventA, eventB)
+                const valueClass = markType ? `ssp-ladder-value ssp-ladder-value-${markType}` : 'ssp-ladder-value'
                 return (
                   <tr key={value}>
-                    <td className="ssp-ladder-value">{value}</td>
+                    <td className={valueClass}>{value}</td>
                     <td className={cellClassA}>{eventA ? <span className={sspShotClass(eventA.type)}>{eventA.playerLabel}</span> : ''}</td>
-                    <td className={cellClassB}>
-                      {eventB ? (
-                        eventB.type === '2PT' ? (
-                          <span className="ssp-shot-2pt-mark">・</span>
-                        ) : (
-                          <span className={sspShotClass(eventB.type)}>&nbsp;</span>
-                        )
-                      ) : (
-                        ''
-                      )}
-                    </td>
+                    {/* 相手チームは選手番号を保持していないため(NOT_RECORDED)、
+                        推測で番号や記号を書き込まない。得点種別は左の累計点セルの
+                        マーク(斜線/黒丸塗り)で表現済み。 */}
+                    <td className={cellClassB}></td>
                   </tr>
                 )
               })}
