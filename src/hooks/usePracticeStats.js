@@ -84,6 +84,8 @@ export function usePracticeStats(teamId, playerId) {
     }),
     { ...EMPTY_TOTALS }
   )
+  practiceTotals.fgPct = pct(practiceTotals.fgm, practiceTotals.fga)
+  practiceTotals.tpPct = pct(practiceTotals.tpm, practiceTotals.tpa)
 
   const shootingTotals = shootingTallies.reduce(
     (acc, t) => {
@@ -97,6 +99,8 @@ export function usePracticeStats(teamId, playerId) {
     },
     { ...EMPTY_TOTALS }
   )
+  shootingTotals.fgPct = pct(shootingTotals.fgm, shootingTotals.fga)
+  shootingTotals.tpPct = pct(shootingTotals.tpm, shootingTotals.tpa)
 
   const summary = {
     fgm: practiceTotals.fgm + shootingTotals.fgm,
@@ -107,7 +111,20 @@ export function usePracticeStats(teamId, playerId) {
   summary.fgPct = pct(summary.fgm, summary.fga)
   summary.tpPct = pct(summary.tpm, summary.tpa)
 
-  const hotZones = mergeHotZones(aggregateHotZones(practiceShots), aggregateHotZonesFromTallies(shootingTallies))
+  const scrimmageHotZones = aggregateHotZones(practiceShots)
+  const shootingHotZones = aggregateHotZonesFromTallies(shootingTallies)
+  const hotZones = mergeHotZones(scrimmageHotZones, shootingHotZones)
 
-  return { loading, practiceGames, shootingSessions, summary, hotZones, refresh }
+  return {
+    loading,
+    practiceGames,
+    shootingSessions,
+    summary,
+    hotZones,
+    // スクリメージ・シューティングそれぞれ単独のシュート成功率/ホットゾーン。
+    // 個人ページでソースを切り替えて表示する際に使う(PlayerDetail.jsx参照)。
+    scrimmage: { totals: practiceTotals, hotZones: scrimmageHotZones },
+    shooting: { totals: shootingTotals, hotZones: shootingHotZones },
+    refresh,
+  }
 }

@@ -265,8 +265,13 @@ export function PlayerDetail({ teamId }) {
   const [statsMode, setStatsMode] = useState('official')
   // 既存の記録の大半が2Q制のため、デフォルトは2Q制で表示する
   const [periodMode, setPeriodMode] = useState('2q')
+  // PRACTICEタブのシュート成功率・ホットゾーンは、スクリメージとシューティングで
+  // 母数の性質が異なる(スクリメージは試合中の実戦シュート、シューティングは
+  // 練習メニューとしての反復シュート)ため合算せず、切り替えて表示する
+  const [practiceSourceMode, setPracticeSourceMode] = useState('scrimmage')
 
   const player = players.find((p) => p.id === id)
+  const activePracticeSource = practiceSourceMode === 'scrimmage' ? practiceStats.scrimmage : practiceStats.shooting
 
   const careerHigh = useMemo(() => {
     if (gameLog.length === 0) return null
@@ -502,20 +507,43 @@ export function PlayerDetail({ teamId }) {
           <p className="text-sm text-muted-foreground py-8 text-center">まだPRACTICEの記録がありません</p>
         ) : (
           <>
+            <div className="flex rounded-lg border p-1">
+              {[
+                { key: 'scrimmage', label: 'スクリメージ' },
+                { key: 'shooting', label: 'シューティング' },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setPracticeSourceMode(tab.key)}
+                  className={cn(
+                    'flex-1 rounded-md py-1.5 text-sm font-medium transition-colors',
+                    practiceSourceMode === tab.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
             <div className="rounded-lg border p-4">
-              <p className="text-xs text-muted-foreground mb-3">シュート成功率 (スクリメージ+シューティング)</p>
+              <p className="text-xs text-muted-foreground mb-3">
+                シュート成功率 ・ {practiceSourceMode === 'scrimmage' ? 'スクリメージ' : 'シューティング'}
+              </p>
               <div className="grid grid-cols-2 gap-y-4">
-                <StatBlock label="FG%" value={formatPct(practiceStats.summary.fgPct)} />
-                <StatBlock label="3P%" value={formatPct(practiceStats.summary.tpPct)} />
+                <StatBlock label="FG%" value={formatPct(activePracticeSource.totals.fgPct)} />
+                <StatBlock label="3P%" value={formatPct(activePracticeSource.totals.tpPct)} />
               </div>
             </div>
 
             <div className="rounded-lg border p-4">
-              <p className="text-xs text-muted-foreground mb-3">ホットゾーン(フィールドゴール) ・ PRACTICE</p>
-              {practiceStats.summary.fga === 0 ? (
+              <p className="text-xs text-muted-foreground mb-3">
+                ホットゾーン(フィールドゴール) ・ {practiceSourceMode === 'scrimmage' ? 'スクリメージ' : 'シューティング'}
+              </p>
+              {activePracticeSource.totals.fga === 0 ? (
                 <p className="text-sm text-muted-foreground py-6 text-center">まだシュート位置の記録がありません</p>
               ) : (
-                <HotZoneChart hotZones={practiceStats.hotZones} />
+                <HotZoneChart hotZones={activePracticeSource.hotZones} />
               )}
             </div>
 
