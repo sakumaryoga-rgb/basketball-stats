@@ -194,9 +194,9 @@
 }
 
 /* JBA/FIBA公式の記法: 2P/3P成功は累計点の数字に斜線、FT成功は黒丸で塗る。
-   自チーム・相手チームは累計点をそれぞれ独立に加算するため、偶然同じ数値の
-   行に両チームの得点が載ることがある(ladderValueMarkType参照)。その場合も
-   マークは1種類にまとめて表示する(どちらの得点かはA/B列の記載で判別できる)。
+   A得点者|A累計得点|B累計得点|B得点者の4列構成で、Team A/Bそれぞれが独立した
+   累計得点セルを持つため、マーク判定(ladderMarkType)も各チームのイベント
+   単体だけを見ればよい。
    累計点セルはブロック幅に対して横長(値は1行の高さしかない)のため、
    セル全体(inset:0)にコーナー基準のlinear-gradientを敷く方式だと、浅い
    角度の対角線になり帯の見た目の面積が数字を覆い隠すほど太くなってしまう
@@ -227,12 +227,16 @@
   min-width: 2em;
 }
 
-/* 各チームのクォーター終了時点の得点マス(太線)・試合終了時点の最終得点マス(二重線) */
-.scoresheet-ladder-period-end {
+/* 各チームのクォーター終了時点の得点マス(太線)・試合終了時点の最終得点マス(二重線)。
+   .scoresheet-ladder-table td { border: 1px solid var(--border); }(全辺指定の
+   borderショートハンド、要素セレクタ込みで詳細度が高い)に対し、クラス単体の
+   セレクタだと詳細度で負けて上書きされない(出現順に関わらず)ため、
+   .scoresheet-ladder-table tdを前置して詳細度を上げる。 */
+.scoresheet-ladder-table td.scoresheet-ladder-period-end {
   border-bottom: 2px solid var(--foreground);
 }
 
-.scoresheet-ladder-game-end {
+.scoresheet-ladder-table td.scoresheet-ladder-game-end {
   border-bottom: 3px double var(--foreground);
 }
 

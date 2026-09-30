@@ -398,14 +398,20 @@
     text-align: center;
   }
 
-  .ssp-ladder-table th:first-child,
-  .ssp-ladder-table td:first-child {
-    width: 32%;
+  /* A得点者|A累計得点|B累計得点|B得点者の4列構成。得点者列(1・4列目)より
+     累計得点列(2・3列目、最大3桁の数字を表示する)をやや広めに配分する。 */
+  .ssp-ladder-table th:nth-child(1),
+  .ssp-ladder-table td:nth-child(1),
+  .ssp-ladder-table th:nth-child(4),
+  .ssp-ladder-table td:nth-child(4) {
+    width: 22%;
   }
 
-  .ssp-ladder-table th:not(:first-child),
-  .ssp-ladder-table td:not(:first-child) {
-    width: 34%;
+  .ssp-ladder-table th:nth-child(2),
+  .ssp-ladder-table td:nth-child(2),
+  .ssp-ladder-table th:nth-child(3),
+  .ssp-ladder-table td:nth-child(3) {
+    width: 28%;
   }
 
   .ssp-ladder-table thead th {
@@ -420,10 +426,10 @@
   }
 
   /* JBA/FIBA公式の記法: 2P/3P成功は累計点の数字に斜線、FT成功は黒丸で塗る。
-     自チーム・相手チームは累計点をそれぞれ独立に加算するため、偶然同じ数値の
-     行に両チームの得点が載ることがある(ladderValueMarkType参照)。その場合も
-     マークは1種類にまとめて表示する(どちらの得点かはA/B列の記載で判別できる)。
-     累計点セルはブロック幅の32%を占め横長(値は1行の高さしかない)のため、
+     A得点者|A累計得点|B累計得点|B得点者の4列構成で、Team A/Bそれぞれが独立した
+     累計得点セルを持つため、マーク判定(ladderMarkType)も各チームのイベント
+     単体だけを見ればよい。
+     累計点セルはブロック幅の28%を占め横長(値は1行の高さしかない)のため、
      セル全体(inset:0)にコーナー基準のlinear-gradientを敷く方式だと、
      浅い角度の対角線になり帯の見た目の面積が数字を覆い隠すほど太くなって
      しまう(セルの縦横比に応じて破綻する)。そのため、数字の上に重なる
@@ -450,11 +456,16 @@
     print-color-adjust: exact;
   }
 
-  .ssp-ladder-period-end {
+  /* .ssp-ladder-table td { border: 0.6pt solid #000; }(全辺指定のborderショート
+     ハンド)は要素セレクタを含むため、クラス単体の.ssp-ladder-period-end/
+     -game-endより詳細度が高い。詳細度で負けると出現順に関わらず全辺指定側が
+     勝ってしまい、太線/二重線が描画されない(実際に発生していた)。
+     .ssp-ladder-table tdを前置して詳細度を上げ、確実に上書きされるようにする。 */
+  .ssp-ladder-table td.ssp-ladder-period-end {
     border-bottom: 1.5pt solid #000;
   }
 
-  .ssp-ladder-game-end {
+  .ssp-ladder-table td.ssp-ladder-game-end {
     border-bottom: 2pt double #000;
   }
 
