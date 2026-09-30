@@ -265,13 +265,19 @@ export function PlayerDetail({ teamId }) {
   const [statsMode, setStatsMode] = useState('official')
   // 既存の記録の大半が2Q制のため、デフォルトは2Q制で表示する
   const [periodMode, setPeriodMode] = useState('2q')
-  // PRACTICEタブのシュート成功率・ホットゾーンは、スクリメージとシューティングで
-  // 母数の性質が異なる(スクリメージは試合中の実戦シュート、シューティングは
-  // 練習メニューとしての反復シュート)ため合算せず、切り替えて表示する
-  const [practiceSourceMode, setPracticeSourceMode] = useState('scrimmage')
+  // PRACTICEタブのシュート成功率・ホットゾーン・記録一覧は、合計(スクリメージ+
+  // シューティング)・スクリメージ・シューティングの3つを切り替えて表示する
+  const [practiceSourceMode, setPracticeSourceMode] = useState('total')
 
   const player = players.find((p) => p.id === id)
-  const activePracticeSource = practiceSourceMode === 'scrimmage' ? practiceStats.scrimmage : practiceStats.shooting
+  const activePracticeSource =
+    practiceSourceMode === 'scrimmage'
+      ? practiceStats.scrimmage
+      : practiceSourceMode === 'shooting'
+        ? practiceStats.shooting
+        : { totals: practiceStats.summary, hotZones: practiceStats.hotZones }
+  const practiceSourceLabel =
+    practiceSourceMode === 'scrimmage' ? 'スクリメージ' : practiceSourceMode === 'shooting' ? 'シューティング' : '合計'
 
   const careerHigh = useMemo(() => {
     if (gameLog.length === 0) return null
@@ -509,6 +515,7 @@ export function PlayerDetail({ teamId }) {
           <>
             <div className="flex rounded-lg border p-1">
               {[
+                { key: 'total', label: '合計' },
                 { key: 'scrimmage', label: 'スクリメージ' },
                 { key: 'shooting', label: 'シューティング' },
               ].map((tab) => (
@@ -527,19 +534,20 @@ export function PlayerDetail({ teamId }) {
             </div>
 
             <div className="rounded-lg border p-4">
-              <p className="text-xs text-muted-foreground mb-3">
-                シュート成功率 ・ {practiceSourceMode === 'scrimmage' ? 'スクリメージ' : 'シューティング'}
-              </p>
-              <div className="grid grid-cols-2 gap-y-4">
+              <p className="text-xs text-muted-foreground mb-3">シュート成功率 ・ {practiceSourceLabel}</p>
+              <div className={cn('grid gap-y-4', practiceSourceMode === 'shooting' ? 'grid-cols-2' : 'grid-cols-3')}>
                 <StatBlock label="FG%" value={formatPct(activePracticeSource.totals.fgPct)} />
                 <StatBlock label="3P%" value={formatPct(activePracticeSource.totals.tpPct)} />
+                {/* シューティング(shooting_entries)はゾーン単位のタリーのみでフリースロー
+                    概念自体を持たないため、FT%はスクリメージ・合計でのみ表示する */}
+                {practiceSourceMode !== 'shooting' && (
+                  <StatBlock label="FT%" value={formatPct(activePracticeSource.totals.ftPct)} />
+                )}
               </div>
             </div>
 
             <div className="rounded-lg border p-4">
-              <p className="text-xs text-muted-foreground mb-3">
-                ホットゾーン(フィールドゴール) ・ {practiceSourceMode === 'scrimmage' ? 'スクリメージ' : 'シューティング'}
-              </p>
+              <p className="text-xs text-muted-foreground mb-3">ホットゾーン(フィールドゴール) ・ {practiceSourceLabel}</p>
               {activePracticeSource.totals.fga === 0 ? (
                 <p className="text-sm text-muted-foreground py-6 text-center">まだシュート位置の記録がありません</p>
               ) : (
@@ -547,7 +555,7 @@ export function PlayerDetail({ teamId }) {
               )}
             </div>
 
-            {practiceSourceMode === 'scrimmage' && practiceStats.practiceGames.length > 0 && (
+            {practiceSourceMode !== 'shooting' && practiceStats.practiceGames.length > 0 && (
               <div className="flex flex-col gap-2">
                 <p className="text-sm font-medium">スクリメージ (直近5試合)</p>
                 <div className="overflow-x-auto -mx-4 px-4">
@@ -588,7 +596,7 @@ export function PlayerDetail({ teamId }) {
               </div>
             )}
 
-            {practiceSourceMode === 'shooting' && practiceStats.shootingSessions.length > 0 && (
+            {practiceSourceMode !== 'scrimmage' && practiceStats.shootingSessions.length > 0 && (
               <div className="flex flex-col gap-2">
                 <p className="text-sm font-medium">シューティング</p>
                 <ul className="flex flex-col gap-2">
