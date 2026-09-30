@@ -210,7 +210,7 @@ function RunningScoreBlocks({ scoringEvents, opponentScoringEvents, teamA, teamB
                 <tr key={value}>
                   <td className="scoresheet-ladder-value tabular-nums">{value}</td>
                   <td className={`scoresheet-ladder-a ${cellClassA}`}>
-                    {eventA ? <span className={shotClass(eventA.type)}>{eventA.playerNumber ?? ''}</span> : ''}
+                    {eventA ? <span className={shotClass(eventA.type)}>{eventA.playerLabel}</span> : ''}
                   </td>
                   <td className={`scoresheet-ladder-b ${cellClassB}`}>
                     {eventB ? (

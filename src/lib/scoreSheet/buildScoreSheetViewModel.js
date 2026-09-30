@@ -17,6 +17,18 @@ const STAT_TYPE_LABEL = { fg2_make: '2PT', fg3_make: '3PT', ft_make: 'FT' }
 // 「使用数」はここからの差分としてのみ算出できる導出値であり、DBに保存された生の値ではない。
 const DEFAULT_TIMEOUTS = 5
 
+// RUNNING SCOREのマスに書き込む識別ラベル。背番号があればそれを使うが、
+// ゲスト選手(guest_game_id付き)は背番号を持たないため、これまで空欄
+// (playerNumber ?? '')になり、得点が記録されていないように見えてしまっていた。
+// ゲストは名前が「ゲスト」「ゲスト2」「ゲスト3」...の連番のため、末尾の数字を
+// 使って「G」「G2」「G3」...のラベルにし、誰の得点か見分けられるようにする。
+function playerLadderLabel(player) {
+  if (!player) return ''
+  if (player.number != null) return String(player.number)
+  const match = /(\d+)\s*$/.exec(player.name ?? '')
+  return match ? `G${match[1]}` : 'G'
+}
+
 function emptyStatLine() {
   return {
     pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, twoPm: 0, twoPa: 0,
@@ -174,6 +186,7 @@ export async function buildScoreSheetViewModel(gameId) {
       period: e.quarter,
       playerId: e.player_id,
       playerNumber: player?.number ?? null,
+      playerLabel: playerLadderLabel(player),
       playerName: player?.name ?? '(削除された選手)',
       type: STAT_TYPE_LABEL[e.stat_key],
       points: pts,
