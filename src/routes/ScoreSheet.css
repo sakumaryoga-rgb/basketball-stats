@@ -176,9 +176,18 @@
   gap: 0.75rem;
 }
 
+/* table-layout: fixedにしない場合、各ブロック(1-40/41-80/81-120/121-160)が
+   それぞれ独立したtable要素のため、ブロックごとに内容(最大桁数)に応じて
+   列幅が自動計算されてしまう。実測で確認した例: 81-120のブロックのみ
+   3桁の数字(120等)を含むため累計得点列が約30.6pxまで広がり、2桁までの
+   他ブロック(約25.8-25.9px)と幅が揃わなかった。table-layout: fixedと
+   列ごとの明示的なwidthを指定し、内容(4/24/G/G2/3P丸囲み等)に関わらず
+   全ブロックで同じ列幅になるようにする(印刷用CSSのssp-ladder-tableで
+   既に行っているのと同じ対策)。 */
 .scoresheet-ladder-table {
   border-collapse: collapse;
   font-size: 0.75rem;
+  table-layout: fixed;
 }
 
 .scoresheet-ladder-table th,
@@ -186,6 +195,22 @@
   border: 1px solid var(--border);
   padding: 0.1rem 0.4rem;
   text-align: center;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.scoresheet-ladder-table th:nth-child(1),
+.scoresheet-ladder-table td:nth-child(1),
+.scoresheet-ladder-table th:nth-child(4),
+.scoresheet-ladder-table td:nth-child(4) {
+  width: 2.75em;
+}
+
+.scoresheet-ladder-table th:nth-child(2),
+.scoresheet-ladder-table td:nth-child(2),
+.scoresheet-ladder-table th:nth-child(3),
+.scoresheet-ladder-table td:nth-child(3) {
+  width: 2.6em;
 }
 
 /* 全得点行(1〜160)の高さを固定する。元々は行の高さが内容(3P丸囲みの
@@ -271,10 +296,11 @@
   z-index: 1;
 }
 
-.scoresheet-ladder-a,
-.scoresheet-ladder-b {
-  min-width: 2em;
-}
+/* 列幅はtable-layout: fixed + nth-child指定の明示的widthに一本化したため
+   (上の.scoresheet-ladder-table th:nth-child()参照)、.scoresheet-ladder-a/
+   -bクラス自体はcellClassA/cellClassB(Quarter終了の太線用)の付与先と
+   してJSX側に残っているが、幅を指定するCSSルールはここでは持たない
+   (table-layout: fixed下ではmin-width指定はそもそも無視されるため)。 */
 
 /* 各チームのクォーター終了時点の得点マス(太線)・試合終了時点の最終得点マス(二重線)。
    border-bottomではなくbox-shadow(inset)で表現する。border-bottomは
