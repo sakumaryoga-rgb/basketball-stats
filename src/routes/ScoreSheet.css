@@ -214,12 +214,19 @@
   transform: translate(-50%, -50%) rotate(-35deg);
 }
 
+/* セルがブロック幅に対して横長のため、inset:%指定だと縦横比に応じて楕円に
+   なってしまう(以前の実装の不具合)。固定のem幅・高さを中央基準で配置し、
+   セルの縦横比に関わらず真円を保つ。 */
 .scoresheet-ladder-value-ft::after {
   content: '';
   position: absolute;
-  inset: 8%;
+  left: 50%;
+  top: 50%;
+  width: 1em;
+  height: 1em;
   border-radius: 999px;
   background: var(--foreground);
+  transform: translate(-50%, -50%);
 }
 
 .scoresheet-ladder-a,
@@ -232,12 +239,36 @@
    borderショートハンド、要素セレクタ込みで詳細度が高い)に対し、クラス単体の
    セレクタだと詳細度で負けて上書きされない(出現順に関わらず)ため、
    .scoresheet-ladder-table tdを前置して詳細度を上げる。 */
+/* このクラスはTeam A/Bそれぞれのイベント単体から独立に判定され
+   (RunningScoreBlocks参照)、該当チーム側のセル(得点者欄+累計得点欄の
+   2マス)のみに適用される。A/Bが偶然同じ行になった場合のみ両側に太線が
+   入るが、それぞれ独立した判定の結果がたまたま同じ行で重なっているだけで、
+   行全体を1つの単位として扱っているわけではない。 */
 .scoresheet-ladder-table td.scoresheet-ladder-period-end {
   border-bottom: 2px solid var(--foreground);
 }
 
 .scoresheet-ladder-table td.scoresheet-ladder-game-end {
   border-bottom: 3px double var(--foreground);
+}
+
+/* 各Q終了時点・試合終了時点のそのチームの最後の累計得点を太めの○で囲む
+   (JBA公式の記法)。囲む対象は累計得点セルのみ(得点者番号セルは囲まない、
+   そちら側は上のborder-bottomのみで区切りを示す)。.scoresheet-ladder-value
+   との組み合わせでのみ有効になるため、得点者番号セルには適用されない。
+   斜線(::after)とは別の疑似要素(::before)のため、2P/3P成功時点がQ終了と
+   重なっても共存できる。 */
+.scoresheet-ladder-value.scoresheet-ladder-period-end::before,
+.scoresheet-ladder-value.scoresheet-ladder-game-end::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.5em;
+  height: 1.5em;
+  border: 1.5px solid var(--foreground);
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
 }
 
 /* 印刷時は画面表示用DOM(このファイルが担当するレスポンシブUI)を丸ごと非表示にし、

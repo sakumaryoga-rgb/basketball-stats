@@ -446,12 +446,19 @@
     transform: translate(-50%, -50%) rotate(-35deg);
   }
 
+  /* セルがブロック幅の28%を占め横長のため、inset:%指定だと縦横比に応じて
+     楕円になってしまう(以前の実装の不具合)。固定のem幅・高さを中央基準で
+     配置し、セルの縦横比に関わらず真円を保つ。 */
   .ssp-ladder-value-ft::after {
     content: '';
     position: absolute;
-    inset: 8%;
+    left: 50%;
+    top: 50%;
+    width: 1em;
+    height: 1em;
     border-radius: 999px;
     background: #000 !important;
+    transform: translate(-50%, -50%);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -460,13 +467,38 @@
      ハンド)は要素セレクタを含むため、クラス単体の.ssp-ladder-period-end/
      -game-endより詳細度が高い。詳細度で負けると出現順に関わらず全辺指定側が
      勝ってしまい、太線/二重線が描画されない(実際に発生していた)。
-     .ssp-ladder-table tdを前置して詳細度を上げ、確実に上書きされるようにする。 */
+     .ssp-ladder-table tdを前置して詳細度を上げ、確実に上書きされるようにする。
+     このクラスはTeam A/Bそれぞれのイベント単体から独立に判定され
+     (SspRunningScore参照)、該当チーム側のセル(得点者欄+累計得点欄の2マス)
+     のみに適用される。A/Bが偶然同じ行になった場合のみ両側に太線が入るが、
+     それぞれ独立した判定の結果がたまたま同じ行で重なっているだけで、
+     行全体を1つの単位として扱っているわけではない。 */
   .ssp-ladder-table td.ssp-ladder-period-end {
     border-bottom: 1.5pt solid #000;
   }
 
   .ssp-ladder-table td.ssp-ladder-game-end {
     border-bottom: 2pt double #000;
+  }
+
+  /* 各Q終了時点・試合終了時点のそのチームの最後の累計得点を太めの○で囲む
+     (JBA公式の記法)。囲む対象は累計得点セルのみ(得点者番号セルは囲まない、
+     そちら側は上のborder-bottomのみで区切りを示す)。.ssp-ladder-valueとの
+     組み合わせでのみ有効になるため、得点者番号セル(.ssp-ladder-valueを
+     持たない)には適用されない。斜線(::after)とは別の疑似要素(::before)
+     のため、2P/3P成功時点がQ終了と重なっても共存できる。セルの縦横比に
+     左右されないよう、FTの黒丸と同様に固定em幅・高さを中央基準で配置する。 */
+  .ssp-ladder-value.ssp-ladder-period-end::before,
+  .ssp-ladder-value.ssp-ladder-game-end::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 1.35em;
+    height: 1.35em;
+    border: 1pt solid #000;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
   }
 
   /* 自チーム(A列)の背番号装飾。3P成功のみ丸で囲む(JBA/FIBA公式の記法)。
