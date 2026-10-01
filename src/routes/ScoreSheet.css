@@ -78,11 +78,17 @@
 
 /* JBA/FIBA公式の記法に合わせ、自チーム(A列)の背番号装飾は3P成功時の丸囲みのみ。
    2P・FTは装飾なしの通常表示(FTは累計点セル側を黒丸で塗ることで示す)。 */
+/* height/box-sizingで自身の高さを明示的に固定し、丸囲みの境界線(1.5px)が
+   行の高さを押し広げないようにする(.scoresheet-ladder-table tdの
+   固定height・overflow:hiddenと組み合わせて、全行の高さを統一するための
+   対策。詳細は.scoresheet-ladder-table tdのコメント参照)。 */
 .scoresheet-shot-3pt {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 1.6em;
+  height: 16px;
+  box-sizing: border-box;
   padding: 0 0.15em;
   border: 1.5px solid currentColor;
   border-radius: 999px;
@@ -182,6 +188,19 @@
   text-align: center;
 }
 
+/* 全得点行(1〜160)の高さを固定する。元々は行の高さが内容(3P丸囲みの
+   背番号バッジの境界線や、Quarter終了時のborder-bottomの太さの違い)に
+   応じて変動していた(実測で通常行21.3〜21.9px、3P丸囲みを含む行
+   23.3〜24px)。box-sizing:border-boxでheightに境界線・paddingを含め、
+   overflow:hiddenでtd側の内容がこのheightを超えて行自体を押し広げる
+   ことがないようにする(tableのheightは本来「最小値」としてしか
+   扱われず、内容が収まらない場合は自動的に広がってしまうため)。 */
+.scoresheet-ladder-table td {
+  height: 24px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
 .scoresheet-ladder-table thead th {
   background: var(--muted);
   color: var(--muted-foreground);
@@ -258,21 +277,25 @@
 }
 
 /* 各チームのクォーター終了時点の得点マス(太線)・試合終了時点の最終得点マス(二重線)。
-   .scoresheet-ladder-table td { border: 1px solid var(--border); }(全辺指定の
-   borderショートハンド、要素セレクタ込みで詳細度が高い)に対し、クラス単体の
-   セレクタだと詳細度で負けて上書きされない(出現順に関わらず)ため、
-   .scoresheet-ladder-table tdを前置して詳細度を上げる。 */
-/* このクラスはTeam A/Bそれぞれのイベント単体から独立に判定され
+   border-bottomではなくbox-shadow(inset)で表現する。border-bottomは
+   ボックスモデルに参加するため、太さの違い(通常行0.6-1px/period-end
+   1.5-2px/game-end 2-3px)がそのまま行の高さの差になってしまい、行高を
+   統一する妨げになっていた(実際にこれが行高不揃いの一因だった)。
+   box-shadowは描画のみでレイアウトに一切影響しないため、
+   .scoresheet-ladder-table tdの固定heightを崩さずに太線/二重線を表現できる。
+   このクラスはTeam A/Bそれぞれのイベント単体から独立に判定され
    (RunningScoreBlocks参照)、該当チーム側のセル(得点者欄+累計得点欄の
    2マス)のみに適用される。A/Bが偶然同じ行になった場合のみ両側に太線が
    入るが、それぞれ独立した判定の結果がたまたま同じ行で重なっているだけで、
    行全体を1つの単位として扱っているわけではない。 */
 .scoresheet-ladder-table td.scoresheet-ladder-period-end {
-  border-bottom: 2px solid var(--foreground);
+  box-shadow: inset 0 -2px 0 0 var(--foreground);
 }
 
 .scoresheet-ladder-table td.scoresheet-ladder-game-end {
-  border-bottom: 3px double var(--foreground);
+  box-shadow:
+    inset 0 -1.2px 0 0 var(--foreground),
+    inset 0 -3.6px 0 0 var(--foreground);
 }
 
 /* 各Q終了時点・試合終了時点のそのチームの最後の累計得点を太めの○で囲む
