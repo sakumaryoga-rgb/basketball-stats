@@ -229,6 +229,21 @@ function SspRunningScore({ scoringEvents, opponentScoringEvents, teamA, teamB })
       <div className="ssp-ladder-grid" style={{ gridTemplateColumns: `repeat(${Math.min(blockCount, 4)}, 1fr)` }}>
         {blockStarts.map((start) => (
           <table key={start} className="ssp-ladder-table">
+            {/* 列幅はthead/tbodyのth/td側ではなくcolgroup/colで指定する。
+                ヘッダー行はcolSpan={2}で2セルしかないため、table-layout: fixedの
+                列幅決定で「先頭行」として扱われるヘッダーのセル数(2)とボディの
+                実列数(4)が食い違い、th側に幅を指定するとボディ側のtd:nth-child
+                指定(4列分、本来は正しい)が無視され、ヘッダーの2セルの幅がそれぞれ
+                「分割されずにそのまま」2列ずつに適用されてA/B非対称にずれる不具合が
+                あった(Playwrightの実測で確認)。colgroup/colは行のセル数・colSpanに
+                左右されず常に実際の列数(4列)に対して幅を指定できるため、この問題が
+                起きない。 */}
+            <colgroup>
+              <col className="ssp-ladder-col-player" />
+              <col className="ssp-ladder-col-value" />
+              <col className="ssp-ladder-col-value" />
+              <col className="ssp-ladder-col-player" />
+            </colgroup>
             <thead>
               <tr>
                 <th colSpan={2}>A</th>

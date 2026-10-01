@@ -181,9 +181,8 @@
    列幅が自動計算されてしまう。実測で確認した例: 81-120のブロックのみ
    3桁の数字(120等)を含むため累計得点列が約30.6pxまで広がり、2桁までの
    他ブロック(約25.8-25.9px)と幅が揃わなかった。table-layout: fixedと
-   列ごとの明示的なwidthを指定し、内容(4/24/G/G2/3P丸囲み等)に関わらず
-   全ブロックで同じ列幅になるようにする(印刷用CSSのssp-ladder-tableで
-   既に行っているのと同じ対策)。 */
+   列ごとの明示的な幅指定(colgroup/col、下記参照)で、内容(4/24/G/G2/3P
+   丸囲み等)に関わらず全ブロックで同じ列幅になるようにする。 */
 .scoresheet-ladder-table {
   border-collapse: collapse;
   font-size: 0.75rem;
@@ -199,18 +198,24 @@
   white-space: nowrap;
 }
 
-.scoresheet-ladder-table th:nth-child(1),
-.scoresheet-ladder-table td:nth-child(1),
-.scoresheet-ladder-table th:nth-child(4),
-.scoresheet-ladder-table td:nth-child(4) {
-  width: 2.75em;
-}
-
-.scoresheet-ladder-table th:nth-child(2),
-.scoresheet-ladder-table td:nth-child(2),
-.scoresheet-ladder-table th:nth-child(3),
-.scoresheet-ladder-table td:nth-child(3) {
-  width: 2.6em;
+/* 列幅はth/tdのnth-childではなく、colgroup/colのcolへ指定する(ScoreSheet.jsx
+   参照)。理由: ヘッダー行はcolSpan={2}で2セルしかなく、table-layout: fixedの
+   列幅決定で「先頭行」として扱われるヘッダーの2セルとボディの実列数(4)が
+   食い違う。th側(nth-child(1)/(2)等)に個別に幅を指定すると、ボディ側の
+   td:nth-childで指定した4列ぶんの幅(本来は正しい)が無視され、ヘッダーの
+   各セル(2つ、それぞれ2列ぶんをcolSpan)の幅がそのまま(分割されずに)
+   2列ずつへ適用されてしまい、A/B非対称にずれる不具合が実際に発生していた
+   (Playwrightで実測確認: 意図した22%/28%/28%/22%相当が22%/22%/28%/28%相当に
+   崩れていた)。colgroup/colは行のセル数やcolSpanに左右されず常に実際の
+   列数に対して幅を指定できるため、この問題が起きない。
+   また、幅の値自体も2.75em/2.6emでは3桁の累計点(120等)や2文字の
+   ゲストラベル(G2/G3等)丸囲みの内容がその幅を超え、table-layout: fixedの
+   「最低限守られるはず」の幅指定があっても列が内容に押されて広がってしまう
+   (overflow: hiddenやmin-width: 0では防げなかった)ことも実測で確認したため、
+   実際に収まることを確認した3.15emに統一した(4列とも同じ幅にすることで、
+   A側合計とB側合計が常に一致することも構造的に保証される)。 */
+.scoresheet-ladder-col {
+  width: 3.15em;
 }
 
 /* 全得点行(1〜160)の高さを固定する。元々は行の高さが内容(3P丸囲みの
@@ -296,11 +301,11 @@
   z-index: 1;
 }
 
-/* 列幅はtable-layout: fixed + nth-child指定の明示的widthに一本化したため
-   (上の.scoresheet-ladder-table th:nth-child()参照)、.scoresheet-ladder-a/
-   -bクラス自体はcellClassA/cellClassB(Quarter終了の太線用)の付与先と
-   してJSX側に残っているが、幅を指定するCSSルールはここでは持たない
-   (table-layout: fixed下ではmin-width指定はそもそも無視されるため)。 */
+/* 列幅はtable-layout: fixed + colgroup/colの.scoresheet-ladder-colに一本化
+   したため(ScoreSheet.jsx・上の.scoresheet-ladder-col参照)、
+   .scoresheet-ladder-a/-bクラス自体はcellClassA/cellClassB(Quarter終了の
+   太線用)の付与先としてJSX側に残っているが、幅を指定するCSSルールは
+   ここでは持たない。 */
 
 /* 各チームのクォーター終了時点の得点マス(太線)・試合終了時点の最終得点マス(二重線)。
    border-bottomではなくbox-shadow(inset)で表現する。border-bottomは

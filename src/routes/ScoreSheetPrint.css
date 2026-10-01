@@ -413,18 +413,23 @@
   }
 
   /* A得点者|A累計得点|B累計得点|B得点者の4列構成。得点者列(1・4列目)より
-     累計得点列(2・3列目、最大3桁の数字を表示する)をやや広めに配分する。 */
-  .ssp-ladder-table th:nth-child(1),
-  .ssp-ladder-table td:nth-child(1),
-  .ssp-ladder-table th:nth-child(4),
-  .ssp-ladder-table td:nth-child(4) {
+     累計得点列(2・3列目、最大3桁の数字を表示する)をやや広めに配分する。
+     列幅はth/tdのnth-childではなく、colgroup/colのcolへ指定する
+     (ScoreSheetPrint.jsx参照)。理由: ヘッダー行はcolSpan={2}で2セルしか
+     なく、table-layout: fixedの列幅決定で「先頭行」として扱われるヘッダーの
+     2セルとボディの実列数(4)が食い違う。th側(nth-child(1)/(2)等)に個別に
+     幅を指定すると、ボディ側のtd:nth-childで指定した4列ぶんの幅(本来は
+     正しい)が無視され、ヘッダーの各セル(2つ、それぞれ2列ぶんをcolSpan)の
+     幅がそのまま(分割されずに)2列ずつへ適用されてしまい、A/B非対称に
+     ずれる不具合が実際に発生していた(Playwrightで実測確認: 意図した
+     22%/28%/28%/22%が22%/22%/28%/28%相当に崩れていた)。colgroup/colは
+     行のセル数やcolSpanに左右されず常に実際の列数に対して幅を指定できる
+     ため、この問題が起きない。 */
+  .ssp-ladder-col-player {
     width: 22%;
   }
 
-  .ssp-ladder-table th:nth-child(2),
-  .ssp-ladder-table td:nth-child(2),
-  .ssp-ladder-table th:nth-child(3),
-  .ssp-ladder-table td:nth-child(3) {
+  .ssp-ladder-col-value {
     width: 28%;
   }
 
