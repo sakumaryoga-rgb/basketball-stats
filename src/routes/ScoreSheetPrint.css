@@ -447,18 +447,24 @@
   }
 
   /* セルがブロック幅の28%を占め横長のため、inset:%指定だと縦横比に応じて
-     楕円になってしまう(以前の実装の不具合)。固定のem幅・高さを中央基準で
-     配置し、セルの縦横比に関わらず真円を保つ。 */
+     楕円になってしまう(以前の実装の不具合)。固定のwidth/heightに加え
+     aspect-ratio: 1/1も明示し、セルの縦横比に関わらず真円を保つ。
+     Q終了の○(下の.ssp-ladder-value.ssp-ladder-period-end::before等)と
+     同心円になった時に明確な白い余白ができるよう、○の直径(1.4em)の
+     60%程度のサイズに抑える。z-indexで○(::before)より上に描画されることを
+     明示し、重なり順を確定させる。 */
   .ssp-ladder-value-ft::after {
     content: '';
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 1em;
-    height: 1em;
+    width: 0.85em;
+    height: 0.85em;
+    aspect-ratio: 1 / 1;
     border-radius: 999px;
     background: #000 !important;
     transform: translate(-50%, -50%);
+    z-index: 1;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -494,11 +500,13 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 1.35em;
-    height: 1.35em;
+    width: 1.4em;
+    height: 1.4em;
+    aspect-ratio: 1 / 1;
     border: 1pt solid #000;
     border-radius: 999px;
     transform: translate(-50%, -50%);
+    z-index: 0;
   }
 
   /* 自チーム(A列)の背番号装飾。3P成功のみ丸で囲む(JBA/FIBA公式の記法)。

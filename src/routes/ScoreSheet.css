@@ -202,31 +202,54 @@
    角度の対角線になり帯の見た目の面積が数字を覆い隠すほど太くなってしまう
    (セルの縦横比に応じて破綻する)。そのため、数字の上に重なる固定長・
    固定太さの細い線(セル中央を基準に回転させた矩形)として描画し、セルの
-   縦横比に依存しないようにする。 */
+   縦横比に依存しないようにする。
+   【PCで斜線が白く見える不具合の原因と対策】height:1pxのまま
+   rotate()で回転させると、devicePixelRatio:1(一般的なPCの外部
+   モニタ等)ではアンチエイリアスにより線の色が薄まり、実測で
+   本来の色(例: #19314dなら明度合計765中165相当)まで到達せず
+   765中495前後(白に近い)までしか濃くならないことをPlaywrightで
+   Chromium/WebKit双方・複数DPIで検証して確認した(devicePixelRatio:3の
+   モバイルでは問題なく濃く表示される==anti-aliasingの影響のみで、
+   ダークモード用CSS変数(このアプリでは.darkクラスをJS側で一切
+   付与しておらず常にライトモード固定)やfilter/opacity/mix-blend-mode
+   等の設定が原因ではないことも確認済み)。height を1.6pxまで
+   太くすると実測で本来の色まで確実に到達することを確認したため、
+   その値を採用する。あわせてvar(--foreground)ではなく明示的な
+   黒(#171717、印刷用CSSの#000に準じた値)を使い、将来的にテーマ変数の
+   解決値が変わってもインクのマークとしての見た目が変化しないようにする
+   (印刷用CSSが用紙は常に白地・黒インクである前提で#000を直接指定している
+   のと同じ考え方)。 */
 .scoresheet-ladder-value-slash::after {
   content: '';
   position: absolute;
   left: 50%;
   top: 50%;
   width: 1.3em;
-  height: 1px;
-  background: var(--foreground);
+  height: 1.6px;
+  background: #171717;
   transform: translate(-50%, -50%) rotate(-35deg);
 }
 
 /* セルがブロック幅に対して横長のため、inset:%指定だと縦横比に応じて楕円に
-   なってしまう(以前の実装の不具合)。固定のem幅・高さを中央基準で配置し、
-   セルの縦横比に関わらず真円を保つ。 */
+   なってしまう(以前の実装の不具合)。固定のwidth/heightに加え
+   aspect-ratio: 1/1も明示し、セルの縦横比に関わらず真円を保つ。
+   Q終了の○(下の.scoresheet-ladder-value.scoresheet-ladder-period-end
+   ::before等)と同心円になった時に明確な白い余白ができるよう、○の直径
+   (1.4em)の60%程度のサイズに抑える。z-indexで○(::before)より上に
+   描画されることを明示し、重なり順を確定させる。斜線と同じ理由で
+   var(--foreground)ではなく明示的な黒を使う。 */
 .scoresheet-ladder-value-ft::after {
   content: '';
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 1em;
-  height: 1em;
+  width: 0.85em;
+  height: 0.85em;
+  aspect-ratio: 1 / 1;
   border-radius: 999px;
-  background: var(--foreground);
+  background: #171717;
   transform: translate(-50%, -50%);
+  z-index: 1;
 }
 
 .scoresheet-ladder-a,
@@ -264,11 +287,13 @@
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 1.5em;
-  height: 1.5em;
-  border: 1.5px solid var(--foreground);
+  width: 1.4em;
+  height: 1.4em;
+  aspect-ratio: 1 / 1;
+  border: 1.5px solid #171717;
   border-radius: 999px;
   transform: translate(-50%, -50%);
+  z-index: 0;
 }
 
 /* 印刷時は画面表示用DOM(このファイルが担当するレスポンシブUI)を丸ごと非表示にし、
