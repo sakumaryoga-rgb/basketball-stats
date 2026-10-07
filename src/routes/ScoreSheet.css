@@ -78,11 +78,17 @@
 
 /* JBA/FIBA公式の記法に合わせ、自チーム(A列)の背番号装飾は3P成功時の丸囲みのみ。
    2P・FTは装飾なしの通常表示(FTは累計点セル側を黒丸で塗ることで示す)。 */
+/* height/box-sizingで自身の高さを明示的に固定し、丸囲みの境界線(1.5px)が
+   行の高さを押し広げないようにする(.scoresheet-ladder-table tdの
+   固定height・overflow:hiddenと組み合わせて、全行の高さを統一するための
+   対策。詳細は.scoresheet-ladder-table tdのコメント参照)。 */
 .scoresheet-shot-3pt {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 1.6em;
+  height: 16px;
+  box-sizing: border-box;
   padding: 0 0.15em;
   border: 1.5px solid currentColor;
   border-radius: 999px;
@@ -170,9 +176,17 @@
   gap: 0.75rem;
 }
 
+/* table-layout: fixedにしない場合、各ブロック(1-40/41-80/81-120/121-160)が
+   それぞれ独立したtable要素のため、ブロックごとに内容(最大桁数)に応じて
+   列幅が自動計算されてしまう。実測で確認した例: 81-120のブロックのみ
+   3桁の数字(120等)を含むため累計得点列が約30.6pxまで広がり、2桁までの
+   他ブロック(約25.8-25.9px)と幅が揃わなかった。table-layout: fixedと
+   列ごとの明示的な幅指定(colgroup/col、下記参照)で、内容(4/24/G/G2/3P
+   丸囲み等)に関わらず全ブロックで同じ列幅になるようにする。 */
 .scoresheet-ladder-table {
   border-collapse: collapse;
   font-size: 0.75rem;
+  table-layout: fixed;
 }
 
 .scoresheet-ladder-table th,
@@ -180,6 +194,41 @@
   border: 1px solid var(--border);
   padding: 0.1rem 0.4rem;
   text-align: center;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+/* 列幅はth/tdのnth-childではなく、colgroup/colのcolへ指定する(ScoreSheet.jsx
+   参照)。理由: ヘッダー行はcolSpan={2}で2セルしかなく、table-layout: fixedの
+   列幅決定で「先頭行」として扱われるヘッダーの2セルとボディの実列数(4)が
+   食い違う。th側(nth-child(1)/(2)等)に個別に幅を指定すると、ボディ側の
+   td:nth-childで指定した4列ぶんの幅(本来は正しい)が無視され、ヘッダーの
+   各セル(2つ、それぞれ2列ぶんをcolSpan)の幅がそのまま(分割されずに)
+   2列ずつへ適用されてしまい、A/B非対称にずれる不具合が実際に発生していた
+   (Playwrightで実測確認: 意図した22%/28%/28%/22%相当が22%/22%/28%/28%相当に
+   崩れていた)。colgroup/colは行のセル数やcolSpanに左右されず常に実際の
+   列数に対して幅を指定できるため、この問題が起きない。
+   また、幅の値自体も2.75em/2.6emでは3桁の累計点(120等)や2文字の
+   ゲストラベル(G2/G3等)丸囲みの内容がその幅を超え、table-layout: fixedの
+   「最低限守られるはず」の幅指定があっても列が内容に押されて広がってしまう
+   (overflow: hiddenやmin-width: 0では防げなかった)ことも実測で確認したため、
+   実際に収まることを確認した3.15emに統一した(4列とも同じ幅にすることで、
+   A側合計とB側合計が常に一致することも構造的に保証される)。 */
+.scoresheet-ladder-col {
+  width: 3.15em;
+}
+
+/* 全得点行(1〜160)の高さを固定する。元々は行の高さが内容(3P丸囲みの
+   背番号バッジの境界線や、Quarter終了時のborder-bottomの太さの違い)に
+   応じて変動していた(実測で通常行21.3〜21.9px、3P丸囲みを含む行
+   23.3〜24px)。box-sizing:border-boxでheightに境界線・paddingを含め、
+   overflow:hiddenでtd側の内容がこのheightを超えて行自体を押し広げる
+   ことがないようにする(tableのheightは本来「最小値」としてしか
+   扱われず、内容が収まらない場合は自動的に広がってしまうため)。 */
+.scoresheet-ladder-table td {
+  height: 24px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .scoresheet-ladder-table thead th {
@@ -202,42 +251,103 @@
    角度の対角線になり帯の見た目の面積が数字を覆い隠すほど太くなってしまう
    (セルの縦横比に応じて破綻する)。そのため、数字の上に重なる固定長・
    固定太さの細い線(セル中央を基準に回転させた矩形)として描画し、セルの
-   縦横比に依存しないようにする。 */
+   縦横比に依存しないようにする。
+   【PCで斜線が白く見える不具合の原因と対策】height:1pxのまま
+   rotate()で回転させると、devicePixelRatio:1(一般的なPCの外部
+   モニタ等)ではアンチエイリアスにより線の色が薄まり、実測で
+   本来の色(例: #19314dなら明度合計765中165相当)まで到達せず
+   765中495前後(白に近い)までしか濃くならないことをPlaywrightで
+   Chromium/WebKit双方・複数DPIで検証して確認した(devicePixelRatio:3の
+   モバイルでは問題なく濃く表示される==anti-aliasingの影響のみで、
+   ダークモード用CSS変数(このアプリでは.darkクラスをJS側で一切
+   付与しておらず常にライトモード固定)やfilter/opacity/mix-blend-mode
+   等の設定が原因ではないことも確認済み)。height を1.6pxまで
+   太くすると実測で本来の色まで確実に到達することを確認したため、
+   その値を採用する。あわせてvar(--foreground)ではなく明示的な
+   黒(#171717、印刷用CSSの#000に準じた値)を使い、将来的にテーマ変数の
+   解決値が変わってもインクのマークとしての見た目が変化しないようにする
+   (印刷用CSSが用紙は常に白地・黒インクである前提で#000を直接指定している
+   のと同じ考え方)。 */
 .scoresheet-ladder-value-slash::after {
   content: '';
   position: absolute;
   left: 50%;
   top: 50%;
   width: 1.3em;
-  height: 1px;
-  background: var(--foreground);
+  height: 1.6px;
+  background: #171717;
   transform: translate(-50%, -50%) rotate(-35deg);
 }
 
+/* セルがブロック幅に対して横長のため、inset:%指定だと縦横比に応じて楕円に
+   なってしまう(以前の実装の不具合)。固定のwidth/heightに加え
+   aspect-ratio: 1/1も明示し、セルの縦横比に関わらず真円を保つ。
+   Q終了の○(下の.scoresheet-ladder-value.scoresheet-ladder-period-end
+   ::before等)と同心円になった時に明確な白い余白ができるよう、○の直径
+   (1.4em)の60%程度のサイズに抑える。z-indexで○(::before)より上に
+   描画されることを明示し、重なり順を確定させる。斜線と同じ理由で
+   var(--foreground)ではなく明示的な黒を使う。 */
 .scoresheet-ladder-value-ft::after {
   content: '';
   position: absolute;
-  inset: 8%;
+  left: 50%;
+  top: 50%;
+  width: 0.85em;
+  height: 0.85em;
+  aspect-ratio: 1 / 1;
   border-radius: 999px;
-  background: var(--foreground);
+  background: #171717;
+  transform: translate(-50%, -50%);
+  z-index: 1;
 }
 
-.scoresheet-ladder-a,
-.scoresheet-ladder-b {
-  min-width: 2em;
-}
+/* 列幅はtable-layout: fixed + colgroup/colの.scoresheet-ladder-colに一本化
+   したため(ScoreSheet.jsx・上の.scoresheet-ladder-col参照)、
+   .scoresheet-ladder-a/-bクラス自体はcellClassA/cellClassB(Quarter終了の
+   太線用)の付与先としてJSX側に残っているが、幅を指定するCSSルールは
+   ここでは持たない。 */
 
 /* 各チームのクォーター終了時点の得点マス(太線)・試合終了時点の最終得点マス(二重線)。
-   .scoresheet-ladder-table td { border: 1px solid var(--border); }(全辺指定の
-   borderショートハンド、要素セレクタ込みで詳細度が高い)に対し、クラス単体の
-   セレクタだと詳細度で負けて上書きされない(出現順に関わらず)ため、
-   .scoresheet-ladder-table tdを前置して詳細度を上げる。 */
+   border-bottomではなくbox-shadow(inset)で表現する。border-bottomは
+   ボックスモデルに参加するため、太さの違い(通常行0.6-1px/period-end
+   1.5-2px/game-end 2-3px)がそのまま行の高さの差になってしまい、行高を
+   統一する妨げになっていた(実際にこれが行高不揃いの一因だった)。
+   box-shadowは描画のみでレイアウトに一切影響しないため、
+   .scoresheet-ladder-table tdの固定heightを崩さずに太線/二重線を表現できる。
+   このクラスはTeam A/Bそれぞれのイベント単体から独立に判定され
+   (RunningScoreBlocks参照)、該当チーム側のセル(得点者欄+累計得点欄の
+   2マス)のみに適用される。A/Bが偶然同じ行になった場合のみ両側に太線が
+   入るが、それぞれ独立した判定の結果がたまたま同じ行で重なっているだけで、
+   行全体を1つの単位として扱っているわけではない。 */
 .scoresheet-ladder-table td.scoresheet-ladder-period-end {
-  border-bottom: 2px solid var(--foreground);
+  box-shadow: inset 0 -2px 0 0 var(--foreground);
 }
 
 .scoresheet-ladder-table td.scoresheet-ladder-game-end {
-  border-bottom: 3px double var(--foreground);
+  box-shadow:
+    inset 0 -1.2px 0 0 var(--foreground),
+    inset 0 -3.6px 0 0 var(--foreground);
+}
+
+/* 各Q終了時点・試合終了時点のそのチームの最後の累計得点を太めの○で囲む
+   (JBA公式の記法)。囲む対象は累計得点セルのみ(得点者番号セルは囲まない、
+   そちら側は上のborder-bottomのみで区切りを示す)。.scoresheet-ladder-value
+   との組み合わせでのみ有効になるため、得点者番号セルには適用されない。
+   斜線(::after)とは別の疑似要素(::before)のため、2P/3P成功時点がQ終了と
+   重なっても共存できる。 */
+.scoresheet-ladder-value.scoresheet-ladder-period-end::before,
+.scoresheet-ladder-value.scoresheet-ladder-game-end::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.4em;
+  height: 1.4em;
+  aspect-ratio: 1 / 1;
+  border: 1.5px solid #171717;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  z-index: 0;
 }
 
 /* 印刷時は画面表示用DOM(このファイルが担当するレスポンシブUI)を丸ごと非表示にし、
