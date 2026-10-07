@@ -175,7 +175,14 @@ function SspTeamSection({ team, label, game }) {
   // (13人目以降)はこのページには含めず、2ページ目(SspOverflowSection)に回す。
   const page1Rows = buildRosterPageRows(team.players.slice(0, PRINT_ROSTER_ROW_COUNT), PRINT_ROSTER_ROW_COUNT)
   return (
-    <div className="ssp-card">
+    // ssp-card-teamは、左カラム(TEAM A/B)の自然な高さを右カラム(RUNNING
+    // SCORE/SCORE)に合わせて少し広げるための専用クラス(ScoreSheetPrint.css
+    // 参照)。.ssp-card/.ssp-card-titleは他のcard(GAME INFORMATION・
+    // RUNNING SCORE・SCORE・OFFICIALS)とも共有しているため、ここだけ
+    // 個別に上書きできるようscopeしている(13人目以降の継続ページ用
+    // SspOverflowSectionにはこのクラスを付けておらず、ページ2は影響を
+    // 受けない)。
+    <div className="ssp-card ssp-card-team">
       <div className="ssp-card-title">
         {label} — {team.name}
       </div>
