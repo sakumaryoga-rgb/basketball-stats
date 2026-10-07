@@ -143,6 +143,26 @@
     margin: 0 0 3pt;
   }
 
+  /* 左カラム(TEAM A/B)の下端を右カラム(RUNNING SCORE/SCORE)の下端に
+     揃えるための調整。.ssp-grid-left/.ssp-grid-rightは2列のgrid track内に
+     あり、track自体の高さは高い方の列(現状は常にRUNNING SCORE側、
+     40行固定のラダー表を含むため)で決まる。そのため右カラムを縮める
+     のではなく、左カラム側に自然な余白を足して高さを合わせる(TEAM Bの
+     下に空のmarginを追加する、absolute位置指定、固定heightの決め打ち、
+     といった場当たり的な対応は避けている)。右カラムが既にtrackの高さを
+     決めているため、左カラムをこの範囲内で広げてもページ全体の高さは
+     増えない。padding/title余白をここで広げ、.ssp-meta-row・
+     .ssp-roster-table・.ssp-coach-rowの各余白もあわせて調整している
+     (詳細は各ルール参照)。 */
+  .ssp-card-team {
+    padding-top: 7.5pt;
+    padding-bottom: 7.5pt;
+  }
+
+  .ssp-card-team .ssp-card-title {
+    margin-bottom: 7pt;
+  }
+
   .ssp-field {
     display: flex;
     flex-direction: column;
@@ -219,26 +239,29 @@
     align-items: start;
   }
 
-  /* TEAM A↔TEAM B間、およびRUNNING SCORE↔SCORE間のgap。1ページ目の縦方向の
-     高さ削減のため4pt→2ptに詰めている(横方向の3fr:2fr比率は上の.ssp-gridの
-     column-gapで別途管理しており、ここでは変更していない)。 */
+  /* TEAM A↔TEAM B間、およびRUNNING SCORE↔SCORE間のgap。.ssp-card側の
+     margin-bottom(3pt)と揃え、GAME INFORMATION→メイン領域間・メイン領域→
+     OFFICIALS間と同じ共通の間隔になるようにしている(横方向の3fr:2fr比率は
+     上の.ssp-gridのcolumn-gapで別途管理しており、ここでは変更していない)。 */
   .ssp-grid-left,
   .ssp-grid-right {
     display: flex;
     flex-direction: column;
-    gap: 2pt;
+    gap: 3pt;
     min-width: 0;
   }
 
   /* タイムアウト・チームファウルを横並びにして上下幅を節約する。
-     画面表示(ScoreSheet.jsx側)は別コンポーネントで縦積みのまま。 */
+     画面表示(ScoreSheet.jsx側)は別コンポーネントで縦積みのまま。
+     margin-bottomは、左カラム(TEAM A/B)の高さを右カラム(RUNNING SCORE/
+     SCORE)に合わせるための調整の一部(.ssp-card-team参照)。 */
   .ssp-meta-row {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
     align-items: flex-start;
     gap: 8pt;
-    margin-bottom: 2pt;
+    margin-bottom: 5pt;
     font-size: 7pt;
   }
 
@@ -330,10 +353,14 @@
     width: 8%;
   }
 
+  /* 行のpaddingは、左カラム(TEAM A/B)の高さを右カラム(RUNNING SCORE/
+     SCORE)に合わせるための調整の一部(.ssp-card-team参照)。このテーブルは
+     13人目以降の継続ページ(SspOverflowSection)にも使われるが、2ページ目は
+     1ページ目の高さ制約とは無関係なので影響はない。 */
   .ssp-roster-table th,
   .ssp-roster-table td {
     border: 0.6pt solid #000;
-    padding: 0.7pt 2pt;
+    padding: 1.5pt 2pt;
     text-align: right;
     white-space: nowrap;
   }
@@ -370,10 +397,12 @@
     text-align: center !important;
   }
 
+  /* margin-topは、左カラム(TEAM A/B)の高さを右カラム(RUNNING SCORE/
+     SCORE)に合わせるための調整の一部(.ssp-card-team参照)。 */
   .ssp-coach-row {
     display: flex;
     gap: 10mm;
-    margin-top: 2pt;
+    margin-top: 5pt;
     font-size: 7pt;
   }
 
