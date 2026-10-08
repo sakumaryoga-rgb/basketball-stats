@@ -211,32 +211,58 @@
      1ページの実際の印刷可能高さが狭くなり、2ページ目に送られる原因の一つに
      なっていた。列構成・横幅は変えず、縦方向の余白のみ元の5ptよりさらに
      詰めている(他のcard: TEAM A/B・RUNNING SCORE・SCOREの基準paddingは
-     上の.ssp-cardで別途調整済み)。 */
-  .ssp-card-game-info,
-  .ssp-card-officials {
+     上の.ssp-cardで別途調整済み)。OFFICIALSはTEAM B/SCOREの下端を揃えた
+     ことで生まれた安全余白の一部を使い、GAME INFORMATIONより少し広めに
+     しており(下のルール参照)、ここではGAME INFORMATION側の基準値のみを
+     保持している。 */
+  .ssp-card-game-info {
     padding-top: 4pt;
     padding-bottom: 4pt;
   }
 
-  .ssp-info-grid .ssp-field,
-  .ssp-officials-grid .ssp-field {
+  /* OFFICIALSはA4下部にまだ余裕があったため、縦方向(padding・項目の
+     上下間隔・記入線の上の余白)だけを少し広げている(固定heightの決め打ち
+     ではなく、自然な余白の積み増し)。GAME INFORMATIONやRunning Scoreには
+     影響しない。 */
+  .ssp-card-officials {
+    padding-top: 7pt;
+    padding-bottom: 7pt;
+  }
+
+  .ssp-card-officials .ssp-card-title {
+    margin-bottom: 5pt;
+  }
+
+  .ssp-info-grid .ssp-field {
     gap: 1.5pt;
   }
 
+  .ssp-officials-grid .ssp-field {
+    gap: 3pt;
+  }
+
   /* OFFICIALSは手書きで記入する欄のため、下線の上の空間を他より少し広めに取る。
-     以前は1.6emだったが、1ページ目の縦方向の高さ削減のため1.1emに詰めている
-     (手書きで記入する余地は残しつつ、ページ高さへの影響を抑える)。 */
+     以前は1.6emだったが、1ページ目の縦方向の高さ削減のため1.1emまで詰めて
+     いた。今回、左右カラムの下端が揃ったことで生まれた余白を使い、1.4emまで
+     少し戻している。 */
   .ssp-officials-grid .ssp-blank {
-    min-height: 1.1em;
+    min-height: 1.4em;
   }
 
   /* 左(チーム情報・選手表)を右(ランニングスコア)よりやや広く配分する。
-     常に3fr:2fr固定で、viewport幅によって比率が変わることはない。 */
+     常に3fr:2fr固定で、viewport幅によって比率が変わることはない。
+     align-items: stretch(grid既定値)にすることで、.ssp-grid-left/
+     .ssp-grid-right(grid item)の両方が、高い方の列で決まるtrackの高さ
+     いっぱいまで引き伸ばされる。これ自体はtrackの高さ計算(=高い方の列の
+     自然な高さ)には影響しない。下の.ssp-card-scoreで、引き伸ばされた
+     .ssp-grid-right内の余った縦スペースをSCOREカードだけが自然に吸収する
+     ようにしている(TEAM B/SCOREどちらが自然に長くても、この仕組みで
+     互いの下端が一致する)。 */
   .ssp-grid {
     display: grid;
     grid-template-columns: 3fr 2fr;
     column-gap: 4pt;
-    align-items: start;
+    align-items: stretch;
   }
 
   /* TEAM A↔TEAM B間、およびRUNNING SCORE↔SCORE間のgap。.ssp-card側の
@@ -249,6 +275,16 @@
     flex-direction: column;
     gap: 3pt;
     min-width: 0;
+  }
+
+  /* SCOREカードの外枠だけをgrid trackの高さいっぱいまで伸ばし、TEAM Bの
+     下端と揃える(完了条件: TEAM B下端 ≒ SCORE下端)。固定heightの決め打ちや
+     SCOREの中身(Quarter Score・最終スコア等)を縦に引き伸ばす方法ではなく、
+     flex-growで外枠の余白だけを自然に増やす。.ssp-card自体はflexコンテナ
+     ではない(中身は通常のブロック要素のまま上詰めで並ぶ)ため、増えた
+     高さぶんはカード下部の余白として現れるだけで、文字間隔・行間は変わらない。 */
+  .ssp-card-score {
+    flex: 1 1 auto;
   }
 
   /* タイムアウト・チームファウルを横並びにして上下幅を節約する。

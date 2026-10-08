@@ -295,7 +295,11 @@ function SspScoreCard({ vm }) {
   const { teamA, teamB, game, result } = vm
   const periods = Array.from({ length: game.lastPeriod }, (_, i) => i + 1)
   return (
-    <div className="ssp-card">
+    // ssp-card-scoreは、右カラム(RUNNING SCORE+SCORE)の下端を左カラム
+    // (TEAM A+B)の下端に合わせるための専用クラス(ScoreSheetPrint.css
+    // 参照)。grid trackの高さまでSCOREカードの外枠だけを自然に伸ばし、
+    // 中身(Quarter Score・最終スコア等)は上側に詰めたまま引き伸ばさない。
+    <div className="ssp-card ssp-card-score">
       <div className="ssp-card-title">SCORE</div>
       <table className="ssp-score-table">
         <thead>
