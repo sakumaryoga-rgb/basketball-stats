@@ -249,41 +249,105 @@
     min-height: 1.4em;
   }
 
-  /* 左(チーム情報・選手表)を右(ランニングスコア)よりやや広く配分する。
-     常に3fr:2fr固定で、viewport幅によって比率が変わることはない。
-     align-items: stretch(grid既定値)にすることで、.ssp-grid-left/
-     .ssp-grid-right(grid item)の両方が、高い方の列で決まるtrackの高さ
-     いっぱいまで引き伸ばされる。これ自体はtrackの高さ計算(=高い方の列の
-     自然な高さ)には影響しない。下の.ssp-card-scoreで、引き伸ばされた
-     .ssp-grid-right内の余った縦スペースをSCOREカードだけが自然に吸収する
-     ようにしている(TEAM B/SCOREどちらが自然に長くても、この仕組みで
-     互いの下端が一致する)。 */
+  /* 左右カラム(TEAM A/B・RUNNING SCORE/SCORE)の下端を、ブラウザ/印刷エンジン
+     に依存せず確実に揃えるため、CSS Grid(align-items: stretch)ではなく
+     table/table-cellの等高セル特性を使う。
+     【以前のgrid stretch方式をやめた理由】 CSS Gridのalign-items: stretchは、
+     grid item自体をtrackの高さまで引き伸ばすが、そのitemがflexコンテナ+
+     flex-growの組み合わせだった場合の最終的な高さ計算は、特にprint
+     fragmentation(改ページ計算)を伴う文脈でブラウザ・レンダリングエンジン
+     ごとに解釈が割れやすい。PC Chromium・Playwright WebKitでは一致したが、
+     実iPhone Safariの印刷パイプラインでは揃わないことが実機検証で判明した
+     (Grid Fragmentationは比較的新しい仕様追加で、ブロック/テーブルの
+     fragmentationほど実装が枯れていないため)。
+     【table/table-cellを選んだ理由】 table-cellの「同じ行の全セルは常に
+     同じ高さになる」という挙動はCSS2.1由来の最も基礎的なレイアウトモデルで、
+     flexbox/gridが存在する以前から標準化されており、古いSafari/WebKitの
+     印刷エンジンを含めあらゆる主要ブラウザで一貫した実装がある(この挙動の
+     既知のクロスブラウザ不整合は無い)。 */
   .ssp-grid {
-    display: grid;
-    grid-template-columns: 3fr 2fr;
-    column-gap: 4pt;
-    align-items: stretch;
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
   }
 
-  /* TEAM A↔TEAM B間、およびRUNNING SCORE↔SCORE間のgap。.ssp-card側の
-     margin-bottom(3pt)と揃え、GAME INFORMATION→メイン領域間・メイン領域→
-     OFFICIALS間と同じ共通の間隔になるようにしている(横方向の3fr:2fr比率は
-     上の.ssp-gridのcolumn-gapで別途管理しており、ここでは変更していない)。 */
+  /* height: 0は「table-cellの実際の高さを0に固定する」という意味ではない
+     (table-cellは常に内容が収まる高さまで自動的に広がる。table-layout:
+     fixedは列幅のみを固定し、行の高さには影響しない)。CSS2.1の仕様では、
+     子要素のheight: 100%等のパーセンテージ指定は、table-cell自身に
+     「明示的な」height指定が無い(=auto)場合はautoとして扱われ、実際には
+     伸び縮みしない。この仕様の結果、下の.ssp-grid-left/.ssp-grid-rightの
+     height: 100%が、cellの実際の高さに正しく伸びないセル(内容が短い方)が
+     ある実測結果を確認した。table-cellにheight: 0という「明示的だが
+     table layoutによって無視される」値を与えることで、この仕様上の
+     auto化を回避し、子のheight: 100%を確実にcellの実際の高さへ解決させる
+     (古くからある、table-cell内でheight: 100%を機能させるための標準的な
+     対策)。 */
+  .ssp-grid-left-cell,
+  .ssp-grid-right-cell {
+    display: table-cell;
+    vertical-align: top;
+    height: 0;
+  }
+
+  /* 3fr:2fr比率を維持する。以前のCSS Grid版(grid-template-columns: 3fr 2fr;
+     column-gap: 4pt)は、4ptのgapを先に差し引いた残り(100% - 4pt)を3:2で
+     分割していた。table-cellはgap/column-gapに対応していないため、
+     左セルのpadding-rightでgapを再現しているが、単純に60%/40%だけを指定
+     すると、gapぶんが右セルの幅に取られず左セルのcontent幅だけが狭くなり、
+     以前よりテーブル(選手名簿・Running Score)の実効幅が左右で0.5mm前後
+     ずれてしまう(実測で確認)。
+     calc((100% - 4pt) * 3 / 5)のような相対計算も試したが、table-layout:
+     fixedの列幅解決でcalc()が一部の値(特に%とptが混在する乗除算)を
+     正しく解釈せず、2列が50%/50%に崩れる現象を実測で確認した(table-cell
+     width内でのcalc()サポートはtable-layout: fixed特有の列幅決定アルゴリズム
+     との相性が悪く、環境依存の挙動がある)。そのため、このコンポーネント
+     全体の方針(「全ての列数・幅は%/mm/pt等の固定値として明示する」
+     ファイル先頭コメント参照)と同様に、.ssp-root の固定幅(194mm)から
+     算出した固定mm値で明示する。194mm・4ptが変わった場合はこの2値も
+     併せて見直す必要がある:
+       left  = (194mm - 4pt) * 3/5 + 4pt ≈ 116.964mm
+       right = (194mm - 4pt) * 2/5       ≈  77.036mm */
+  .ssp-grid-left-cell {
+    width: 116.964mm;
+    padding-right: 4pt;
+  }
+
+  .ssp-grid-right-cell {
+    width: 77.036mm;
+  }
+
+  /* table-cellの等高化(上記)により、.ssp-grid-left-cell/
+     .ssp-grid-right-cell自体の高さは常に一致する。その内側のflex
+     コンテナにheight: 100%を与えてセルいっぱいまで広げたうえで、各カラムの
+     最後のcard(TEAM B・SCORE)だけがflex-growで余ったスペースを自然に
+     吸収する(下のルール参照)。TEAM A↔TEAM B間・RUNNING SCORE↔SCORE間の
+     gapは、.ssp-card側のmargin-bottom(3pt)と揃え、GAME INFORMATION→
+     メイン領域間・メイン領域→OFFICIALS間と同じ共通の間隔にしている
+     (横方向の3fr:2fr比率は上の.ssp-grid-left-cell/.ssp-grid-right-cellの
+     widthで別途管理しており、ここでは変更していない)。 */
   .ssp-grid-left,
   .ssp-grid-right {
     display: flex;
     flex-direction: column;
     gap: 3pt;
     min-width: 0;
+    height: 100%;
   }
 
-  /* SCOREカードの外枠だけをgrid trackの高さいっぱいまで伸ばし、TEAM Bの
-     下端と揃える(完了条件: TEAM B下端 ≒ SCORE下端)。固定heightの決め打ちや
-     SCOREの中身(Quarter Score・最終スコア等)を縦に引き伸ばす方法ではなく、
-     flex-growで外枠の余白だけを自然に増やす。.ssp-card自体はflexコンテナ
-     ではない(中身は通常のブロック要素のまま上詰めで並ぶ)ため、増えた
-     高さぶんはカード下部の余白として現れるだけで、文字間隔・行間は変わらない。 */
-  .ssp-card-score {
+  /* 各カラムの最後のcard(TEAM B・SCORE)の外枠だけを、高さが確定した
+     table-cellいっぱいまで伸ばす(完了条件: leftColumn.bottom ===
+     rightColumn.bottom、その結果としてTEAM B下端 ≒ SCORE下端)。
+     固定heightの決め打ちやカードの中身(選手名簿・Quarter Score等)を
+     縦に引き伸ばす方法ではなく、flex-growで外枠の余白だけを自然に増やす。
+     .ssp-card自体はflexコンテナではない(中身は通常のブロック要素のまま
+     上詰めで並ぶ)ため、増えた高さぶんはカード下部の余白として現れるだけで、
+     文字間隔・行間は変わらない。左右どちらのカラムが自然に長くなっても
+     (左右対称に同じルールを適用しているため)短い方の最後のカードが
+     追従して揃う。 */
+  .ssp-grid-left > .ssp-card:last-child,
+  .ssp-grid-right > .ssp-card:last-child {
     flex: 1 1 auto;
   }
 

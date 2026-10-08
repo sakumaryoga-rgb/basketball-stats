@@ -295,11 +295,10 @@ function SspScoreCard({ vm }) {
   const { teamA, teamB, game, result } = vm
   const periods = Array.from({ length: game.lastPeriod }, (_, i) => i + 1)
   return (
-    // ssp-card-scoreは、右カラム(RUNNING SCORE+SCORE)の下端を左カラム
-    // (TEAM A+B)の下端に合わせるための専用クラス(ScoreSheetPrint.css
-    // 参照)。grid trackの高さまでSCOREカードの外枠だけを自然に伸ばし、
-    // 中身(Quarter Score・最終スコア等)は上側に詰めたまま引き伸ばさない。
-    <div className="ssp-card ssp-card-score">
+    // SCOREは.ssp-grid-right内の最後のcardのため、ScoreSheetPrint.cssの
+    // .ssp-grid-right > .ssp-card:last-childがflex-growを与え、外枠だけを
+    // 自然に伸ばす(中身=Quarter Score・最終スコア等は上側に詰めたまま)。
+    <div className="ssp-card">
       <div className="ssp-card-title">SCORE</div>
       <table className="ssp-score-table">
         <thead>
@@ -402,14 +401,24 @@ export function ScoreSheetPrint({ vm }) {
         </div>
       </div>
 
+      {/* 左右カラム(TEAM A/B・RUNNING SCORE/SCORE)の下端を、ブラウザ/印刷
+          エンジンに依存せず確実に揃えるため、ssp-grid-left-cell/
+          ssp-grid-right-cellはdisplay:table-cellにしている(詳細は
+          ScoreSheetPrint.cssのssp-grid付近のコメント参照)。中のssp-grid-left/
+          ssp-grid-rightは従来通りのflex columnで、各コンポーネント自体は
+          変更していない。 */}
       <div className="ssp-grid">
-        <div className="ssp-grid-left">
-          <SspTeamSection team={teamA} label="TEAM A" game={game} />
-          <SspTeamSection team={teamB} label="TEAM B" game={game} />
+        <div className="ssp-grid-left-cell">
+          <div className="ssp-grid-left">
+            <SspTeamSection team={teamA} label="TEAM A" game={game} />
+            <SspTeamSection team={teamB} label="TEAM B" game={game} />
+          </div>
         </div>
-        <div className="ssp-grid-right">
-          <SspRunningScore scoringEvents={scoringEvents} opponentScoringEvents={opponentScoringEvents} teamA={teamA} teamB={teamB} />
-          <SspScoreCard vm={vm} />
+        <div className="ssp-grid-right-cell">
+          <div className="ssp-grid-right">
+            <SspRunningScore scoringEvents={scoringEvents} opponentScoringEvents={opponentScoringEvents} teamA={teamA} teamB={teamB} />
+            <SspScoreCard vm={vm} />
+          </div>
         </div>
       </div>
 
