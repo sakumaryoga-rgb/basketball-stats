@@ -437,14 +437,18 @@
   .ssp-col-no {
     width: 5%;
   }
+  /* STARTER見出しのはみ出し対策で.ssp-col-starterを9%→11%に広げたぶん、
+     氏名列(41%→39%)から2%を振り替えている(表全体の合計は100%のまま、
+     他の列・表全体の横幅は変更していない)。氏名列はまだ十分に広く、
+     長い氏名は既存のword-break: break-wordで折り返される。 */
   .ssp-col-name {
-    width: 41%;
+    width: 39%;
   }
   .ssp-col-number {
     width: 7%;
   }
   .ssp-col-starter {
-    width: 9%;
+    width: 11%;
   }
   .ssp-col-foul {
     width: 6%;
@@ -467,6 +471,18 @@
 
   .ssp-roster-table tr {
     break-inside: avoid;
+  }
+
+  /* STARTER見出しが列幅からはみ出していた対策。列幅自体も9%→11%に広げて
+     いる(上の.ssp-col-starter参照)が、それだけでは太字7文字ぶんの幅が
+     ぎりぎりだったため、見出しセルだけfont-sizeとletter-spacing・左右
+     paddingを少し詰め、確実に枠内に収まるようにする。TEAM A/Bとも同じ
+     .ssp-starter-headerクラスを使うため見た目は共通。 */
+  .ssp-starter-header {
+    font-size: 6pt;
+    letter-spacing: -0.02em;
+    padding-left: 0.75pt;
+    padding-right: 0.75pt;
   }
 
   .ssp-col-name-align {

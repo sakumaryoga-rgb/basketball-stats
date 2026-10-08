@@ -116,7 +116,7 @@ function SspRosterTable({ rows, startIndex, periodSystem }) {
           <th>No.</th>
           <th className="ssp-col-name-align">選手氏名</th>
           <th>#</th>
-          <th>STARTER</th>
+          <th className="ssp-starter-header">STARTER</th>
           <th colSpan={FOUL_BOX_COUNT}>ファウル</th>
           <th>PTS</th>
         </tr>
@@ -142,7 +142,10 @@ function SspRosterTable({ rows, startIndex, periodSystem }) {
                 </>
               )}
             </td>
-            <td>{p ? (p.number ?? <SspBlank value={null} />) : null}</td>
+            {/* #(背番号)欄は、未記入時でも下線(SspBlank)を表示しない。
+                手書き記入欄ではなく、記録された背番号をそのまま表示する
+                だけの列のため、空欄のときは単に空セルにする。 */}
+            <td>{p?.number ?? ''}</td>
             <td>{p?.startedOnCourt ? '○' : ''}</td>
             {Array.from({ length: FOUL_BOX_COUNT }, (_, idx) => (
               <td key={idx} className="ssp-foul-box-cell">
