@@ -272,10 +272,23 @@
     border-collapse: collapse;
   }
 
+  /* height: 0は「table-cellの実際の高さを0に固定する」という意味ではない
+     (table-cellは常に内容が収まる高さまで自動的に広がる。table-layout:
+     fixedは列幅のみを固定し、行の高さには影響しない)。CSS2.1の仕様では、
+     子要素のheight: 100%等のパーセンテージ指定は、table-cell自身に
+     「明示的な」height指定が無い(=auto)場合はautoとして扱われ、実際には
+     伸び縮みしない。この仕様の結果、下の.ssp-grid-left/.ssp-grid-rightの
+     height: 100%が、cellの実際の高さに正しく伸びないセル(内容が短い方)が
+     ある実測結果を確認した。table-cellにheight: 0という「明示的だが
+     table layoutによって無視される」値を与えることで、この仕様上の
+     auto化を回避し、子のheight: 100%を確実にcellの実際の高さへ解決させる
+     (古くからある、table-cell内でheight: 100%を機能させるための標準的な
+     対策)。 */
   .ssp-grid-left-cell,
   .ssp-grid-right-cell {
     display: table-cell;
     vertical-align: top;
+    height: 0;
   }
 
   /* 3fr:2fr比率を維持する。以前のCSS Grid版(grid-template-columns: 3fr 2fr;
