@@ -153,7 +153,10 @@ function TeamRosterTable({ team, periodSystem, blankRowCount }) {
                   <Blank value={null} minWidth="7em" />
                 )}
               </td>
-              <td className="tabular-nums">{p ? (p.number ?? <Blank value={null} minWidth="2em" />) : <Blank value={null} minWidth="2em" />}</td>
+              {/* #(背番号)欄は、未記入時でも下線(Blank)を表示しない。
+                  手書き記入欄ではなく、記録された背番号をそのまま表示する
+                  だけの列のため、空欄のときは単に空セルにする。 */}
+              <td className="tabular-nums">{p?.number ?? ''}</td>
               <td>{p?.startedOnCourt ? '○' : ''}</td>
               {Array.from({ length: FOUL_BOX_COUNT }, (_, idx) => (
                 <td key={idx} className="scoresheet-foul-box-cell tabular-nums">
@@ -306,15 +309,31 @@ export function ScoreSheet() {
   // ボタンが永久に押せなくなることは無いようにする。
   const printingRef = useRef(false)
   const printingFallbackTimeoutRef = useRef(null)
-  // ブラウザの「PDFに保存」は既定でdocument.titleをファイル名候補にするため、
-  // 印刷直前だけ「vs対戦相手名_試合日」に変更し、印刷完了後に元のタイトル
-  // (アプリ起動時のもの)へ戻す。
   const originalTitleRef = useRef(document.title)
+
+  // ブラウザの「PDFに保存」は既定でdocument.titleをファイル名候補にすることが
+  // 多い。以前はアプリ内の「印刷/PDF保存」ボタンのクリック時だけdocument.title
+  // を変更していたが、iOS Safari標準の共有/印刷UIをアプリのボタンを経由せず
+  // 直接使って保存するケースではタイトルが変更されないまま(=既定のアプリ名)
+  // 保存されてしまう不具合があった。vm(試合データ)が読み込まれ次第、この
+  // 画面を表示している間はずっと「vs対戦相手名_試合日」のタイトルにしておき、
+  // 画面を離れるとき(アンマウント時)に元のタイトルへ戻す(印刷完了直後に
+  // 戻すのではない)。日付が未設定の場合は保存日(今日の日付)をフォールバック
+  // として使う。
+  useEffect(() => {
+    if (!vm) return
+    // ファイル名として使えない記号(/ \ : * ? " < > |)は除去する
+    const opponent = (vm.teamB.name || '').replace(/[\\/:*?"<>|]/g, '').trim() || 'Guest'
+    const date = vm.game.date || new Date().toISOString().slice(0, 10)
+    document.title = `vs${opponent}_${date}`
+    return () => {
+      document.title = originalTitleRef.current
+    }
+  }, [vm])
 
   useEffect(() => {
     function handleAfterPrint() {
       printingRef.current = false
-      document.title = originalTitleRef.current
       if (printingFallbackTimeoutRef.current) {
         clearTimeout(printingFallbackTimeoutRef.current)
         printingFallbackTimeoutRef.current = null
@@ -324,24 +343,17 @@ export function ScoreSheet() {
     return () => {
       window.removeEventListener('afterprint', handleAfterPrint)
       if (printingFallbackTimeoutRef.current) clearTimeout(printingFallbackTimeoutRef.current)
-      // 印刷ダイアログが開いたまま画面を離れた場合でも、タイトルを変更したままに
-      // しない(戻る操作等でこのコンポーネント自体がアンマウントされるケース)
-      document.title = originalTitleRef.current
     }
   }, [])
 
   const handlePrintClick = () => {
     if (printingRef.current || !vm) return
     printingRef.current = true
-    // ファイル名として使えない記号(/ \ : * ? " < > |)は除去する
-    const opponent = (vm.teamB.name || '').replace(/[\\/:*?"<>|]/g, '').trim()
-    document.title = `vs${opponent}_${vm.game.date}`
     window.print()
     // afterprintがどうしても発火しない環境へのフォールバックのみ。
     // afterprintが先に発火した場合はこのタイマー自体をクリアする。
     printingFallbackTimeoutRef.current = setTimeout(() => {
       printingRef.current = false
-      document.title = originalTitleRef.current
       printingFallbackTimeoutRef.current = null
     }, 10000)
   }
