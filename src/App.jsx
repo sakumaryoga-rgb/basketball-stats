@@ -22,6 +22,7 @@ import { Terms } from '@/routes/Terms'
 import { OperatorInfo } from '@/routes/OperatorInfo'
 import { Layout } from '@/components/Layout'
 import { InAppBrowserBanner } from '@/components/InAppBrowserBanner'
+import { ExternalBrowserGate } from '@/components/ExternalBrowserGate'
 import { UpdatePrompt } from '@/components/UpdatePrompt'
 
 function FullScreenLoader() {
@@ -54,7 +55,14 @@ export default function App() {
           </Suspense>
         }
       />
-      <Route path="/*" element={<MainApp />} />
+      <Route
+        path="/*"
+        element={
+          <ExternalBrowserGate>
+            <MainApp />
+          </ExternalBrowserGate>
+        }
+      />
     </Routes>
   )
 }
