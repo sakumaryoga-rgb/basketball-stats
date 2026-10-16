@@ -67,8 +67,13 @@ export default function App() {
   )
 }
 
-function OnboardingRoute({ playful, ...props }) {
-  return playful ? <Onboarding {...props} /> : <OnboardingClassic {...props} />
+function OnboardingRoute({ playful, teams, activeTeamId, onSwitchTeam, ...props }) {
+  // 参加済みチームからの切り替えは新UIのオンボーディングだけの機能(従来版には渡さない)
+  return playful ? (
+    <Onboarding {...props} teams={teams} activeTeamId={activeTeamId} onSwitchTeam={onSwitchTeam} />
+  ) : (
+    <OnboardingClassic {...props} />
+  )
 }
 
 function MainApp() {
@@ -116,8 +121,32 @@ function MainApp() {
       <UpdatePrompt />
       <InAppBrowserBanner />
       <Routes>
-        <Route path="/onboarding" element={<OnboardingRoute playful={playfulOnboarding} onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
-        <Route path="/t/:token" element={<OnboardingRoute playful={playfulOnboarding} onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
+        <Route
+          path="/onboarding"
+          element={
+            <OnboardingRoute
+              playful={playfulOnboarding}
+              onTeamJoined={handleTeamJoined}
+              hasTeam={!!activeTeam}
+              teams={teams}
+              activeTeamId={activeTeam?.id}
+              onSwitchTeam={handleSwitchTeam}
+            />
+          }
+        />
+        <Route
+          path="/t/:token"
+          element={
+            <OnboardingRoute
+              playful={playfulOnboarding}
+              onTeamJoined={handleTeamJoined}
+              hasTeam={!!activeTeam}
+              teams={teams}
+              activeTeamId={activeTeam?.id}
+              onSwitchTeam={handleSwitchTeam}
+            />
+          }
+        />
         {/* 印刷用A4レイアウト(@media print)を持つ専用ページのため、Layoutの
             固定高さ・overflow:hiddenのapp-shellの外側に置く(印刷時に内容が
             クリップされるのを避けるため) */}

@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Basketball } from '@/components/fun/Basketball'
 import { CourtLines } from '@/components/fun/CourtLines'
 import { ShareLinkPanel } from '@/components/fun/ShareLinkPanel'
+import { TeamPickerList } from '@/components/fun/TeamPickerList'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -69,7 +70,9 @@ const MODES = [
   { key: 'join', icon: UserPlus, title: 'チームに参加する', sub: '招待リンクをもらった' },
 ]
 
-export function Onboarding({ onTeamJoined, hasTeam }) {
+// teams/activeTeamId/onSwitchTeamはApp.jsx(useTeams=匿名ユーザーのteam_members)から渡される。
+// JOIN TEAMでは、既に所属しているチームを「参加し直さずに切り替える」選択肢として先に出す
+export function Onboarding({ onTeamJoined, hasTeam, teams = [], activeTeamId, onSwitchTeam }) {
   const { token: tokenFromPath } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -346,9 +349,29 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
                   </Button>
                 </form>
               ) : (
+                <div className="flex flex-col gap-4">
+                  {teams.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div>
+                        <p className="font-heading text-[10px] tracking-[0.2em] text-primary">MY TEAMS</p>
+                        <p className="text-sm font-bold">参加済みのチーム</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          この端末で参加しているチームです。タップするとそのチームを表示します(参加し直す必要はありません)
+                        </p>
+                      </div>
+                      {/* 既に所属済みのチームは参加処理を行わず、表示するチームを切り替えるだけ(URLの共有トークンも外す) */}
+                      <TeamPickerList teams={teams} activeTeamId={activeTeamId} onSelect={(teamId) => onSwitchTeam(teamId, '/games')} />
+                      <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground">
+                        <span className="h-px flex-1 bg-border" />
+                        または
+                        <span className="h-px flex-1 bg-border" />
+                      </div>
+                    </div>
+                  )}
                 <form onSubmit={handleJoin} className="flex flex-col gap-3">
                   <div>
                     <p className="font-heading text-[10px] tracking-[0.2em] text-primary">JOIN TEAM</p>
+                    {teams.length > 0 && <p className="text-sm font-bold">新しいチームに参加</p>}
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       招待リンクを開くと自動で参加できます。うまくいかない場合はここに貼り付けてください
                     </p>
@@ -369,6 +392,7 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
                     {saving ? '参加中...' : 'チームに参加'}
                   </Button>
                 </form>
+                </div>
               )}
             </div>
           </>

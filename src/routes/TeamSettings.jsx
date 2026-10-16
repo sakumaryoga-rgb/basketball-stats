@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeftRight, ChevronDown, LogOut, Pencil, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
@@ -9,7 +9,7 @@ import { useTeamPeriodStats } from '@/hooks/useTeamPeriodStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
 import { getShareUrl, saveShareUrl } from '@/lib/shareUrlStore'
-import { formatAvg, formatPct, pct, perGame } from '@/lib/stats'
+import { formatAvg, formatPct, perGame, shootingSplits } from '@/lib/stats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -287,16 +287,27 @@ function StatTile({ label, value, index = 0 }) {
   )
 }
 
-function ShootingRing({ label, value }) {
+// split.pctは0〜100の百分率(stats.jsのshootingSplits)。リングには0〜1の割合で渡す
+function ShootingRing({ split }) {
+  const { label, made, att, pct: value, invalid } = split
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <WinRing value={value} size={72} stroke={7} color="var(--primary)" track="var(--foreground)">
-        <span className="font-heading text-lg tabular-nums">
-          {value == null ? '-' : Math.round(value * 1000) / 10}
-          {value != null && <span className="text-[9px]">%</span>}
+    <div className="flex flex-col items-center gap-1">
+      <WinRing
+        value={invalid || value == null ? 0 : value / 100}
+        size={64}
+        stroke={6}
+        color="var(--primary)"
+        track="var(--foreground)"
+      >
+        <span className="font-heading text-base tabular-nums">
+          {invalid ? '!' : value == null ? '-' : value.toFixed(1)}
+          {!invalid && value != null && <span className="text-[8px]">%</span>}
         </span>
       </WinRing>
-      <span className="font-heading text-[11px] tracking-widest text-muted-foreground">{label}</span>
+      <span className="font-heading text-[11px] tracking-widest">{label}</span>
+      <span className={cn('text-[10px] tabular-nums', invalid ? 'font-bold text-destructive' : 'text-muted-foreground')}>
+        {invalid ? `要確認 ${made}/${att}` : `${made}/${att}`}
+      </span>
     </div>
   )
 }
@@ -343,17 +354,16 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
   const periodBucket = periodStats[periodMode]
   const otherTeams = teams.filter((t) => t.id !== team.id)
 
-  const averages = useMemo(() => {
-    if (!totals) return null
-    return {
-      fgPct: pct(totals.fgm, totals.fga),
-      tpPct: pct(totals.tpm, totals.tpa),
-      ftPct: pct(totals.ftm, totals.fta),
-    }
-  }, [totals])
+  // シュート成功率は全公式戦(2Q制・4Q制の合算、スクリメージ/シューティングは含まない)の
+  // player_season_statsの成功数・試投数から計算する。1試合平均の2Q/4Q切り替えとは連動しない
+  const shooting = useMemo(() => shootingSplits(totals), [totals])
+  useEffect(() => {
+    const bad = shooting?.filter((s) => s.invalid)
+    if (bad?.length) console.error('チームのシュート集計に不整合があります(成功数>試投数など)', team.id, bad)
+  }, [shooting, team.id])
 
   // 「チーム1試合平均」だけは大会の2Q制/4Q制で切り替えられるようにするため、
-  // 全期間合算のaveragesとは別に、選択中の制度の試合だけで平均を出す
+  // 全公式戦合算のシュート成功率・シーズン合計とは別に、選択中の制度の試合だけで平均を出す
   const periodAverages = useMemo(() => {
     const g = periodBucket.gamesPlayed
     const t = periodBucket.totals
@@ -477,7 +487,9 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
           <section className="flex flex-col gap-2">
             <SectionLabel right={<SegmentToggle value={periodMode} onChange={setPeriodMode} />}>PER GAME</SectionLabel>
             <div className="rounded-2xl border bg-card p-3">
-              <p className="mb-2 px-1 text-[11px] text-muted-foreground">チーム1試合平均({periodBucket.gamesPlayed}試合)</p>
+              <p className="mb-2 px-1 text-[11px] text-muted-foreground">
+                チーム1試合平均({periodMode === '2q' ? '2Q制' : '4Q制'}の公式戦 {periodBucket.gamesPlayed}試合)
+              </p>
               <div key={periodMode} className="grid grid-cols-3 gap-2">
                 <StatTile label="PPG" value={formatAvg(periodAverages.pts)} index={0} />
                 <StatTile label="RPG" value={formatAvg(periodAverages.reb)} index={1} />
@@ -491,19 +503,23 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
 
           <section className="flex flex-col gap-2">
             <SectionLabel>SHOOTING</SectionLabel>
-            <div className="grid grid-cols-3 rounded-2xl border bg-card px-2 py-4">
-              <ShootingRing label="FG%" value={averages.fgPct} />
-              <ShootingRing label="3P%" value={averages.tpPct} />
-              <ShootingRing label="FT%" value={averages.ftPct} />
+            <div className="rounded-2xl border bg-card p-3">
+              <p className="mb-2 px-1 text-[11px] text-muted-foreground">全公式戦のシュート成功率(成功数/試投数)</p>
+              <div className="grid grid-cols-4 gap-1">
+                {shooting.map((split) => (
+                  <ShootingRing key={split.key} split={split} />
+                ))}
+              </div>
             </div>
             <p className="sr-only">
-              FG% {formatPct(averages.fgPct)}、3P% {formatPct(averages.tpPct)}、FT% {formatPct(averages.ftPct)}
+              {shooting.map((s) => `${s.label} ${s.invalid ? '要確認' : formatPct(s.pct)}`).join('、')}
             </p>
           </section>
 
           <section className="flex flex-col gap-2">
             <SectionLabel>SEASON TOTALS</SectionLabel>
             <div className="grid grid-cols-3 gap-2 rounded-2xl border bg-card p-3">
+              <p className="col-span-3 px-1 text-[11px] text-muted-foreground">全公式戦の合計(2Q制・4Q制の合算)</p>
               <StatTile label="PTS" value={totals.pts} />
               <StatTile label="REB" value={totals.reb} index={1} />
               <StatTile label="AST" value={totals.ast} index={2} />
