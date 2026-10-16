@@ -288,7 +288,7 @@ function StatBlock({ label, value }) {
   )
 }
 
-export function TeamSettings({ team, onTeamUpdated }) {
+export function TeamSettings({ team, onTeamUpdated, playful = false }) {
   const navigate = useNavigate()
   const { players: allPlayers } = usePlayers(team.id)
   const players = allPlayers.filter((p) => !p.guest_game_id)
@@ -363,7 +363,11 @@ export function TeamSettings({ team, onTeamUpdated }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="TEAM" eyebrow="CLUBHOUSE" />
+      {playful ? (
+        <PageHeader title="TEAM" eyebrow="CLUBHOUSE" />
+      ) : (
+        <h1 className="text-2xl font-heading tracking-wide">TEAM</h1>
+      )}
 
       <div className="rounded-lg border p-4 flex items-center gap-4">
         <Avatar size="lg" className="size-16">

@@ -20,7 +20,7 @@ const NAV_ITEMS = [
 // 大会の試合一覧(/games)・大会詳細(/games/t/:tournamentId)は対象外
 const GAME_RECORDING_PATH = /^\/games\/(?!t\/)[^/]+$/
 
-export function Layout({ teamName, teamIconUrl }) {
+export function Layout({ teamName, teamIconUrl, playful = false }) {
   const location = useLocation()
   const pullToRefreshDisabled = GAME_RECORDING_PATH.test(location.pathname)
   // pull-to-refreshで画面のデータを再取得するため、この値を変えて現在の画面を再マウントさせる
@@ -97,20 +97,27 @@ export function Layout({ teamName, teamIconUrl }) {
                 }`
               }
             >
-              {({ isActive }) => (
-                <>
-                  {isActive && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
-                  <span
-                    key={isActive ? 'on' : 'off'}
-                    className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${
-                      isActive ? 'bg-primary/10 animate-nav-pop' : ''
-                    }`}
-                  >
-                    <Icon className="size-5" strokeWidth={isActive ? 2.4 : 2} />
-                  </span>
-                  <span className="leading-none">{label}</span>
-                </>
-              )}
+              {({ isActive }) =>
+                playful ? (
+                  <>
+                    {isActive && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
+                    <span
+                      key={isActive ? 'on' : 'off'}
+                      className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${
+                        isActive ? 'bg-primary/10 animate-nav-pop' : ''
+                      }`}
+                    >
+                      <Icon className="size-5" strokeWidth={isActive ? 2.4 : 2} />
+                    </span>
+                    <span className="leading-none">{label}</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon className="size-5" />
+                    <span className="leading-none">{label}</span>
+                  </>
+                )
+              }
             </NavLink>
           ))}
         </div>
