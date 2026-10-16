@@ -55,7 +55,28 @@ function SeasonHero({ record, tournamentCount, avgFor, avgAgainst, periodSystem,
           <span className="mt-0.5 font-heading text-[9px] tracking-widest opacity-70">WIN</span>
         </WinRing>
         <div className="flex-1 min-w-0">
-          <p className="font-heading text-[10px] tracking-[0.2em] opacity-70">SEASON RECORD</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="pt-1 font-heading text-[10px] tracking-[0.2em] opacity-70">SEASON RECORD</p>
+            {/* 大会数・平均得点・平均失点だけを切り替える(勝敗とWIN%は合算のまま) */}
+            <div className="-mr-1 -mt-1 flex shrink-0 rounded-lg bg-white/10 p-0.5" role="group" aria-label="大会の制度">
+              {[
+                { key: '2q', label: '2Q制' },
+                { key: '4q', label: '4Q制' },
+              ].map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => onPeriodSystemChange(o.key)}
+                  aria-pressed={periodSystem === o.key}
+                  className={`min-h-8 rounded-md px-2.5 text-[11px] font-bold transition-colors ${
+                    periodSystem === o.key ? 'bg-white text-secondary shadow' : 'text-secondary-foreground/70'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <p className="font-heading text-4xl leading-none tabular-nums mt-1">
             {record.wins}
             <span className="mx-1 opacity-40">-</span>
@@ -86,30 +107,7 @@ function SeasonHero({ record, tournamentCount, avgFor, avgAgainst, periodSystem,
           </div>
         </div>
       </div>
-      <div className="relative mt-4 flex items-center justify-between gap-2">
-        <span className="font-heading text-[10px] tracking-[0.2em] opacity-70">
-          {periodSystem === '2q' ? '2Q制' : '4Q制'}の大会・試合
-        </span>
-        <div className="flex rounded-lg bg-white/10 p-0.5">
-          {[
-            { key: '2q', label: '2Q制' },
-            { key: '4q', label: '4Q制' },
-          ].map((o) => (
-            <button
-              key={o.key}
-              type="button"
-              onClick={() => onPeriodSystemChange(o.key)}
-              aria-pressed={periodSystem === o.key}
-              className={`min-h-8 rounded-md px-3 text-[11px] font-bold transition-colors ${
-                periodSystem === o.key ? 'bg-white text-secondary shadow' : 'text-secondary-foreground/70'
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="relative mt-2 grid grid-cols-3 divide-x divide-white/15 rounded-xl bg-white/5 py-2 text-center">
+      <div className="relative mt-4 grid grid-cols-3 divide-x divide-white/15 rounded-xl bg-white/5 py-2 text-center">
         {[
           { label: 'TOURNAMENTS', value: tournamentCount },
           { label: 'AVG PTS', value: avgFor ?? '-' },
