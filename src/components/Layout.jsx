@@ -92,13 +92,25 @@ export function Layout({ teamName, teamIconUrl }) {
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 py-2.5 text-xs font-heading leading-none tracking-wide ${
+                `relative flex flex-col items-center gap-1 py-2.5 text-xs font-heading leading-none tracking-wide transition-colors ${
                   isActive ? 'text-primary' : 'text-muted-foreground'
                 }`
               }
             >
-              <Icon className="size-5" />
-              <span className="leading-none">{label}</span>
+              {({ isActive }) => (
+                <>
+                  {isActive && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-primary" />}
+                  <span
+                    key={isActive ? 'on' : 'off'}
+                    className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${
+                      isActive ? 'bg-primary/10 animate-nav-pop' : ''
+                    }`}
+                  >
+                    <Icon className="size-5" strokeWidth={isActive ? 2.4 : 2} />
+                  </span>
+                  <span className="leading-none">{label}</span>
+                </>
+              )}
             </NavLink>
           ))}
         </div>

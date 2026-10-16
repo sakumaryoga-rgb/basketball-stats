@@ -1,13 +1,19 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Plus, X } from 'lucide-react'
+import { ChevronRight, Plus, Swords, Target, X } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
+import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
+import { PageHeader } from '@/components/fun/PageHeader'
+import { EmptyState } from '@/components/fun/EmptyState'
+import { GameScoreCard } from '@/components/fun/GameScoreCard'
+import { PracticeHeatmap } from '@/components/fun/PracticeHeatmap'
+import { WinRing } from '@/components/fun/WinRing'
+import { DateTile } from '@/components/fun/DateTile'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useShootingParticipants } from '@/hooks/useShootingParticipants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
@@ -20,18 +26,6 @@ import {
   DialogFooter,
   DialogTrigger,
 } from '@/components/ui/dialog'
-
-const STATUS_LABEL = {
-  scheduled: '予定',
-  in_progress: '試合中',
-  final: '終了',
-}
-
-const STATUS_VARIANT = {
-  scheduled: 'outline',
-  in_progress: 'default',
-  final: 'secondary',
-}
 
 function todayStr() {
   const d = new Date()
@@ -241,6 +235,31 @@ function ParticipantAvatars({ players }) {
   )
 }
 
+function SectionHeader({ icon: Icon, title, sub, children }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
+          <Icon className="size-4" />
+        </span>
+        <div className="min-w-0 leading-none">
+          <h2 className="font-heading text-lg tracking-wide leading-none">{title}</h2>
+          {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+// 成功率に応じてリングの色を変える(よく入った日は金色でちょっと特別感を出す)
+function ringColor(rate) {
+  if (rate == null) return 'var(--muted-foreground)'
+  if (rate >= 0.5) return 'var(--chart-3)'
+  if (rate >= 0.35) return 'var(--primary)'
+  return 'var(--secondary)'
+}
+
 export function Practice({ teamId }) {
   const location = useLocation()
   const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
@@ -249,7 +268,11 @@ export function Practice({ teamId }) {
   // useGamesは日付の新しい順に返すため、先頭5件が直近のワークアウトになる
   const recentShootingSessions = shootingSessions.slice(0, 5)
   // 追加時に選んだだけの選手ではなく、実際にshooting_entriesへ記録がある選手だけを参加者とする
-  const participantsByGame = useShootingParticipants(recentShootingSessions.map((s) => s.id))
+  const summaryByGame = useShootingParticipants(recentShootingSessions.map((s) => s.id))
+  const scrimmageScores = useTeamScoresByGame(
+    scrimmages.map((g) => g.id),
+    'player_practice_game_stats'
+  )
   const playersById = new Map(players.map((p) => [p.id, p]))
   // シューティング画面で「ワークアウトを完了する」を押した直後だけ表示する完了メッセージ
   const [flashMessage, setFlashMessage] = useState(location.state?.flashMessage ?? null)
@@ -266,36 +289,31 @@ export function Practice({ teamId }) {
       )}
 
       <div>
-        <h1 className="text-2xl font-heading tracking-wide">PRACTICE</h1>
-        <p className="text-xs text-muted-foreground mt-1">
+        <PageHeader title="PRACTICE" eyebrow="GRIND TIME" />
+        <p className="text-xs text-muted-foreground mt-2">
           ここで記録した内容は公式スタッツ(TEAM/個人記録)には反映されません
         </p>
       </div>
 
+      <PracticeHeatmap sessions={[...scrimmages, ...shootingSessions]} />
+
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">スクリメージ</h2>
+        <SectionHeader icon={Swords} title="SCRIMMAGE" sub="スクリメージ">
           <CreateScrimmageDialog createGame={createScrimmage} />
-        </div>
+        </SectionHeader>
         {scrimmages.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">まだスクリメージが登録されていません</p>
+          <EmptyState title="まだスクリメージが登録されていません" description="紅白戦や練習試合もGAME同様に記録できます" />
         ) : (
           <ul className="flex flex-col gap-2">
-            {scrimmages.map((game) => (
+            {scrimmages.map((game, i) => (
               <li key={game.id}>
-                <Link
+                <GameScoreCard
+                  game={game}
+                  teamScore={scrimmageScores[game.id]}
                   to={`/games/${game.id}`}
-                  className="flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{game.opponent_name ? `vs ${game.opponent_name}` : 'スクリメージ'}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {game.game_date}
-                      {game.location ? ` ・ ${game.location}` : ''}
-                    </p>
-                  </div>
-                  <Badge variant={STATUS_VARIANT[game.status]}>{STATUS_LABEL[game.status]}</Badge>
-                </Link>
+                  title={game.opponent_name ? `vs ${game.opponent_name}` : 'スクリメージ'}
+                  index={i}
+                />
               </li>
             ))}
           </ul>
@@ -303,29 +321,50 @@ export function Practice({ teamId }) {
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium">シューティング(直近5件)</h2>
+        <SectionHeader icon={Target} title="SHOOTING" sub="シューティング(直近5件)">
           <CreateShootingDialog createGame={createShooting} players={players} />
-        </div>
+        </SectionHeader>
         {recentShootingSessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">まだシューティング記録がありません</p>
+          <EmptyState title="まだシューティング記録がありません" description="コートをタップしてゾーンごとの成功数を記録しよう" />
         ) : (
           <ul className="flex flex-col gap-2">
-            {recentShootingSessions.map((session) => {
-              const participants = (participantsByGame[session.id] ?? [])
-                .map((id) => playersById.get(id))
-                .filter(Boolean)
+            {recentShootingSessions.map((session, i) => {
+              const summary = summaryByGame[session.id]
+              const participants = (summary?.participants ?? []).map((id) => playersById.get(id)).filter(Boolean)
+              const rate = summary?.attempts ? summary.makes / summary.attempts : null
               return (
                 <li key={session.id}>
                   <Link
                     to={`/shooting/${session.id}`}
-                    className="flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
+                    className="press animate-rise-in flex items-center gap-3 rounded-xl border bg-card p-2.5 shadow-xs hover:shadow-md"
+                    style={{ '--i': i }}
                   >
+                    <DateTile date={session.game_date} />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{session.opponent_name || 'シューティング'}</p>
-                      <p className="text-xs text-muted-foreground">{session.game_date}</p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {summary?.attempts ? (
+                          <>
+                            <span className="font-heading text-sm text-foreground">{summary.makes}</span>
+                            <span className="mx-0.5">/</span>
+                            {summary.attempts} 本成功
+                          </>
+                        ) : (
+                          'まだ記録がありません'
+                        )}
+                      </p>
+                      <div className="mt-1.5">
+                        <ParticipantAvatars players={participants} />
+                      </div>
                     </div>
-                    <ParticipantAvatars players={participants} />
+                    <WinRing value={rate} size={52} stroke={5} color={ringColor(rate)} track="var(--foreground)">
+                      <span className="font-heading text-sm tabular-nums">
+                        {rate == null ? '-' : Math.round(rate * 100)}
+                        {rate != null && <span className="text-[8px]">%</span>}
+                      </span>
+                      <span className="font-heading text-[7px] tracking-widest text-muted-foreground">FG</span>
+                    </WinRing>
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
                   </Link>
                 </li>
               )

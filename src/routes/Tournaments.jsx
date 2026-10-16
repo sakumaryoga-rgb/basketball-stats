@@ -1,7 +1,16 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Flame, Plus, Snowflake, Trash2, Trophy } from 'lucide-react'
 import { useTournaments } from '@/hooks/useTournaments'
+import { useGames } from '@/hooks/useGames'
+import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
+import { summarizeRecord, streakLabel } from '@/lib/record'
+import { PageHeader } from '@/components/fun/PageHeader'
+import { EmptyState } from '@/components/fun/EmptyState'
+import { CourtLines } from '@/components/fun/CourtLines'
+import { WinRing } from '@/components/fun/WinRing'
+import { ResultDots } from '@/components/fun/ResultDots'
+import { DateTile } from '@/components/fun/DateTile'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,11 +38,98 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// シーズン通算の成績を電光掲示板風にまとめたヒーローカード
+function SeasonHero({ record, tournamentCount, avgFor, avgAgainst }) {
+  const label = streakLabel(record.streak)
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-secondary p-4 text-secondary-foreground shadow-md animate-rise-in">
+      <CourtLines className="text-white/10" />
+      <div className="absolute -right-6 -top-6 size-24 rounded-full bg-primary/30 blur-2xl" />
+      <div className="relative flex items-center gap-4">
+        <WinRing value={record.winRate} size={80} stroke={7} track="white">
+          <span className="font-heading text-2xl tabular-nums">
+            {record.winRate == null ? '-' : Math.round(record.winRate * 100)}
+            <span className="text-xs">%</span>
+          </span>
+          <span className="mt-0.5 font-heading text-[9px] tracking-widest opacity-70">WIN</span>
+        </WinRing>
+        <div className="flex-1 min-w-0">
+          <p className="font-heading text-[10px] tracking-[0.2em] opacity-70">SEASON RECORD</p>
+          <p className="font-heading text-4xl leading-none tabular-nums mt-1">
+            {record.wins}
+            <span className="mx-1 opacity-40">-</span>
+            {record.losses}
+            {record.ties > 0 && (
+              <>
+                <span className="mx-1 opacity-40">-</span>
+                {record.ties}
+              </>
+            )}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {record.form.length > 0 ? (
+              <ResultDots results={record.form} size="xs" />
+            ) : (
+              <span className="text-xs opacity-70">最初の試合を記録しよう!</span>
+            )}
+            {label && (
+              <span
+                className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                  record.streak.type === 'W' ? 'bg-chart-3 text-[oklch(0.28_0.08_75)]' : 'bg-white/15'
+                }`}
+              >
+                {record.streak.type === 'W' ? <Flame className="size-3" /> : <Snowflake className="size-3" />}
+                {label}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="relative mt-4 grid grid-cols-3 divide-x divide-white/15 rounded-xl bg-white/5 py-2 text-center">
+        {[
+          { label: 'TOURNAMENTS', value: tournamentCount },
+          { label: 'AVG PTS', value: avgFor ?? '-' },
+          { label: 'AVG OPP', value: avgAgainst ?? '-' },
+        ].map((s) => (
+          <div key={s.label}>
+            <p className="font-heading text-xl leading-none tabular-nums">{s.value}</p>
+            <p className="mt-1 font-heading text-[9px] tracking-widest opacity-60">{s.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // GAMEタブは大会単位の一覧。大会を作成し、その中で複数の試合を追加していく
 // (過去の記録を大会単位で参照しやすくするため)。日程・会場は大会作成時に入力し、
 // 大会内で試合を追加するたびに同じ内容を入力する手間を省く
 export function Tournaments({ teamId }) {
   const { tournaments, createTournament, deleteTournament } = useTournaments(teamId)
+  // シーズン成績・大会ごとの勝敗を出すため、大会に属する公式戦をまとめて取得する
+  const { games: officialGames } = useGames(teamId, 'official')
+  const scoresByGameId = useTeamScoresByGame(officialGames.map((g) => g.id))
+
+  const seasonRecord = useMemo(() => summarizeRecord(officialGames, scoresByGameId), [officialGames, scoresByGameId])
+  const recordByTournament = useMemo(() => {
+    const groups = new Map()
+    for (const g of officialGames) {
+      if (!g.tournament_id) continue
+      const list = groups.get(g.tournament_id) ?? []
+      list.push(g)
+      groups.set(g.tournament_id, list)
+    }
+    const map = {}
+    for (const [id, list] of groups) map[id] = { ...summarizeRecord(list, scoresByGameId), total: list.length }
+    return map
+  }, [officialGames, scoresByGameId])
+  const { avgFor, avgAgainst } = useMemo(() => {
+    const finals = officialGames.filter((g) => g.status === 'final')
+    if (finals.length === 0) return { avgFor: null, avgAgainst: null }
+    const sumFor = finals.reduce((acc, g) => acc + (scoresByGameId[g.id] ?? 0), 0)
+    const sumAgainst = finals.reduce((acc, g) => acc + (g.opponent_score ?? 0), 0)
+    return { avgFor: (sumFor / finals.length).toFixed(1), avgAgainst: (sumAgainst / finals.length).toFixed(1) }
+  }, [officialGames, scoresByGameId])
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [gameDate, setGameDate] = useState(todayStr())
@@ -70,8 +166,7 @@ export function Tournaments({ teamId }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-heading tracking-wide">GAMES</h1>
+      <PageHeader title="GAMES" eyebrow="GAME DAY">
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button size="sm" />}>
             <Plus className="size-4" />
@@ -136,25 +231,59 @@ export function Tournaments({ teamId }) {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
+
+      <SeasonHero record={seasonRecord} tournamentCount={tournaments.length} avgFor={avgFor} avgAgainst={avgAgainst} />
 
       {tournaments.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">まだ大会が登録されていません</p>
+        <EmptyState title="まだ大会が登録されていません" description="「大会を作成」から最初の大会を登録しましょう" />
       ) : (
         <ul className="flex flex-col gap-2">
-          {tournaments.map((t) => (
-            <li key={t.id} className="flex items-center gap-2">
+          <li className="font-heading text-xs tracking-[0.2em] text-muted-foreground px-1">TOURNAMENTS</li>
+          {tournaments.map((t, i) => {
+            const rec = recordByTournament[t.id]
+            const perfect = rec && rec.played >= 2 && rec.losses === 0 && rec.ties === 0
+            return (
+            <li key={t.id} className="flex items-center gap-1">
               <Link
                 to={`/games/t/${t.id}`}
-                className="flex-1 min-w-0 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
+                className="press animate-rise-in flex flex-1 min-w-0 items-center gap-3 rounded-xl border bg-card p-2.5 shadow-xs hover:shadow-md"
+                style={{ '--i': i }}
               >
-                <p className="font-medium truncate">{t.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t.game_date}
-                  {t.location ? ` ・ ${t.location}` : ''}
-                  {' ・ '}
-                  {t.period_system === '2q' ? '2Q制' : '4Q制'}
-                </p>
+                <DateTile date={t.game_date} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate flex items-center gap-1">
+                    {perfect && <Trophy className="size-3.5 shrink-0 text-chart-3" />}
+                    <span className="truncate">{t.name}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {t.location ? `${t.location} ・ ` : ''}
+                    {t.period_system === '2q' ? '2Q制' : '4Q制'}
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-2 min-h-4">
+                    {rec?.live && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 font-heading text-[9px] tracking-wider leading-none text-primary-foreground">
+                        <span className="size-1.5 rounded-full bg-white animate-pulse" />
+                        LIVE
+                      </span>
+                    )}
+                    {rec && rec.played > 0 ? (
+                      <>
+                        <ResultDots results={[...rec.form]} size="xs" />
+                        <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                          {rec.wins}勝{rec.losses}敗{rec.ties > 0 ? `${rec.ties}分` : ''}
+                        </span>
+                      </>
+                    ) : (
+                      !rec?.live && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {rec?.total ? `${rec.total}試合 予定` : '試合未登録'}
+                        </span>
+                      )
+                    )}
+                  </div>
+                </div>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
               </Link>
               <Button
                 variant="ghost"
@@ -166,7 +295,8 @@ export function Tournaments({ teamId }) {
                 <Trash2 className="size-4" />
               </Button>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 

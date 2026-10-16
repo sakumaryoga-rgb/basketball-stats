@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useSession } from '@/hooks/useSession'
 import { useTeams } from '@/hooks/useTeams'
@@ -61,11 +61,20 @@ export default function App() {
 
 function MainApp() {
   const location = useLocation()
+  const navigate = useNavigate()
   const { session, loading: sessionLoading } = useSession()
   const { teams, activeTeam, loading: teamsLoading, refresh: refreshTeams, switchTeam } = useTeams(session)
   useActiveShareToken(activeTeam?.id)
   usePageViewTracking(session?.user?.id, activeTeam?.id)
   useErrorTracking(session?.user?.id)
+
+  // チームの切り替え。表示するチーム(localStorageのactiveTeamId)を変えるだけで、
+  // team_members(所属情報)には触れない。URLに残っている切り替え前チームの共有トークン(?t=)は
+  // useActiveShareTokenで保存値より優先されてしまうため外し、切り替え先のトークンに付け替えさせる
+  function handleSwitchTeam(teamId, to = location.pathname) {
+    switchTeam(teamId)
+    navigate({ pathname: to, search: '' }, { replace: true })
+  }
 
   async function handleTeamJoined(teamId) {
     await refreshTeams()
@@ -87,8 +96,30 @@ function MainApp() {
       <UpdatePrompt />
       <InAppBrowserBanner />
       <Routes>
-        <Route path="/onboarding" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
-        <Route path="/t/:token" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
+        <Route
+          path="/onboarding"
+          element={
+            <Onboarding
+              onTeamJoined={handleTeamJoined}
+              hasTeam={!!activeTeam}
+              teams={teams}
+              activeTeamId={activeTeam?.id}
+              onSwitchTeam={handleSwitchTeam}
+            />
+          }
+        />
+        <Route
+          path="/t/:token"
+          element={
+            <Onboarding
+              onTeamJoined={handleTeamJoined}
+              hasTeam={!!activeTeam}
+              teams={teams}
+              activeTeamId={activeTeam?.id}
+              onSwitchTeam={handleSwitchTeam}
+            />
+          }
+        />
         {/* 印刷用A4レイアウト(@media print)を持つ専用ページのため、Layoutの
             固定高さ・overflow:hiddenのapp-shellの外側に置く(印刷時に内容が
             クリップされるのを避けるため) */}
@@ -111,14 +142,23 @@ function MainApp() {
             <>
               <Route index element={<Navigate to="/games" replace />} />
               <Route path="/games" element={<Tournaments teamId={activeTeam.id} />} />
-              <Route path="/games/t/:tournamentId" element={<TournamentGames teamId={activeTeam.id} />} />
+              <Route
+                path="/games/t/:tournamentId"
+                element={<TournamentGames teamId={activeTeam.id} />}
+              />
               <Route path="/games/:id" element={<GameDetail teamId={activeTeam.id} />} />
               <Route path="/practice" element={<Practice teamId={activeTeam.id} />} />
               <Route path="/shooting/:id" element={<ShootingDetail teamId={activeTeam.id} />} />
-              <Route path="/players" element={<Players teamId={activeTeam.id} teams={teams} />} />
+              <Route
+                path="/players"
+                element={<Players teamId={activeTeam.id} teams={teams} />}
+              />
               <Route path="/players/:id" element={<PlayerDetail teamId={activeTeam.id} />} />
               <Route path="/leaders" element={<Leaders teamId={activeTeam.id} />} />
-              <Route path="/team" element={<TeamSettings team={activeTeam} onTeamUpdated={refreshTeams} />} />
+              <Route
+                path="/team"
+                element={<TeamSettings team={activeTeam} teams={teams} onTeamUpdated={refreshTeams} onSwitchTeam={handleSwitchTeam} />}
+              />
             </>
           )}
           <Route

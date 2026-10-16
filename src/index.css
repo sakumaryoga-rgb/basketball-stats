@@ -193,3 +193,117 @@ html.app-height-locked {
     @apply font-sans;
   }
 }
+/* ===== 遊び心のあるUI演出(playful UI refresh) =====
+   リスト項目の時間差フェードイン、空状態のバウンドするボール、LIVE表示の点滅など。
+   prefers-reduced-motionの端末では動きをすべて止める */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-rise-in {
+  animation: rise-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes ball-bounce {
+  0%,
+  100% {
+    transform: translateY(-34px) rotate(0deg);
+    animation-timing-function: cubic-bezier(0.5, 0, 1, 0.5);
+  }
+  50% {
+    transform: translateY(0) rotate(180deg);
+    animation-timing-function: cubic-bezier(0, 0.5, 0.5, 1);
+  }
+}
+@keyframes ball-shadow {
+  0%,
+  100% {
+    transform: scaleX(0.45);
+    opacity: 0.25;
+    animation-timing-function: cubic-bezier(0.5, 0, 1, 0.5);
+  }
+  50% {
+    transform: scaleX(1);
+    opacity: 0.6;
+    animation-timing-function: cubic-bezier(0, 0.5, 0.5, 1);
+  }
+}
+.animate-ball-bounce {
+  animation: ball-bounce 1.1s infinite;
+}
+.animate-ball-shadow {
+  animation: ball-shadow 1.1s infinite;
+}
+
+@keyframes nav-pop {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-4px) scale(1.15);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-nav-pop {
+  animation: nav-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes ring-fill {
+  from {
+    stroke-dashoffset: var(--ring-circ);
+  }
+}
+.animate-ring-fill {
+  animation: ring-fill 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+.animate-bar-grow {
+  transform-origin: left;
+  animation: bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes podium-up {
+  from {
+    transform: scaleY(0);
+  }
+}
+.animate-podium-up {
+  transform-origin: bottom;
+  animation: podium-up 0.6s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+/* 押した瞬間に少し沈む、カード共通のタップ感 */
+.press {
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.press:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise-in,
+  .animate-ball-bounce,
+  .animate-ball-shadow,
+  .animate-nav-pop,
+  .animate-ring-fill,
+  .animate-bar-grow,
+  .animate-podium-up {
+    animation: none;
+  }
+}

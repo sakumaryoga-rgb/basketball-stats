@@ -159,3 +159,34 @@ export function filterGamesByPeriod(games, period, now = new Date()) {
   }
   return games
 }
+
+// TEAM画面などで使うシュート成功率の内訳。値はすべて元の成功数・試投数から計算する。
+// - FG% = FGM / FGA × 100(FGM・FGAは2P+3Pの合算。ビュー側でfg2/fg3のmake・missを合算済み)
+// - 2P% = (FGM − 3PM) / (FGA − 3PA) × 100
+// - 3P% = 3PM / 3PA × 100
+// - FT% = FTM / FTA × 100
+// pctは0〜100の百分率(試投数0ならnull=「-」表示)。成功数が試投数を上回る・負になる等の
+// あり得ない組み合わせは丸めずにinvalid=trueとして返し、表示側で「要確認」とする
+export function shootingSplits(totals) {
+  if (!totals) return null
+  const fgm = totals.fgm ?? 0
+  const fga = totals.fga ?? 0
+  const tpm = totals.tpm ?? 0
+  const tpa = totals.tpa ?? 0
+  const ftm = totals.ftm ?? 0
+  const fta = totals.fta ?? 0
+  const split = (key, label, made, att) => ({
+    key,
+    label,
+    made,
+    att,
+    pct: pct(made, att),
+    invalid: made < 0 || att < 0 || made > att,
+  })
+  return [
+    split('fg', 'FG%', fgm, fga),
+    split('2p', '2P%', fgm - tpm, fga - tpa),
+    split('3p', '3P%', tpm, tpa),
+    split('ft', 'FT%', ftm, fta),
+  ]
+}
