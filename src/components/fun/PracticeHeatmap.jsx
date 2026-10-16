@@ -1,54 +1,76 @@
-import { useMemo } from 'react'
-import { Flame } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, Flame } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { parseLocalDate, toDateStr } from '@/lib/dates'
 
-const WEEKS = 6
-const DAY_LABELS = ['月', '火', '水', '木', '金', '土', '日']
+// 日本のカレンダーアプリと同じ日曜始まりにする(見慣れた並びと揃えるため)
+const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土']
 
-function mondayOf(d) {
-  const m = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  m.setDate(m.getDate() - ((m.getDay() + 6) % 7))
-  return m
+function sundayOf(d) {
+  const s = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  s.setDate(s.getDate() - s.getDay())
+  return s
 }
 
-// 練習(スクリメージ+シューティング)の日付から、直近6週間の練習カレンダーと
-// 今月の回数・連続練習週数を出すヒーローカード。体育館の床(ウッド)をイメージした背景
+// 練習(スクリメージ+シューティング)を、実際の月間カレンダーに日付入りで並べるヒーローカード。
+// 以前は「今日から遡る6週間」を日付なしで並べていたため、見出しの「今月」や
+// 実際のカレンダーと対応が取れず分かりにくかった。体育館の床(ウッド)をイメージした背景
 export function PracticeHeatmap({ sessions }) {
-  const { weeks, monthCount, weekStreak, total } = useMemo(() => {
-    const now = new Date()
-    const countByDate = new Map()
-    for (const s of sessions) countByDate.set(s.game_date, (countByDate.get(s.game_date) ?? 0) + 1)
+  // 表示中の月(0 = 今月、-1 = 先月 ...)。未来の月には進めない
+  const [monthOffset, setMonthOffset] = useState(0)
 
-    const todayStr = toDateStr(now)
-    const start = mondayOf(now)
-    start.setDate(start.getDate() - 7 * (WEEKS - 1))
-    const weeks = []
-    for (let w = 0; w < WEEKS; w++) {
-      const days = []
-      for (let d = 0; d < 7; d++) {
-        const date = new Date(start)
-        date.setDate(start.getDate() + w * 7 + d)
-        const key = toDateStr(date)
-        days.push({ key, count: countByDate.get(key) ?? 0, isToday: key === todayStr, isFuture: key > todayStr })
-      }
-      weeks.push(days)
+  const { year, month, weeks, monthCount, weekStreak, total } = useMemo(() => {
+    const now = new Date()
+    const nowStr = toDateStr(now)
+    const byDate = new Map()
+    for (const s of sessions) {
+      if (!s.game_date) continue
+      const entry = byDate.get(s.game_date) ?? { shooting: 0, scrimmage: 0 }
+      if (s.game_type === 'shooting') entry.shooting++
+      else entry.scrimmage++
+      byDate.set(s.game_date, entry)
     }
 
-    const monthPrefix = todayStr.slice(0, 7)
+    const first = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+    const year = first.getFullYear()
+    const month = first.getMonth()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const cells = []
+    for (let i = 0; i < first.getDay(); i++) cells.push(null)
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day)
+      const key = toDateStr(date)
+      const entry = byDate.get(key)
+      cells.push({
+        key,
+        day,
+        weekday: date.getDay(),
+        shooting: entry?.shooting ?? 0,
+        scrimmage: entry?.scrimmage ?? 0,
+        isToday: key === nowStr,
+        isFuture: key > nowStr,
+      })
+    }
+    while (cells.length % 7 !== 0) cells.push(null)
+    const weeks = []
+    for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+
+    const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
     const monthCount = sessions.filter((s) => s.game_date?.startsWith(monthPrefix)).length
 
-    // 今週から遡って、練習のある週が何週続いているか(今週がまだ0回なら先週から数える)
-    const weekKeys = new Set(sessions.map((s) => toDateStr(mondayOf(parseLocalDate(s.game_date)))))
-    const cursor = mondayOf(now)
+    // 今週から遡って、練習のある週(日〜土)が何週続いているか(今週がまだ0回なら先週から数える)
+    const weekKeys = new Set(
+      sessions.filter((s) => s.game_date).map((s) => toDateStr(sundayOf(parseLocalDate(s.game_date))))
+    )
+    const cursor = sundayOf(now)
     if (!weekKeys.has(toDateStr(cursor))) cursor.setDate(cursor.getDate() - 7)
     let weekStreak = 0
     while (weekKeys.has(toDateStr(cursor))) {
       weekStreak++
       cursor.setDate(cursor.getDate() - 7)
     }
-    return { weeks, monthCount, weekStreak, total: sessions.length }
-  }, [sessions])
+    return { year, month, weeks, monthCount, weekStreak, total: sessions.length }
+  }, [sessions, monthOffset])
 
   return (
     <div
@@ -61,7 +83,9 @@ export function PracticeHeatmap({ sessions }) {
       <div className="absolute inset-x-0 top-0 h-1 bg-primary" />
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-heading text-[10px] tracking-[0.2em] opacity-70">THIS MONTH</p>
+          <p className="font-heading text-[10px] tracking-[0.2em] opacity-70">
+            {monthOffset === 0 ? 'THIS MONTH' : `${year}.${month + 1}`}
+          </p>
           <p className="font-heading text-5xl leading-none tabular-nums">
             {monthCount}
             <span className="ml-1 text-base">SESSIONS</span>
@@ -75,43 +99,86 @@ export function PracticeHeatmap({ sessions }) {
         </div>
       </div>
 
-      <div className="mt-3 rounded-xl bg-white/45 p-2.5 backdrop-blur-sm">
-        <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-medium opacity-60 mb-1">
-          {DAY_LABELS.map((l) => (
-            <span key={l}>{l}</span>
+      <div className="mt-3 rounded-xl bg-white/55 p-2.5 backdrop-blur-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setMonthOffset((m) => m - 1)}
+            aria-label="前の月"
+            className="flex size-7 items-center justify-center rounded-full hover:bg-white/60 active:scale-90"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <p className="text-sm font-bold tabular-nums">
+            {year}年{month + 1}月
+          </p>
+          <button
+            type="button"
+            onClick={() => setMonthOffset((m) => Math.min(0, m + 1))}
+            disabled={monthOffset === 0}
+            aria-label="次の月"
+            className="flex size-7 items-center justify-center rounded-full hover:bg-white/60 active:scale-90 disabled:opacity-25"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+        <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-bold">
+          {DAY_LABELS.map((l, i) => (
+            <span key={l} className={cn(i === 0 ? 'text-red-600' : i === 6 ? 'text-blue-600' : 'opacity-60')}>
+              {l}
+            </span>
           ))}
         </div>
-        <div className="flex flex-col gap-1">
-          {weeks.map((days, w) => (
+        <div key={`${year}-${month}`} className="flex flex-col gap-1 animate-in fade-in duration-200">
+          {weeks.map((cells, w) => (
             <div key={w} className="grid grid-cols-7 gap-1">
-              {days.map((day) => (
-                <div
-                  key={day.key}
-                  title={`${day.key} ${day.count}回`}
-                  className={cn(
-                    'aspect-[5/2] rounded-[4px] flex items-center justify-center transition-colors',
-                    day.isFuture
-                      ? 'bg-transparent border border-dashed border-[oklch(0.3_0.06_55)]/15'
-                      : day.count === 0
-                        ? 'bg-white/70'
-                        : day.count === 1
-                          ? 'bg-primary/65'
-                          : 'bg-primary',
-                    day.isToday && 'ring-2 ring-secondary ring-offset-1 ring-offset-transparent'
-                  )}
-                >
-                  {day.count > 0 && <span className="size-1 rounded-full bg-white/90" />}
-                </div>
-              ))}
+              {cells.map((cell, i) => {
+                if (!cell) return <div key={`empty-${i}`} />
+                const count = cell.shooting + cell.scrimmage
+                return (
+                  <div
+                    key={cell.key}
+                    title={`${cell.key} シューティング${cell.shooting}回・スクリメージ${cell.scrimmage}回`}
+                    className={cn(
+                      'relative flex h-9 flex-col items-center justify-center rounded-md text-xs font-bold tabular-nums leading-none',
+                      count > 0
+                        ? count >= 2
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-primary/75 text-primary-foreground'
+                        : cell.isFuture
+                          ? 'opacity-35'
+                          : 'bg-white/70',
+                      count === 0 && cell.weekday === 0 && 'text-red-600',
+                      count === 0 && cell.weekday === 6 && 'text-blue-600',
+                      cell.isToday && 'ring-2 ring-secondary ring-offset-1 ring-offset-white/0'
+                    )}
+                  >
+                    {cell.day}
+                    {count > 0 && (
+                      <span className="mt-1 flex gap-0.5">
+                        {cell.shooting > 0 && <span className="size-1.5 rounded-full bg-chart-3" />}
+                        {cell.scrimmage > 0 && <span className="size-1.5 rounded-full bg-white" />}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           ))}
         </div>
-        <div className="mt-2 flex items-center justify-end gap-1 text-[9px] opacity-60">
-          <span>少</span>
-          <span className="size-2.5 rounded-[3px] bg-white/70" />
-          <span className="size-2.5 rounded-[3px] bg-primary/65" />
-          <span className="size-2.5 rounded-[3px] bg-primary" />
-          <span>多</span>
+        <div className="mt-2 flex items-center justify-end gap-3 text-[10px] opacity-75">
+          <span className="flex items-center gap-1">
+            <span className="size-2 rounded-full bg-chart-3 ring-1 ring-black/10" />
+            シューティング
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="size-2 rounded-full bg-white ring-1 ring-black/20" />
+            スクリメージ
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="size-2.5 rounded-sm ring-2 ring-secondary" />
+            今日
+          </span>
         </div>
       </div>
     </div>
