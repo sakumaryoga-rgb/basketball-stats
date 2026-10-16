@@ -36,6 +36,7 @@ import {
   AlertDialogClose,
 } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
+import { PageHeader } from '@/components/fun/PageHeader'
 
 function EditTeamDialog({ team, onTeamUpdated, children }) {
   const navigate = useNavigate()
@@ -362,7 +363,7 @@ export function TeamSettings({ team, onTeamUpdated }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-heading tracking-wide">TEAM</h1>
+      <PageHeader title="TEAM" eyebrow="CLUBHOUSE" />
 
       <div className="rounded-lg border p-4 flex items-center gap-4">
         <Avatar size="lg" className="size-16">

@@ -2,20 +2,21 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/supabaseClient'
 
 // 指定したシューティングセッション(game_id)群それぞれについて、実際に記録が
-// 存在する選手ID(重複なし)を返す。追加時に選んだだけで実際には未記録の選手を
-// 参加者として表示してしまわないよう、shooting_entriesの実データを根拠にする。
+// 存在する選手ID(重複なし)と、セッション全体の試投数・成功数を返す。
+// 追加時に選んだだけで実際には未記録の選手を参加者として表示してしまわないよう、
+// shooting_entriesの実データを根拠にする。
 export function useShootingParticipants(gameIds) {
-  const [participantsByGame, setParticipantsByGame] = useState({})
+  const [summaryByGame, setSummaryByGame] = useState({})
   const key = gameIds.join(',')
 
   const refresh = useCallback(async () => {
     if (!key) {
-      setParticipantsByGame({})
+      setSummaryByGame({})
       return
     }
     const { data, error } = await supabase
       .from('shooting_entries')
-      .select('game_id, player_id')
+      .select('game_id, player_id, attempts, makes')
       .in('game_id', key.split(','))
     if (error) {
       console.error('シューティング参加者の取得に失敗しました', error)
@@ -23,10 +24,12 @@ export function useShootingParticipants(gameIds) {
     }
     const map = {}
     for (const row of data ?? []) {
-      const list = map[row.game_id] ?? (map[row.game_id] = [])
-      if (!list.includes(row.player_id)) list.push(row.player_id)
+      const summary = map[row.game_id] ?? (map[row.game_id] = { participants: [], attempts: 0, makes: 0 })
+      if (!summary.participants.includes(row.player_id)) summary.participants.push(row.player_id)
+      summary.attempts += row.attempts ?? 0
+      summary.makes += row.makes ?? 0
     }
-    setParticipantsByGame(map)
+    setSummaryByGame(map)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
@@ -44,5 +47,5 @@ export function useShootingParticipants(gameIds) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, refresh])
 
-  return participantsByGame
+  return summaryByGame
 }

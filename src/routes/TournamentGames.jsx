@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ChevronLeft, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useTournaments } from '@/hooks/useTournaments'
 import { useGames } from '@/hooks/useGames'
-import { supabase } from '@/supabaseClient'
-import { cn } from '@/lib/utils'
+import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
+import { summarizeRecord } from '@/lib/record'
+import { GameScoreCard } from '@/components/fun/GameScoreCard'
+import { EmptyState } from '@/components/fun/EmptyState'
+import { DateTile } from '@/components/fun/DateTile'
+import { ResultDots } from '@/components/fun/ResultDots'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -28,71 +31,6 @@ import {
   AlertDialogClose,
 } from '@/components/ui/alert-dialog'
 
-const STATUS_LABEL = {
-  scheduled: '予定',
-  in_progress: '試合中',
-  final: '終了',
-}
-
-const STATUS_VARIANT = {
-  scheduled: 'outline',
-  in_progress: 'default',
-  final: 'secondary',
-}
-
-const RESULT_STYLE = {
-  W: 'bg-lime-200 text-lime-800',
-  L: 'bg-red-100 text-red-500',
-  T: 'bg-gray-200 text-gray-600',
-}
-
-function ResultBadge({ result }) {
-  return (
-    <span
-      className={cn(
-        'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-        RESULT_STYLE[result]
-      )}
-    >
-      {result}
-    </span>
-  )
-}
-
-// 大会内の試合一覧で勝敗を一目で分かるようにするため、自チームの得点(選手ごとのptsの合計、
-// GameDetail.jsxのteamScore算出と同じ考え方)を試合IDごとにまとめて取得する
-function useTeamScoresByGame(gameIds) {
-  const [scores, setScores] = useState({})
-  const key = gameIds.join(',')
-
-  useEffect(() => {
-    if (!key) {
-      setScores({})
-      return
-    }
-    let cancelled = false
-    supabase
-      .from('player_game_stats')
-      .select('game_id, pts')
-      .in('game_id', key.split(','))
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('試合スコアの取得に失敗しました', error)
-          return
-        }
-        if (cancelled) return
-        const totals = {}
-        for (const row of data ?? []) totals[row.game_id] = (totals[row.game_id] ?? 0) + row.pts
-        setScores(totals)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [key])
-
-  return scores
-}
-
 // 1つの大会に属する試合の一覧。大会単位でGAMEタブから遷移してくる。
 // 日程・会場は大会作成時に入力済みのため、試合追加時は対戦相手のみ入力すればよい
 export function TournamentGames({ teamId }) {
@@ -102,6 +40,7 @@ export function TournamentGames({ teamId }) {
   const { games, createGame } = useGames(teamId, 'official', tournamentId)
   const tournament = tournaments.find((t) => t.id === tournamentId)
   const teamScoresByGameId = useTeamScoresByGame(games.map((g) => g.id))
+  const record = useMemo(() => summarizeRecord(games, teamScoresByGameId), [games, teamScoresByGameId])
 
   const [open, setOpen] = useState(false)
   const [opponentName, setOpponentName] = useState('')
@@ -175,14 +114,20 @@ export function TournamentGames({ teamId }) {
       </button>
 
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-heading tracking-wide truncate">{tournament.name}</h1>
-          <p className="text-xs text-muted-foreground">
-            {tournament.game_date}
-            {tournament.location ? ` ・ ${tournament.location}` : ''}
-            {' ・ '}
-            {tournament.period_system === '2q' ? '2Q制' : '4Q制'}
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <DateTile date={tournament.game_date} />
+          <div className="min-w-0">
+            <h1 className="text-2xl font-heading tracking-wide truncate leading-tight">{tournament.name}</h1>
+            <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+              {tournament.location && (
+                <>
+                  <MapPin className="size-3 shrink-0" />
+                  {tournament.location} ・{' '}
+                </>
+              )}
+              {tournament.period_system === '2q' ? '2Q制' : '4Q制'}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <Dialog open={open} onOpenChange={setOpen}>
@@ -236,39 +181,39 @@ export function TournamentGames({ teamId }) {
         </div>
       </div>
 
+      {games.length > 0 && (
+        <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2 animate-rise-in">
+          <div className="flex items-baseline gap-2">
+            <span className="font-heading text-[10px] tracking-[0.2em] text-muted-foreground">RECORD</span>
+            <span className="font-heading text-xl tabular-nums leading-none">
+              {record.wins}-{record.losses}
+              {record.ties > 0 ? `-${record.ties}` : ''}
+            </span>
+          </div>
+          {record.form.length > 0 ? (
+            <ResultDots results={record.form} />
+          ) : (
+            <span className="text-xs text-muted-foreground">{games.length}試合 登録済み</span>
+          )}
+        </div>
+      )}
+
       {games.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">まだ試合が登録されていません</p>
+        <EmptyState title="まだ試合が登録されていません" description="「試合を追加」で対戦相手を登録するとここに並びます" />
       ) : (
         <ul className="flex flex-col gap-2">
-          {games.map((game) => {
-            const teamScore = teamScoresByGameId[game.id] ?? 0
-            const result =
-              game.status === 'final'
-                ? teamScore > game.opponent_score
-                  ? 'W'
-                  : teamScore < game.opponent_score
-                    ? 'L'
-                    : 'T'
-                : null
-            return (
-              <li key={game.id}>
-                <Link
-                  to={`/games/${game.id}`}
-                  className="flex items-center gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">vs {game.opponent_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {game.game_date}
-                      {game.location ? ` ・ ${game.location}` : ''}
-                    </p>
-                  </div>
-                  {result && <ResultBadge result={result} />}
-                  <Badge variant={STATUS_VARIANT[game.status]}>{STATUS_LABEL[game.status]}</Badge>
-                </Link>
-              </li>
-            )
-          })}
+          {games.map((game, i) => (
+            <li key={game.id}>
+              <GameScoreCard
+                game={game}
+                teamScore={teamScoresByGameId[game.id]}
+                to={`/games/${game.id}`}
+                title={`vs ${game.opponent_name}`}
+                showDate={false}
+                index={i}
+              />
+            </li>
+          ))}
         </ul>
       )}
 

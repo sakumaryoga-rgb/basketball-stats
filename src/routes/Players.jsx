@@ -1,14 +1,18 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, ChevronDown, Search } from 'lucide-react'
+import { Plus, Search, Star } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
-import { formatPositions, groupPlayersByPosition } from '@/lib/stats'
+import { POSITIONS, UNSET_POSITION, formatPositions, groupPlayersByPosition } from '@/lib/stats'
+import { positionColor } from '@/lib/positionStyle'
+import { PageHeader } from '@/components/fun/PageHeader'
+import { EmptyState } from '@/components/fun/EmptyState'
+import { StartingCourt } from '@/components/fun/StartingCourt'
+import { Jersey } from '@/components/fun/Jersey'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { PositionSelect } from '@/components/PositionSelect'
 import { cn } from '@/lib/utils'
 import {
@@ -178,48 +182,86 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
   )
 }
 
-function PlayerRow({ player }) {
+function PositionChip({ position }) {
   return (
-    <li className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
-      <Avatar className="size-9 shrink-0 text-sm font-medium">
+    <span
+      className="rounded px-1.5 py-0.5 font-heading text-[10px] tracking-wider leading-none text-white"
+      style={{ background: positionColor(position) }}
+    >
+      {position}
+    </span>
+  )
+}
+
+function PlayerFace({ player, className }) {
+  if (player.photo_url) {
+    return (
+      <Avatar className={cn('size-12 shrink-0', className)}>
         <AvatarImage src={player.photo_url} alt={player.name} />
         <AvatarFallback className="tabular-nums">{player.number ?? '-'}</AvatarFallback>
       </Avatar>
-      <Link to={`/players/${player.id}`} className="flex-1 min-w-0">
-        <p className="font-medium truncate">{player.name}</p>
-        {player.position && (
-          <p className="text-xs text-muted-foreground">{formatPositions(player.position, player.position2)}</p>
-        )}
+    )
+  }
+  return <Jersey number={player.number} color={positionColor(player.position)} className={cn('size-12 shrink-0', className)} />
+}
+
+// ROSTERの選手カード。上部の帯でポジション、右上の★でSTARTING FIVEかどうかが一目で分かる
+function RosterCard({ player, index, onToggleStarter }) {
+  const starter = player.is_starter
+  return (
+    <li
+      className={cn(
+        'press animate-rise-in relative overflow-hidden rounded-xl border bg-card shadow-xs',
+        starter && 'border-chart-3 ring-2 ring-chart-3/50'
+      )}
+      style={{ '--i': index }}
+    >
+      <span className="absolute inset-x-0 top-0 h-1.5" style={{ background: positionColor(player.position) }} />
+      <span className="pointer-events-none absolute -right-1 bottom-0 font-heading text-6xl leading-none text-foreground/[0.06] tabular-nums">
+        {player.number ?? ''}
+      </span>
+      <Link to={`/players/${player.id}`} className="flex flex-col items-start gap-2 p-3 pt-4">
+        <PlayerFace player={player} />
+        <div className="w-full min-w-0 pr-1">
+          <p className="text-[10px] font-heading tracking-wider text-muted-foreground leading-none">
+            {player.number != null ? `#${player.number}` : 'NO NUMBER'}
+          </p>
+          <p className="mt-0.5 text-sm font-bold truncate">{player.name}</p>
+          <div className="mt-1.5 flex flex-wrap gap-1 min-h-4">
+            {player.position ? <PositionChip position={player.position} /> : <span className="text-[10px] text-muted-foreground">ポジション未設定</span>}
+            {player.position2 && <PositionChip position={player.position2} />}
+          </div>
+        </div>
       </Link>
+      <button
+        type="button"
+        onClick={onToggleStarter}
+        aria-pressed={starter}
+        aria-label={starter ? 'STARTING FIVEから外す' : 'STARTING FIVEに入れる'}
+        className={cn(
+          'absolute right-1.5 top-3 flex size-9 items-center justify-center rounded-full transition-all active:scale-90',
+          starter ? 'bg-chart-3 text-[oklch(0.28_0.08_75)] shadow' : 'bg-muted text-muted-foreground hover:text-foreground'
+        )}
+      >
+        <Star className={cn('size-4', starter && 'fill-current animate-check-pop')} />
+      </button>
     </li>
   )
 }
 
-function RosterRow({ player, checked, onToggleStarter }) {
+function StarterPips({ count }) {
   return (
-    <li
-      className={cn(
-        'flex items-center gap-3 -mx-2 px-2 py-1.5 rounded-lg transition-colors duration-300',
-        player.is_starter && 'bg-primary/5'
-      )}
-    >
-      <Link to={`/players/${player.id}`} className="flex flex-1 min-w-0 items-center gap-3 rounded-lg hover:bg-muted/50">
-        <Avatar className="size-8 shrink-0 text-xs font-medium">
-          <AvatarImage src={player.photo_url} alt={player.name} />
-          <AvatarFallback className="tabular-nums">{player.number ?? '-'}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{player.name}</p>
-          {player.position && (
-            <p className="text-xs text-muted-foreground">{formatPositions(player.position, player.position2)}</p>
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }, (_, i) => (
+        <span
+          key={i}
+          className={cn(
+            'size-2.5 rounded-full transition-colors duration-300',
+            i < count ? 'bg-chart-3 shadow-[0_0_0_2px_oklch(0.8_0.16_85/0.3)]' : 'bg-muted-foreground/25'
           )}
-        </div>
-      </Link>
-      <div className="flex items-center gap-1.5 shrink-0">
-        <span className="text-[10px] text-muted-foreground">STARTING FIVE</span>
-        <Switch checked={checked} onCheckedChange={onToggleStarter} />
-      </div>
-    </li>
+        />
+      ))}
+    </div>
   )
 }
 
@@ -227,7 +269,7 @@ export function Players({ teamId, teams = [] }) {
   const { players: allPlayers, addPlayer, updatePlayer } = usePlayers(teamId)
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const [viewMode, setViewMode] = useState('starting') // 'starting' | 'roster'
-  const [openGroups, setOpenGroups] = useState({})
+  const [positionFilter, setPositionFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   // STARTING FIVEが5人埋まっている状態で6人目をONにしようとした選手。
   // nullでなければ「誰と入れ替えるか」の選択ダイアログを表示する
@@ -242,12 +284,14 @@ export function Players({ teamId, teams = [] }) {
   const positionGroups = useMemo(() => groupPlayersByPosition(filteredPlayers), [filteredPlayers])
   // STARTING FIVEの人数(5人制限の判定)は検索結果に関わらず常に全選手基準で数える
   const starters = useMemo(() => players.filter((p) => p.is_starter), [players])
-  const visibleStarters = useMemo(() => starters.filter((p) => filteredPlayers.includes(p)), [starters, filteredPlayers])
+  const bench = useMemo(() => players.filter((p) => !p.is_starter), [players])
   const startersCount = starters.length
-
-  function toggleGroup(key) {
-    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
-  }
+  const allGroups = useMemo(() => groupPlayersByPosition(players), [players])
+  const countByPosition = useMemo(() => Object.fromEntries(allGroups.map((g) => [g.key, g.players.length])), [allGroups])
+  const rosterPlayers =
+    positionFilter === 'ALL'
+      ? filteredPlayers
+      : (positionGroups.find((g) => g.key === positionFilter)?.players ?? [])
 
   async function handleToggleStarter(player) {
     if (!player.is_starter && startersCount >= 5) {
@@ -269,106 +313,128 @@ export function Players({ teamId, teams = [] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-heading tracking-wide">PLAYERS</h1>
+      <PageHeader title="PLAYERS" eyebrow={players.length > 0 ? `${players.length} ON THE ROSTER` : 'ROSTER'}>
         <AddPlayerDialog teamId={teamId} teams={teams} addPlayer={addPlayer} />
-      </div>
+      </PageHeader>
 
       {players.length > 0 && (
-        <>
-          <div className="flex gap-2">
-            <Button
+        <div className="relative grid grid-cols-2 rounded-xl bg-muted p-1">
+          <span
+            className={cn(
+              'absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-lg bg-secondary shadow transition-transform duration-300 ease-[cubic-bezier(0.34,1.4,0.64,1)]',
+              viewMode === 'roster' && 'translate-x-full'
+            )}
+          />
+          {[
+            { key: 'starting', label: 'STARTING' },
+            { key: 'roster', label: 'ROSTER' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
               type="button"
-              size="sm"
-              variant={viewMode === 'starting' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setViewMode('starting')}
+              onClick={() => setViewMode(tab.key)}
+              className={cn(
+                'relative z-10 py-1.5 font-heading text-sm tracking-wider transition-colors',
+                viewMode === tab.key ? 'text-secondary-foreground' : 'text-muted-foreground'
+              )}
             >
-              STARTING
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={viewMode === 'roster' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setViewMode('roster')}
-            >
-              ROSTER
-            </Button>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {players.length === 0 ? (
+        <EmptyState title="まだ選手が登録されていません" description="「選手を追加」からチームのメンバーを登録しましょう" />
+      ) : viewMode === 'roster' ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
+            <div className="leading-none">
+              <p className="font-heading text-xs tracking-wider">STARTING FIVE</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">★で選択(試合追加時のデフォルト)</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <StarterPips count={startersCount} />
+              <span className="font-heading text-lg tabular-nums leading-none">{startersCount}/5</span>
+            </div>
           </div>
 
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="選手名で検索"
-              className="pl-9"
-            />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="選手名で検索" className="pl-9" />
           </div>
-        </>
-      )}
 
-      {players.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">まだ選手が登録されていません</p>
-      ) : viewMode === 'roster' ? (
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground mb-2">
-            STARTING FIVE(試合追加時のデフォルト) ・ {startersCount}/5人選択中
-          </p>
-          {positionGroups.length === 0 ? (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+            {['ALL', ...POSITIONS, UNSET_POSITION]
+              .filter((key) => key === 'ALL' || countByPosition[key])
+              .map((key) => {
+                const active = positionFilter === key
+                const color = key === 'ALL' ? 'var(--secondary)' : positionColor(key)
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setPositionFilter(key)}
+                    className={cn(
+                      'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-heading text-xs tracking-wider transition-all active:scale-95',
+                      active ? 'text-white border-transparent shadow' : 'bg-background text-muted-foreground'
+                    )}
+                    style={active ? { background: color } : undefined}
+                  >
+                    {!active && <span className="size-2 rounded-full" style={{ background: color }} />}
+                    {key}
+                    <span className={cn('tabular-nums', active ? 'opacity-80' : 'opacity-60')}>
+                      {key === 'ALL' ? players.length : countByPosition[key]}
+                    </span>
+                  </button>
+                )
+              })}
+          </div>
+
+          {rosterPlayers.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">該当する選手が見つかりません</p>
           ) : (
-            positionGroups.map(({ key, players: groupPlayers }) => {
-              const open = !!openGroups[key]
-              return (
-                <div key={key}>
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(key)}
-                    className="flex w-full items-center justify-between rounded-lg -mx-2 px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
-                  >
-                    <span>
-                      {key} ({groupPlayers.length}人)
-                    </span>
-                    <ChevronDown className={cn('size-4 transition-transform duration-300', open && 'rotate-180')} />
-                  </button>
-                  <div
-                    className={cn(
-                      'grid transition-[grid-template-rows] duration-300 ease-in-out',
-                      open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                    )}
-                  >
-                    <div className="overflow-hidden">
-                      <ul className="flex flex-col gap-2 pt-2 pb-1">
-                        {groupPlayers.map((player) => (
-                          <RosterRow
-                            key={player.id}
-                            player={player}
-                            checked={player.is_starter}
-                            onToggleStarter={() => handleToggleStarter(player)}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )
-            })
+            <ul key={positionFilter} className="grid grid-cols-2 gap-2">
+              {rosterPlayers.map((player, i) => (
+                <RosterCard key={player.id} player={player} index={i} onToggleStarter={() => handleToggleStarter(player)} />
+              ))}
+            </ul>
           )}
         </div>
-      ) : starters.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">
-          まだSTARTING FIVEが選ばれていません。ROSTERタブから選択してください
-        </p>
-      ) : visibleStarters.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-8 text-center">該当する選手が見つかりません</p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {visibleStarters.map((player) => (
-            <PlayerRow key={player.id} player={player} />
-          ))}
-        </ul>
+        <div className="flex flex-col gap-4">
+          <StartingCourt starters={starters} onPickStarter={() => setViewMode('roster')} />
+          {starters.length < 5 && (
+            <p className="text-xs text-muted-foreground text-center -mt-2">
+              空いている枠をタップすると、ROSTERからSTARTING FIVEを選べます
+            </p>
+          )}
+          {bench.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 px-1">
+                <h2 className="font-heading text-xs tracking-[0.2em] text-muted-foreground">BENCH</h2>
+                <span className="h-px flex-1 bg-border" />
+                <span className="font-heading text-xs tabular-nums text-muted-foreground">{bench.length}</span>
+              </div>
+              <ul className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+                {bench.map((player, i) => (
+                  <li key={player.id} className="animate-rise-in shrink-0" style={{ '--i': i }}>
+                    <Link
+                      to={`/players/${player.id}`}
+                      className="press flex w-20 flex-col items-center gap-1 rounded-xl border bg-card px-1.5 py-2"
+                    >
+                      <PlayerFace player={player} className="size-10" />
+                      <span className="w-full truncate text-center text-[11px] font-medium">{player.name}</span>
+                      <span className="font-heading text-[9px] tracking-wider text-muted-foreground leading-none">
+                        {formatPositions(player.position, player.position2) || '-'}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
 
       <Dialog open={!!swapTarget} onOpenChange={(o) => !o && setSwapTarget(null)}>
