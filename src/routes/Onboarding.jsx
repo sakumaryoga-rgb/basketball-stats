@@ -172,6 +172,34 @@ export function Onboarding({ onTeamJoined, hasTeam, teams = [], activeTeamId, on
     })
   }
 
+  // この端末が以前参加したことのあるチーム(localStorageに共有URLの控えがあるチーム)のうち、
+  // 現在は所属していない(team_membersに無い)もの。現在所属しているチームは上の「参加済みのチーム」に
+  // team_members由来で出すため、ここからは除く。タップすると控えてある共有URLで参加し直す
+  const memberTeamIds = new Set(teams.map((t) => t.id))
+  const rememberedTeams = getAllShareUrls()
+    .filter((entry) => entry.shareUrl && entry.name && !memberTeamIds.has(entry.teamId))
+    .map((entry) => ({ id: entry.teamId, name: entry.name, icon_url: null, shareUrl: entry.shareUrl }))
+
+  async function handleRejoinRemembered(teamId) {
+    const entry = rememberedTeams.find((t) => t.id === teamId)
+    if (!entry) return
+    setSaving(true)
+    setError('')
+    const rememberedToken = extractShareToken(entry.shareUrl)
+    const { data, error: rpcError } = await supabase.rpc('redeem_share_token', { p_token: rememberedToken })
+    const result = Array.isArray(data) ? data[0] : data
+    setSaving(false)
+    if (rpcError || !result?.success) {
+      setError(
+        rpcError?.message ||
+          `「${entry.name}」の招待リンクは再発行されたため使えなくなっています。メンバーから新しい招待リンクをもらってください。`
+      )
+      return
+    }
+    saveShareUrl(result.out_team_id, `${window.location.origin}/t/${rememberedToken}`, result.out_team_name)
+    await finishJoin(result.out_team_id)
+  }
+
   async function handleJoin(e) {
     e.preventDefault()
     setSaving(true)
@@ -361,17 +389,36 @@ export function Onboarding({ onTeamJoined, hasTeam, teams = [], activeTeamId, on
                       </div>
                       {/* 既に所属済みのチームは参加処理を行わず、表示するチームを切り替えるだけ(URLの共有トークンも外す) */}
                       <TeamPickerList teams={teams} activeTeamId={activeTeamId} onSelect={(teamId) => onSwitchTeam(teamId, '/games')} />
-                      <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground">
-                        <span className="h-px flex-1 bg-border" />
-                        または
-                        <span className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+                  {rememberedTeams.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div>
+                        <p className="font-heading text-[10px] tracking-[0.2em] text-primary">REMEMBERED</p>
+                        <p className="text-sm font-bold">以前この端末で参加したチーム</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          この端末に招待リンクが残っているチームです。タップするともう一度参加します
+                        </p>
                       </div>
+                      <TeamPickerList
+                        teams={rememberedTeams}
+                        onSelect={handleRejoinRemembered}
+                        subLabel={saving ? '参加中...' : 'タップで参加し直す'}
+                        disabled={saving}
+                      />
+                    </div>
+                  )}
+                  {(teams.length > 0 || rememberedTeams.length > 0) && (
+                    <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground">
+                      <span className="h-px flex-1 bg-border" />
+                      または
+                      <span className="h-px flex-1 bg-border" />
                     </div>
                   )}
                 <form onSubmit={handleJoin} className="flex flex-col gap-3">
                   <div>
                     <p className="font-heading text-[10px] tracking-[0.2em] text-primary">JOIN TEAM</p>
-                    {teams.length > 0 && <p className="text-sm font-bold">新しいチームに参加</p>}
+                    {(teams.length > 0 || rememberedTeams.length > 0) && <p className="text-sm font-bold">新しいチームに参加</p>}
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       招待リンクを開くと自動で参加できます。うまくいかない場合はここに貼り付けてください
                     </p>

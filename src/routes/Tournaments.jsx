@@ -39,7 +39,8 @@ function todayStr() {
 }
 
 // シーズン通算の成績を電光掲示板風にまとめたヒーローカード
-function SeasonHero({ record, tournamentCount, avgFor, avgAgainst }) {
+// 勝敗・勝率は2Q制/4Q制の合算のまま。大会数・平均得点・平均失点だけをperiodSystemで切り替える
+function SeasonHero({ record, tournamentCount, avgFor, avgAgainst, periodSystem, onPeriodSystemChange }) {
   const label = streakLabel(record.streak)
   return (
     <div className="relative overflow-hidden rounded-2xl bg-secondary p-4 text-secondary-foreground shadow-md animate-rise-in">
@@ -85,7 +86,30 @@ function SeasonHero({ record, tournamentCount, avgFor, avgAgainst }) {
           </div>
         </div>
       </div>
-      <div className="relative mt-4 grid grid-cols-3 divide-x divide-white/15 rounded-xl bg-white/5 py-2 text-center">
+      <div className="relative mt-4 flex items-center justify-between gap-2">
+        <span className="font-heading text-[10px] tracking-[0.2em] opacity-70">
+          {periodSystem === '2q' ? '2Q制' : '4Q制'}の大会・試合
+        </span>
+        <div className="flex rounded-lg bg-white/10 p-0.5">
+          {[
+            { key: '2q', label: '2Q制' },
+            { key: '4q', label: '4Q制' },
+          ].map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => onPeriodSystemChange(o.key)}
+              aria-pressed={periodSystem === o.key}
+              className={`min-h-8 rounded-md px-3 text-[11px] font-bold transition-colors ${
+                periodSystem === o.key ? 'bg-white text-secondary shadow' : 'text-secondary-foreground/70'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="relative mt-2 grid grid-cols-3 divide-x divide-white/15 rounded-xl bg-white/5 py-2 text-center">
         {[
           { label: 'TOURNAMENTS', value: tournamentCount },
           { label: 'AVG PTS', value: avgFor ?? '-' },
@@ -123,13 +147,16 @@ export function Tournaments({ teamId }) {
     for (const [id, list] of groups) map[id] = { ...summarizeRecord(list, scoresByGameId), total: list.length }
     return map
   }, [officialGames, scoresByGameId])
+  // 既存の記録の大半が2Q制のため、デフォルトは2Q制(LEADERS/TEAMと同じ)
+  const [heroPeriodSystem, setHeroPeriodSystem] = useState('2q')
+  const heroTournamentCount = tournaments.filter((t) => t.period_system === heroPeriodSystem).length
   const { avgFor, avgAgainst } = useMemo(() => {
-    const finals = officialGames.filter((g) => g.status === 'final')
+    const finals = officialGames.filter((g) => g.status === 'final' && g.period_system === heroPeriodSystem)
     if (finals.length === 0) return { avgFor: null, avgAgainst: null }
     const sumFor = finals.reduce((acc, g) => acc + (scoresByGameId[g.id] ?? 0), 0)
     const sumAgainst = finals.reduce((acc, g) => acc + (g.opponent_score ?? 0), 0)
     return { avgFor: (sumFor / finals.length).toFixed(1), avgAgainst: (sumAgainst / finals.length).toFixed(1) }
-  }, [officialGames, scoresByGameId])
+  }, [officialGames, scoresByGameId, heroPeriodSystem])
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [gameDate, setGameDate] = useState(todayStr())
@@ -233,7 +260,14 @@ export function Tournaments({ teamId }) {
         </Dialog>
       </PageHeader>
 
-      <SeasonHero record={seasonRecord} tournamentCount={tournaments.length} avgFor={avgFor} avgAgainst={avgAgainst} />
+      <SeasonHero
+        record={seasonRecord}
+        tournamentCount={heroTournamentCount}
+        avgFor={avgFor}
+        avgAgainst={avgAgainst}
+        periodSystem={heroPeriodSystem}
+        onPeriodSystemChange={setHeroPeriodSystem}
+      />
 
       {tournaments.length === 0 ? (
         <EmptyState title="まだ大会が登録されていません" description="「大会を作成」から最初の大会を登録しましょう" />

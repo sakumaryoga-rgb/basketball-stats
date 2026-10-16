@@ -6,7 +6,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 // teamsは必ずuseTeams(=ログイン中の匿名ユーザーのteam_members)から渡すこと。
 // localStorageの履歴は退出済みのチームを含みうるため、この一覧の根拠にしない。
 // タップは「表示するチームを切り替える」だけで、参加処理(team_membersへのINSERT等)は行わない
-export function TeamPickerList({ teams, activeTeamId, onSelect, className }) {
+// subLabelを渡すと「表示中/タップで切り替え」の代わりに表示する(以前参加したチームの再参加など)
+export function TeamPickerList({ teams, activeTeamId, onSelect, className, subLabel, disabled = false }) {
   return (
     <ul className={cn('flex flex-col gap-2', className)}>
       {teams.map((t, i) => {
@@ -16,9 +17,10 @@ export function TeamPickerList({ teams, activeTeamId, onSelect, className }) {
             <button
               type="button"
               onClick={() => onSelect(t.id)}
+              disabled={disabled}
               aria-current={active ? 'true' : undefined}
               className={cn(
-                'press flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left',
+                'press flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left disabled:opacity-60',
                 active ? 'border-primary bg-primary/5 ring-1 ring-primary/40' : 'bg-card hover:bg-muted/50'
               )}
             >
@@ -29,7 +31,7 @@ export function TeamPickerList({ teams, activeTeamId, onSelect, className }) {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold">{t.name}</span>
                 <span className={cn('block text-[11px]', active ? 'text-primary font-medium' : 'text-muted-foreground')}>
-                  {active ? '表示中のチーム' : 'タップで切り替え'}
+                  {subLabel ?? (active ? '表示中のチーム' : 'タップで切り替え')}
                 </span>
               </span>
               {active ? (
