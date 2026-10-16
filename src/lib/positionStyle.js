@@ -14,9 +14,9 @@ export function positionColor(position) {
 
 // STARTING FIVEをハーフコート上に配置する位置(%)。ゴールは下側
 export const COURT_SLOTS = [
-  { key: 'PG', x: 50, y: 17 },
-  { key: 'SG', x: 83, y: 36 },
-  { key: 'SF', x: 17, y: 36 },
+  { key: 'PG', x: 50, y: 21 },
+  { key: 'SG', x: 83, y: 39 },
+  { key: 'SF', x: 17, y: 39 },
   { key: 'PF', x: 70, y: 63 },
   { key: 'C', x: 30, y: 63 },
 ]

@@ -239,7 +239,7 @@ function RosterCard({ player, index, onToggleStarter }) {
         aria-pressed={starter}
         aria-label={starter ? 'STARTING FIVEから外す' : 'STARTING FIVEに入れる'}
         className={cn(
-          'absolute right-1.5 top-3 flex size-9 items-center justify-center rounded-full transition-all active:scale-90',
+          'absolute right-1 top-2.5 flex size-11 items-center justify-center rounded-full transition-all active:scale-90',
           starter ? 'bg-chart-3 text-[oklch(0.28_0.08_75)] shadow' : 'bg-muted text-muted-foreground hover:text-foreground'
         )}
       >
@@ -334,7 +334,7 @@ export function Players({ teamId, teams = [] }) {
               type="button"
               onClick={() => setViewMode(tab.key)}
               className={cn(
-                'relative z-10 py-1.5 font-heading text-sm tracking-wider transition-colors',
+                'relative z-10 py-2.5 font-heading text-sm tracking-wider transition-colors',
                 viewMode === tab.key ? 'text-secondary-foreground' : 'text-muted-foreground'
               )}
             >
@@ -376,7 +376,7 @@ export function Players({ teamId, teams = [] }) {
                     type="button"
                     onClick={() => setPositionFilter(key)}
                     className={cn(
-                      'flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 font-heading text-xs tracking-wider transition-all active:scale-95',
+                      'flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 font-heading text-xs tracking-wider transition-all active:scale-95',
                       active ? 'text-white border-transparent shadow' : 'bg-background text-muted-foreground'
                     )}
                     style={active ? { background: color } : undefined}

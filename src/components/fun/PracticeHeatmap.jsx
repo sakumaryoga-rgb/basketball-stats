@@ -100,12 +100,12 @@ export function PracticeHeatmap({ sessions }) {
       </div>
 
       <div className="mt-3 rounded-xl bg-white/55 p-2.5 backdrop-blur-sm">
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-1 flex items-center justify-between">
           <button
             type="button"
             onClick={() => setMonthOffset((m) => m - 1)}
             aria-label="前の月"
-            className="flex size-7 items-center justify-center rounded-full hover:bg-white/60 active:scale-90"
+            className="-m-1.5 flex size-10 items-center justify-center rounded-full hover:bg-white/60 active:scale-90"
           >
             <ChevronLeft className="size-4" />
           </button>
@@ -117,7 +117,7 @@ export function PracticeHeatmap({ sessions }) {
             onClick={() => setMonthOffset((m) => Math.min(0, m + 1))}
             disabled={monthOffset === 0}
             aria-label="次の月"
-            className="flex size-7 items-center justify-center rounded-full hover:bg-white/60 active:scale-90 disabled:opacity-25"
+            className="-m-1.5 flex size-10 items-center justify-center rounded-full hover:bg-white/60 active:scale-90 disabled:opacity-25"
           >
             <ChevronRight className="size-4" />
           </button>
