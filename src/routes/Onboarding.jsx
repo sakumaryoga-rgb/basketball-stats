@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, CheckCircle2, Circle, Copy, Check, Loader2, Share2 } from 'lucide-react'
+import { BarChart3, Check, ChevronLeft, ChevronRight, CheckCircle2, Circle, Dumbbell, Plus, Trophy, UserPlus } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { cn } from '@/lib/utils'
 import { TERMS_VERSION, PRIVACY_VERSION } from '@/lib/legal'
@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Basketball } from '@/components/fun/Basketball'
+import { CourtLines } from '@/components/fun/CourtLines'
+import { ShareLinkPanel } from '@/components/fun/ShareLinkPanel'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -56,14 +58,16 @@ function findRememberedTokenByName(name) {
   return match ? extractShareToken(match.shareUrl) : null
 }
 
-function BasketballIcon(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 3v18M3 12h18M5.6 5.6c1.9 1.9 2.9 4.1 2.9 6.4s-1 4.5-2.9 6.4M18.4 5.6c-1.9 1.9-2.9 4.1-2.9 6.4s1 4.5 2.9 6.4" />
-    </svg>
-  )
-}
+const FEATURES = [
+  { icon: Trophy, title: 'GAMES', text: '試合をその場で記録' },
+  { icon: Dumbbell, title: 'PRACTICE', text: '練習・シュートも' },
+  { icon: BarChart3, title: 'STATS', text: '成績を自動で集計' },
+]
+
+const MODES = [
+  { key: 'create', icon: Plus, title: '新しいチームを作る', sub: 'はじめて使うチーム' },
+  { key: 'join', icon: UserPlus, title: 'チームに参加する', sub: '招待リンクをもらった' },
+]
 
 export function Onboarding({ onTeamJoined, hasTeam }) {
   const { token: tokenFromPath } = useParams()
@@ -84,7 +88,6 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
   const [autoJoining, setAutoJoining] = useState(!!token)
   // チーム作成直後だけ、発行された共有URLを一度きり表示するための状態
   const [pendingShareReveal, setPendingShareReveal] = useState(null)
-  const [copied, setCopied] = useState(false)
   // 初回アクセス時のみ、利用規約・プライバシーポリシーへの同意ポップアップを表示する
   const [showConsent, setShowConsent] = useState(() => !hasCurrentConsent())
   const [agreeChecked, setAgreeChecked] = useState(false)
@@ -195,22 +198,6 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
     await finishJoin(result.out_team_id)
   }
 
-  async function handleCopyShareUrl() {
-    if (!pendingShareReveal) return
-    await navigator.clipboard.writeText(pendingShareReveal.shareUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  async function handleShareShareUrl() {
-    if (!pendingShareReveal) return
-    try {
-      await navigator.share({ title: pendingShareReveal.teamName, url: pendingShareReveal.shareUrl })
-    } catch {
-      // ユーザーがシェアをキャンセルした場合等は何もしない
-    }
-  }
-
   // 共有URLも「別のチームを追加」の意図もなく、既にチームを持った状態で
   // ここに来た場合は、読み込みタイミングのズレによる意図しない遷移とみなして
   // 試合一覧に戻す(そうしないとチームのデータが見えなくなってしまう)
@@ -223,129 +210,170 @@ export function Onboarding({ onTeamJoined, hasTeam }) {
 
   if (autoJoining || (hasTeam && !token && !isDeliberateAdd)) {
     return (
-      <div className="flex items-center justify-center" style={{ minHeight: 'var(--app-height, 100svh)' }}>
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center gap-2" style={{ minHeight: 'var(--app-height, 100svh)' }}>
+        <div className="flex h-16 flex-col items-center justify-end">
+          <Basketball className="size-10 animate-ball-bounce" />
+          <div className="mt-1 h-1.5 w-9 rounded-full bg-foreground/30 blur-[1px] animate-ball-shadow" />
+        </div>
+        {autoJoining && <p className="text-sm font-medium text-muted-foreground">チームに参加しています…</p>}
       </div>
     )
   }
 
   return (
-    <div
-      className="overscroll-none relative flex flex-col items-center justify-center gap-8 px-4 pt-[calc(2.5rem+env(safe-area-inset-top))] pb-[calc(2.5rem+env(safe-area-inset-bottom))]"
-      style={{ minHeight: 'var(--app-height, 100svh)' }}
-    >
-      <div className="fixed inset-0 -z-10 overflow-hidden bg-background" aria-hidden>
-        <div className="absolute -top-24 -right-24 size-72 rounded-full bg-primary/10 blur-3xl" />
-        <div className="absolute -bottom-24 -left-24 size-72 rounded-full bg-primary/8 blur-3xl" />
+    <div className="overscroll-none relative flex flex-col bg-background" style={{ minHeight: 'var(--app-height, 100svh)' }}>
+      {/* ヒーロー: GAMES/TEAMのヒーローカードと同じ紺+コートラインの表現 */}
+      <div className="relative overflow-hidden rounded-b-[2rem] bg-secondary px-4 pb-8 pt-[calc(1rem+env(safe-area-inset-top))] text-secondary-foreground shadow-md">
+        <CourtLines className="text-white/10" />
+        <div className="absolute -right-10 -top-10 size-40 rounded-full bg-primary/35 blur-3xl" />
+        <div className="relative mx-auto flex max-w-sm flex-col items-center gap-3 pt-2">
+          {hasTeam && (
+            <button
+              onClick={() => navigate(-1)}
+              className="flex min-h-10 items-center gap-1 self-start rounded-lg pr-2 text-sm opacity-80 hover:opacity-100"
+            >
+              <ChevronLeft className="size-4" />
+              戻る
+            </button>
+          )}
+          <div className="flex h-24 flex-col items-center justify-end">
+            <Basketball className="size-14 animate-ball-bounce drop-shadow-lg" />
+            <div className="mt-1 h-2 w-12 rounded-full bg-black/40 blur-[2px] animate-ball-shadow" />
+          </div>
+          <div className="text-center">
+            <p className="font-heading text-4xl leading-none tracking-wide">
+              BASKETBALL <span className="text-primary">STATS</span>
+            </p>
+            <p className="mt-2 text-sm opacity-80">チームのスタッツを、みんなで記録しよう</p>
+          </div>
+          {!hasTeam && !pendingShareReveal && (
+            <ul className="mt-2 grid w-full grid-cols-3 gap-2">
+              {FEATURES.map(({ icon: Icon, title, text }, i) => (
+                <li
+                  key={title}
+                  className="animate-rise-in flex flex-col items-center gap-1 rounded-xl bg-white/8 px-1 py-2.5 text-center"
+                  style={{ '--i': i + 1 }}
+                >
+                  <Icon className="size-4 text-chart-3" />
+                  <span className="font-heading text-[11px] tracking-wider">{title}</span>
+                  <span className="text-[10px] leading-tight opacity-75">{text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
-      <div className="relative flex flex-col items-center gap-3">
-        <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30">
-          <BasketballIcon className="size-9" />
-        </div>
-        <div className="text-center">
-          <p className="font-heading text-4xl tracking-wide text-primary">BASKETBALL STATS</p>
-        </div>
-      </div>
+      <div className="relative mx-auto -mt-4 flex w-full max-w-sm flex-1 flex-col gap-4 px-4 pb-[calc(2rem+env(safe-area-inset-bottom))]">
+        {pendingShareReveal ? (
+          <div className="flex flex-col gap-4 animate-rise-in">
+            <div className="flex items-center gap-3 rounded-2xl border bg-card p-4 shadow-xs">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-lime-400 text-lime-950 animate-check-pop">
+                <Check className="size-6" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-heading text-[10px] tracking-[0.2em] text-primary">TEAM CREATED</p>
+                <p className="break-words text-lg font-bold leading-snug">「{pendingShareReveal.teamName}」ができました!</p>
+              </div>
+            </div>
+            <ShareLinkPanel url={pendingShareReveal.shareUrl} teamName={pendingShareReveal.teamName} />
+            <p className="px-1 text-xs leading-relaxed text-muted-foreground">
+              このリンクはあとからTEAMタブでも確認できます(この端末のみ)。念のため、メンバーへ送るかメモしておいてください。
+            </p>
+            <Button className="h-12 text-base font-bold" onClick={() => finishJoin(pendingShareReveal.teamId)}>
+              保存しました。はじめる
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2 animate-rise-in">
+              {MODES.map(({ key, icon: Icon, title, sub }) => {
+                const active = mode === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setMode(key)
+                      setError('')
+                    }}
+                    aria-pressed={active}
+                    className={cn(
+                      'press flex flex-col items-start gap-2 rounded-2xl border bg-card p-3 text-left shadow-xs transition-colors',
+                      active ? 'border-primary ring-2 ring-primary/30' : 'hover:bg-muted/40'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex size-9 items-center justify-center rounded-xl transition-colors',
+                        active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      <Icon className="size-5" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-bold leading-snug">{title}</span>
+                      <span className="block text-[11px] text-muted-foreground">{sub}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
 
-      {pendingShareReveal ? (
-        <Card className="relative w-full max-w-sm">
-          <CardHeader>
-            <CardTitle>共有URLを保存してください</CardTitle>
-            <CardDescription>
-              このURLを知っている人は誰でも「{pendingShareReveal.teamName}」にアクセスして記録・編集できます。
-              このURLは今だけ表示されます。忘れずに保存・共有してください。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="text-sm bg-muted rounded-md px-3 py-2 break-all">{pendingShareReveal.shareUrl}</div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={handleCopyShareUrl}>
-                {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-                {copied ? 'コピーしました' : 'URLをコピー'}
-              </Button>
-              {typeof navigator !== 'undefined' && navigator.share && (
-                <Button variant="outline" size="icon" aria-label="共有" onClick={handleShareShareUrl}>
-                  <Share2 className="size-4" />
-                </Button>
+            <div key={mode} className="rounded-2xl border bg-card p-4 shadow-xs animate-in fade-in slide-in-from-bottom-1 duration-200">
+              {mode === 'create' ? (
+                <form onSubmit={handleCreate} className="flex flex-col gap-3">
+                  <div>
+                    <p className="font-heading text-[10px] tracking-[0.2em] text-primary">CREATE TEAM</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      作成すると、メンバーを招待するリンクが発行されます
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="team-name">チーム名</Label>
+                    <Input
+                      id="team-name"
+                      required
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      placeholder="ここにチーム名を入力"
+                      className="h-11"
+                    />
+                  </div>
+                  {error && <p className="text-destructive text-sm">{error}</p>}
+                  <Button type="submit" disabled={saving} className="h-11 font-bold">
+                    {saving ? '作成中...' : 'チームを作成'}
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleJoin} className="flex flex-col gap-3">
+                  <div>
+                    <p className="font-heading text-[10px] tracking-[0.2em] text-primary">JOIN TEAM</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      招待リンクを開くと自動で参加できます。うまくいかない場合はここに貼り付けてください
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="join-input">共有URL または 参加済みのチーム名</Label>
+                    <Input
+                      id="join-input"
+                      required
+                      value={joinInput}
+                      onChange={(e) => setJoinInput(e.target.value)}
+                      placeholder="共有URLを貼り付け、または参加済みのチーム名を入力"
+                      className="h-11"
+                    />
+                  </div>
+                  {error && <p className="text-destructive text-sm">{error}</p>}
+                  <Button type="submit" disabled={saving} className="h-11 font-bold">
+                    {saving ? '参加中...' : 'チームに参加'}
+                  </Button>
+                </form>
               )}
             </div>
-            <Button onClick={() => finishJoin(pendingShareReveal.teamId)}>保存しました。続ける</Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="relative w-full max-w-sm">
-          <CardHeader>
-            {hasTeam && (
-              <button
-                onClick={() => navigate(-1)}
-                className="flex items-center gap-1 text-sm text-muted-foreground -mt-1 mb-1 self-start"
-              >
-                <ChevronLeft className="size-4" />
-                戻る
-              </button>
-            )}
-            <CardTitle>チームを作成 / 参加</CardTitle>
-            <CardDescription>スタッツを共有するチームを設定します</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={mode === 'create' ? 'default' : 'outline'}
-                className="flex-1"
-                onClick={() => setMode('create')}
-              >
-                CREATE TEAM
-              </Button>
-              <Button
-                type="button"
-                variant={mode === 'join' ? 'default' : 'outline'}
-                className="flex-1"
-                onClick={() => setMode('join')}
-              >
-                JOIN TEAM
-              </Button>
-            </div>
-
-            {mode === 'create' ? (
-              <form onSubmit={handleCreate} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="team-name">チーム名</Label>
-                  <Input
-                    id="team-name"
-                    required
-                    value={teamName}
-                    onChange={(e) => setTeamName(e.target.value)}
-                    placeholder="ここにチーム名を入力"
-                  />
-                </div>
-                {error && <p className="text-destructive text-sm">{error}</p>}
-                <Button type="submit" disabled={saving}>
-                  {saving ? '作成中...' : 'チームを作成'}
-                </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleJoin} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="join-input">共有URL または 参加済みのチーム名</Label>
-                  <Input
-                    id="join-input"
-                    required
-                    value={joinInput}
-                    onChange={(e) => setJoinInput(e.target.value)}
-                    placeholder="共有URLを貼り付け、または参加済みのチーム名を入力"
-                  />
-                </div>
-                {error && <p className="text-destructive text-sm">{error}</p>}
-                <Button type="submit" disabled={saving}>
-                  {saving ? '参加中...' : 'チームに参加'}
-                </Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-      )}
+          </>
+        )}
+      </div>
 
       <AlertDialog open={showConsent}>
         <AlertDialogContent className="gap-5 p-6 sm:max-w-md">

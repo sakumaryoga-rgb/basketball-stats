@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useSession } from '@/hooks/useSession'
 import { useTeams } from '@/hooks/useTeams'
@@ -27,6 +27,8 @@ import { TournamentGamesClassic } from '@/routes/classic/TournamentGamesClassic'
 import { PracticeClassic } from '@/routes/classic/PracticeClassic'
 import { PlayersClassic } from '@/routes/classic/PlayersClassic'
 import { LeadersClassic } from '@/routes/classic/LeadersClassic'
+import { TeamSettingsClassic } from '@/routes/classic/TeamSettingsClassic'
+import { OnboardingClassic } from '@/routes/classic/OnboardingClassic'
 import { InAppBrowserBanner } from '@/components/InAppBrowserBanner'
 import { UpdatePrompt } from '@/components/UpdatePrompt'
 
@@ -65,8 +67,13 @@ export default function App() {
   )
 }
 
+function OnboardingRoute({ playful, ...props }) {
+  return playful ? <Onboarding {...props} /> : <OnboardingClassic {...props} />
+}
+
 function MainApp() {
   const location = useLocation()
+  const navigate = useNavigate()
   const { session, loading: sessionLoading } = useSession()
   const { teams, activeTeam, loading: teamsLoading, refresh: refreshTeams, switchTeam } = useTeams(session)
   useActiveShareToken(activeTeam?.id)
@@ -75,6 +82,19 @@ function MainApp() {
 
   // 新UI(遊び心のあるUI)はまずTokyo Comets(検証チーム)限定で先行公開する
   const playfulUi = isTeamInTestGroup(activeTeam?.id)
+
+  // オンボーディングは「まだチームがない」状態でも表示されるためチームIDで判定できない。
+  // Vercel Preview(とローカル開発)では誰でも新UIで確認でき、本番では表示中のチームが
+  // 対象チームの場合だけ新UIにする(本番の初回利用者は全チーム展開まで従来のまま)
+  const playfulOnboarding = playfulUi || import.meta.env.VITE_VERCEL_ENV === 'preview' || import.meta.env.DEV
+
+  // チームの切り替え。表示するチーム(localStorageのactiveTeamId)を変えるだけで、
+  // team_members(所属情報)には触れない。URLに残っている切り替え前チームの共有トークン(?t=)は
+  // useActiveShareTokenで保存値より優先されてしまうため外し、切り替え先のトークンに付け替えさせる
+  function handleSwitchTeam(teamId, to = location.pathname) {
+    switchTeam(teamId)
+    navigate({ pathname: to, search: '' }, { replace: true })
+  }
 
   async function handleTeamJoined(teamId) {
     await refreshTeams()
@@ -96,8 +116,8 @@ function MainApp() {
       <UpdatePrompt />
       <InAppBrowserBanner />
       <Routes>
-        <Route path="/onboarding" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
-        <Route path="/t/:token" element={<Onboarding onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
+        <Route path="/onboarding" element={<OnboardingRoute playful={playfulOnboarding} onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
+        <Route path="/t/:token" element={<OnboardingRoute playful={playfulOnboarding} onTeamJoined={handleTeamJoined} hasTeam={!!activeTeam} />} />
         {/* 印刷用A4レイアウト(@media print)を持つ専用ページのため、Layoutの
             固定高さ・overflow:hiddenのapp-shellの外側に置く(印刷時に内容が
             クリップされるのを避けるため) */}
@@ -133,7 +153,16 @@ function MainApp() {
               />
               <Route path="/players/:id" element={<PlayerDetail teamId={activeTeam.id} />} />
               <Route path="/leaders" element={playfulUi ? <Leaders teamId={activeTeam.id} /> : <LeadersClassic teamId={activeTeam.id} />} />
-              <Route path="/team" element={<TeamSettings team={activeTeam} onTeamUpdated={refreshTeams} playful={playfulUi} />} />
+              <Route
+                path="/team"
+                element={
+                  playfulUi ? (
+                    <TeamSettings team={activeTeam} teams={teams} onTeamUpdated={refreshTeams} onSwitchTeam={handleSwitchTeam} />
+                  ) : (
+                    <TeamSettingsClassic team={activeTeam} teams={teams} onTeamUpdated={refreshTeams} onSwitchTeam={handleSwitchTeam} />
+                  )
+                }
+              />
             </>
           )}
           <Route
