@@ -20,6 +20,7 @@ export function TeamSwitcherSheet({ open, onOpenChange, teams, activeTeamId, onS
         </SheetHeader>
         <TeamPickerList teams={teams} activeTeamId={activeTeamId} onSelect={onSwitch} className="max-h-[50svh] overflow-y-auto" />
         <SheetClose
+          nativeButton={false}
           render={
             <Link
               to="/onboarding?add=1"

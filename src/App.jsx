@@ -21,14 +21,6 @@ import { PrivacyPolicy } from '@/routes/PrivacyPolicy'
 import { Terms } from '@/routes/Terms'
 import { OperatorInfo } from '@/routes/OperatorInfo'
 import { Layout } from '@/components/Layout'
-import { isTeamInTestGroup } from '@/lib/testTeamConfig'
-import { TournamentsClassic } from '@/routes/classic/TournamentsClassic'
-import { TournamentGamesClassic } from '@/routes/classic/TournamentGamesClassic'
-import { PracticeClassic } from '@/routes/classic/PracticeClassic'
-import { PlayersClassic } from '@/routes/classic/PlayersClassic'
-import { LeadersClassic } from '@/routes/classic/LeadersClassic'
-import { TeamSettingsClassic } from '@/routes/classic/TeamSettingsClassic'
-import { OnboardingClassic } from '@/routes/classic/OnboardingClassic'
 import { InAppBrowserBanner } from '@/components/InAppBrowserBanner'
 import { UpdatePrompt } from '@/components/UpdatePrompt'
 
@@ -67,15 +59,6 @@ export default function App() {
   )
 }
 
-function OnboardingRoute({ playful, teams, activeTeamId, onSwitchTeam, ...props }) {
-  // 参加済みチームからの切り替えは新UIのオンボーディングだけの機能(従来版には渡さない)
-  return playful ? (
-    <Onboarding {...props} teams={teams} activeTeamId={activeTeamId} onSwitchTeam={onSwitchTeam} />
-  ) : (
-    <OnboardingClassic {...props} />
-  )
-}
-
 function MainApp() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -84,14 +67,6 @@ function MainApp() {
   useActiveShareToken(activeTeam?.id)
   usePageViewTracking(session?.user?.id, activeTeam?.id)
   useErrorTracking(session?.user?.id)
-
-  // 新UI(遊び心のあるUI)はまずTokyo Comets(検証チーム)限定で先行公開する
-  const playfulUi = isTeamInTestGroup(activeTeam?.id)
-
-  // オンボーディングは「まだチームがない」状態でも表示されるためチームIDで判定できない。
-  // Vercel Preview(とローカル開発)では誰でも新UIで確認でき、本番では表示中のチームが
-  // 対象チームの場合だけ新UIにする(本番の初回利用者は全チーム展開まで従来のまま)
-  const playfulOnboarding = playfulUi || import.meta.env.VITE_VERCEL_ENV === 'preview' || import.meta.env.DEV
 
   // チームの切り替え。表示するチーム(localStorageのactiveTeamId)を変えるだけで、
   // team_members(所属情報)には触れない。URLに残っている切り替え前チームの共有トークン(?t=)は
@@ -124,8 +99,7 @@ function MainApp() {
         <Route
           path="/onboarding"
           element={
-            <OnboardingRoute
-              playful={playfulOnboarding}
+            <Onboarding
               onTeamJoined={handleTeamJoined}
               hasTeam={!!activeTeam}
               teams={teams}
@@ -137,8 +111,7 @@ function MainApp() {
         <Route
           path="/t/:token"
           element={
-            <OnboardingRoute
-              playful={playfulOnboarding}
+            <Onboarding
               onTeamJoined={handleTeamJoined}
               hasTeam={!!activeTeam}
               teams={teams}
@@ -158,7 +131,7 @@ function MainApp() {
             </Suspense>
           }
         />
-        <Route element={<Layout teamName={activeTeam?.name} teamIconUrl={activeTeam?.icon_url} playful={playfulUi} />}>
+        <Route element={<Layout teamName={activeTeam?.name} teamIconUrl={activeTeam?.icon_url} />}>
           {/* チーム未所属でも(オンボーディング中の同意ポップアップから遷移できるよう)閲覧できる情報ページ */}
           <Route path="/contact" element={<ContactForm />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -168,29 +141,23 @@ function MainApp() {
           {activeTeam && (
             <>
               <Route index element={<Navigate to="/games" replace />} />
-              <Route path="/games" element={playfulUi ? <Tournaments teamId={activeTeam.id} /> : <TournamentsClassic teamId={activeTeam.id} />} />
+              <Route path="/games" element={<Tournaments teamId={activeTeam.id} />} />
               <Route
                 path="/games/t/:tournamentId"
-                element={playfulUi ? <TournamentGames teamId={activeTeam.id} /> : <TournamentGamesClassic teamId={activeTeam.id} />}
+                element={<TournamentGames teamId={activeTeam.id} />}
               />
               <Route path="/games/:id" element={<GameDetail teamId={activeTeam.id} />} />
-              <Route path="/practice" element={playfulUi ? <Practice teamId={activeTeam.id} /> : <PracticeClassic teamId={activeTeam.id} />} />
+              <Route path="/practice" element={<Practice teamId={activeTeam.id} />} />
               <Route path="/shooting/:id" element={<ShootingDetail teamId={activeTeam.id} />} />
               <Route
                 path="/players"
-                element={playfulUi ? <Players teamId={activeTeam.id} teams={teams} /> : <PlayersClassic teamId={activeTeam.id} teams={teams} />}
+                element={<Players teamId={activeTeam.id} teams={teams} />}
               />
               <Route path="/players/:id" element={<PlayerDetail teamId={activeTeam.id} />} />
-              <Route path="/leaders" element={playfulUi ? <Leaders teamId={activeTeam.id} /> : <LeadersClassic teamId={activeTeam.id} />} />
+              <Route path="/leaders" element={<Leaders teamId={activeTeam.id} />} />
               <Route
                 path="/team"
-                element={
-                  playfulUi ? (
-                    <TeamSettings team={activeTeam} teams={teams} onTeamUpdated={refreshTeams} onSwitchTeam={handleSwitchTeam} />
-                  ) : (
-                    <TeamSettingsClassic team={activeTeam} teams={teams} onTeamUpdated={refreshTeams} onSwitchTeam={handleSwitchTeam} />
-                  )
-                }
+                element={<TeamSettings team={activeTeam} teams={teams} onTeamUpdated={refreshTeams} onSwitchTeam={handleSwitchTeam} />}
               />
             </>
           )}

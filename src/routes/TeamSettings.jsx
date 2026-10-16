@@ -4,7 +4,6 @@ import { ArrowLeftRight, ChevronDown, LogOut, Pencil, Plus, RefreshCw, Trash2, T
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useGames } from '@/hooks/useGames'
-import { useTeamSeasonStats } from '@/hooks/useTeamSeasonStats'
 import { useTeamPeriodStats } from '@/hooks/useTeamPeriodStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
@@ -340,8 +339,10 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
   const { players: allPlayers } = usePlayers(team.id)
   const players = allPlayers.filter((p) => !p.guest_game_id)
   const { games } = useGames(team.id)
-  const { totals } = useTeamSeasonStats(team.id)
-  const { stats: periodStats } = useTeamPeriodStats(team.id)
+  const { stats: periodStats, loading: periodLoading } = useTeamPeriodStats(team.id)
+  // シュート成功率・シーズン合計は全公式戦(ゲスト選手を含むチームの記録)の合計から出す。
+  // 1試合平均と同じ集計元(useTeamPeriodStats)を使い、対象範囲を揃える
+  const totals = periodLoading ? null : periodStats.all.totals
   const { shots } = useShotChart(team.id)
   const [leaving, setLeaving] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
@@ -354,8 +355,8 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
   const periodBucket = periodStats[periodMode]
   const otherTeams = teams.filter((t) => t.id !== team.id)
 
-  // シュート成功率は全公式戦(2Q制・4Q制の合算、スクリメージ/シューティングは含まない)の
-  // player_season_statsの成功数・試投数から計算する。1試合平均の2Q/4Q切り替えとは連動しない
+  // シュート成功率は全公式戦(2Q制・4Q制の合算、ゲスト選手を含む、スクリメージ/シューティングは
+  // 含まない)の成功数・試投数から計算する。1試合平均の2Q/4Q切り替えとは連動しない
   const shooting = useMemo(() => shootingSplits(totals), [totals])
   useEffect(() => {
     const bad = shooting?.filter((s) => s.invalid)
