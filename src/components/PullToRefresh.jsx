@@ -6,6 +6,21 @@ const PULL_THRESHOLD = 70
 const MAX_PULL = 110
 const REFRESH_HEIGHT = 50 // 更新中に表示し続ける高さ
 const REFRESH_DURATION_MS = 700 // 更新中インジケーターを表示する最短時間
+// 指の動きがこの距離(px)を超えた時点で、縦の操作か横の操作かを確定させる
+const DIRECTION_LOCK_DISTANCE = 8
+
+// 横スクロールする要素(PLAYERSのBENCH、ポジション絞り込みチップ等)の中で始まったタッチかどうか。
+// そこでの横スワイプが少し下にずれただけで画面全体が引き下げられないよう、引っ張り更新の対象外にする
+function startsInHorizontalScroller(target) {
+  let el = target instanceof Element ? target : null
+  while (el && el !== document.body) {
+    if (el.dataset?.noPullRefresh != null) return true
+    const style = window.getComputedStyle(el)
+    if ((style.overflowX === 'auto' || style.overflowX === 'scroll') && el.scrollWidth > el.clientWidth) return true
+    el = el.parentElement
+  }
+  return false
+}
 
 // ホーム画面に追加した状態(standalone PWA)ではブラウザのpull-to-refreshが
 // 使えなくなるため、最上部から下に引っ張ったら再読み込みする独自実装を提供する。
@@ -17,6 +32,9 @@ export function PullToRefresh({ children, onRefresh, disabled = false }) {
   const [dragging, setDragging] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const startYRef = useRef(null)
+  const startXRef = useRef(null)
+  // null: まだ方向が決まっていない / 'vertical': 引っ張り更新として扱う / 'horizontal': 無視する
+  const directionRef = useRef(null)
   const enabledRef = useRef(false)
   const disabledRef = useRef(disabled)
   const pendingPullRef = useRef(0)
@@ -71,29 +89,64 @@ export function PullToRefresh({ children, onRefresh, disabled = false }) {
         startYRef.current = null
         return
       }
+      if (startsInHorizontalScroller(e.target)) {
+        startYRef.current = null
+        return
+      }
       startYRef.current = e.touches[0].clientY
-      setDragging(true)
+      startXRef.current = e.touches[0].clientX
+      directionRef.current = null
     }
 
     function handleTouchMove(e) {
       if (startYRef.current == null) return
       const delta = e.touches[0].clientY - startYRef.current
+      // 指が少し動いた時点で縦横どちらの操作かを確定させ、横方向(や上方向)が優勢なら
+      // このジェスチャーの間は引っ張り更新を一切行わない(斜めの横スワイプで画面全体が動かないように)
+      if (directionRef.current == null) {
+        const dx = Math.abs(e.touches[0].clientX - startXRef.current)
+        const dy = Math.abs(delta)
+        if (Math.max(dx, dy) < DIRECTION_LOCK_DISTANCE) return
+        if (dx >= dy || delta < 0) {
+          directionRef.current = 'horizontal'
+          startYRef.current = null
+          return
+        }
+        directionRef.current = 'vertical'
+        // 方向を確定するまでの数pxは引っ張り量に含めず、ここを起点にする
+        startYRef.current = e.touches[0].clientY
+        setDragging(true)
+        return
+      }
       pendingPullRef.current = delta <= 0 ? 0 : Math.min(MAX_PULL, delta)
       scheduleFlush()
     }
 
     function endDrag() {
-      if (startYRef.current == null) return
+      const wasVertical = directionRef.current === 'vertical'
+      directionRef.current = null
+      if (startYRef.current == null || !wasVertical) {
+        startYRef.current = null
+        return
+      }
       startYRef.current = null
       setDragging(false)
-      setPull((current) => {
-        if (current >= PULL_THRESHOLD) {
-          setRefreshing(true)
-          onRefreshRef.current?.()
-          return REFRESH_HEIGHT
-        }
-        return 0
-      })
+      // 最新の引っ張り量はpendingPullRefが持っている。以前はsetPullの更新関数の中で
+      // setRefreshing/onRefreshを呼んでいたが、描画中に他コンポーネントの状態を更新する
+      // 形になりReactの警告が出ていたため、更新関数の外で判定する
+      if (rafIdRef.current != null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+      const current = pendingPullRef.current
+      pendingPullRef.current = 0
+      if (current >= PULL_THRESHOLD) {
+        setRefreshing(true)
+        setPull(REFRESH_HEIGHT)
+        onRefreshRef.current?.()
+      } else {
+        setPull(0)
+      }
     }
 
     window.addEventListener('touchstart', handleTouchStart, { passive: true })

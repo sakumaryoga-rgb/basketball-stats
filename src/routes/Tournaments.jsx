@@ -11,6 +11,7 @@ import { CourtLines } from '@/components/fun/CourtLines'
 import { WinRing } from '@/components/fun/WinRing'
 import { ResultDots } from '@/components/fun/ResultDots'
 import { DateTile } from '@/components/fun/DateTile'
+import { Glow } from '@/components/fun/Glow'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -45,7 +46,7 @@ function SeasonHero({ record, tournamentCount, avgFor, avgAgainst, periodSystem,
   return (
     <div className="relative overflow-hidden rounded-2xl bg-secondary p-4 text-secondary-foreground shadow-md animate-rise-in">
       <CourtLines className="text-white/10" />
-      <div className="absolute -right-6 -top-6 size-24 rounded-full bg-primary/30 blur-2xl" />
+      <Glow className="-right-12 -top-12 size-36" opacity={0.4} />
       <div className="relative flex items-center gap-4">
         <WinRing value={record.winRate} size={80} stroke={7} track="white">
           <span className="font-heading text-2xl tabular-nums">

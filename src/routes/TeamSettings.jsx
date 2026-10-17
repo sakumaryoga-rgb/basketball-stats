@@ -39,6 +39,7 @@ import { CourtLines } from '@/components/fun/CourtLines'
 import { WinRing } from '@/components/fun/WinRing'
 import { ShareLinkPanel } from '@/components/fun/ShareLinkPanel'
 import { TeamSwitcherSheet } from '@/components/fun/TeamSwitcherSheet'
+import { Glow } from '@/components/fun/Glow'
 
 function EditTeamDialog({ team, onTeamUpdated, children }) {
   const navigate = useNavigate()
@@ -422,7 +423,7 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
       {/* チームのプロフィールと、所属チームの切り替え */}
       <div className="relative overflow-hidden rounded-2xl bg-secondary p-4 text-secondary-foreground shadow-md animate-rise-in">
         <CourtLines className="text-white/10" />
-        <div className="absolute -left-8 -bottom-10 size-32 rounded-full bg-primary/30 blur-2xl" />
+        <Glow className="-left-14 -bottom-16 size-44" opacity={0.4} />
         <div className="relative flex items-center gap-3.5">
           <Avatar className="size-16 shrink-0 ring-4 ring-white/15 after:hidden">
             <AvatarImage src={team.icon_url} alt={team.name} />

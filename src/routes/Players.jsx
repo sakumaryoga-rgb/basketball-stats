@@ -364,7 +364,7 @@ export function Players({ teamId, teams = [] }) {
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="選手名で検索" className="pl-9" />
           </div>
 
-          <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+          <div data-no-pull-refresh className="flex gap-1.5 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none]">
             {['ALL', ...POSITIONS, UNSET_POSITION]
               .filter((key) => key === 'ALL' || countByPosition[key])
               .map((key) => {
@@ -416,9 +416,12 @@ export function Players({ teamId, teams = [] }) {
                 <span className="h-px flex-1 bg-border" />
                 <span className="font-heading text-xs tabular-nums text-muted-foreground">{bench.length}</span>
               </div>
-              <ul className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+              <ul
+                data-no-pull-refresh
+                className="flex snap-x snap-proximity gap-2 overflow-x-auto overscroll-x-contain scroll-px-1 px-1 pb-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch]"
+              >
                 {bench.map((player, i) => (
-                  <li key={player.id} className="animate-rise-in shrink-0" style={{ '--i': i }}>
+                  <li key={player.id} className="animate-rise-in shrink-0 snap-start" style={{ '--i': i }}>
                     <Link
                       to={`/players/${player.id}`}
                       className="press flex w-20 flex-col items-center gap-1 rounded-xl border bg-card px-1.5 py-2"
