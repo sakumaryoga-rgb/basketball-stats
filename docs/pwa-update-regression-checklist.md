@@ -75,8 +75,9 @@ controllerの引き継ぎが実際に発生し、ページが新しいJSバン�
 - 確認: クリック前後で`reg.waiting`が`true`→`false`になる
 - 確認: `navigator.serviceWorker.controller`が`null`にならず、新しいSWのインスタンスに
   引き継がれる(`controllerchange`が発火する)
-- 確認: リロード後、`document.querySelectorAll('script[src*="index-"]')`が指すJSファイル名の
-  ハッシュが更新前と変わっている
+- 確認: リロード後、`document.querySelectorAll('script[src*="main-"]')`が指すJSファイル名の
+  ハッシュが更新前と変わっている(招待リンク用にinvite.htmlを追加しビルドの入口が2つになって以降、アプリ本体は
+  共有チャンクとして`main-<hash>.js`の名前で出力される)
 
 ### 5. minSupportedVersionによる強制ブロック
 `public/version.json`の`minSupportedVersion`を現在のアプリバージョン(`package.json`の
