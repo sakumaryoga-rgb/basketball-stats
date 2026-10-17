@@ -48,7 +48,7 @@ export default defineConfig({
     // 共有リンク用にOGPだけ差し替えたinvite.htmlも出力する(vercel.jsonで/t/*を振り分け)
     rollupOptions: {
       input: {
-        main: path.resolve(fileURLToPath(new URL('.', import.meta.url)), 'index.html'),
+        index: path.resolve(fileURLToPath(new URL('.', import.meta.url)), 'index.html'),
         invite: path.resolve(fileURLToPath(new URL('.', import.meta.url)), 'invite.html'),
       },
     },
