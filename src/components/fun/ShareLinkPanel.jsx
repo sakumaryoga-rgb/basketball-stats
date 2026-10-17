@@ -3,6 +3,7 @@ import { Check, Copy, Link2, Send, Share2, ShieldAlert, UserPlus, Users } from '
 import { cn } from '@/lib/utils'
 import { copyText, shortenShareUrl } from '@/lib/clipboard'
 import { Button } from '@/components/ui/button'
+import { Glow } from '@/components/fun/Glow'
 
 const STEPS = [
   { icon: Send, text: 'LINEなどでリンクを送る' },
@@ -39,7 +40,7 @@ export function ShareLinkPanel({ url, teamName, footer, className }) {
   return (
     <div className={cn('relative overflow-hidden rounded-2xl border bg-card shadow-xs', className)}>
       <div className="relative bg-secondary px-4 pb-4 pt-3.5 text-secondary-foreground">
-        <div className="absolute -right-8 -top-10 size-28 rounded-full bg-primary/35 blur-2xl" />
+        <Glow className="-right-14 -top-16 size-40" opacity={0.45} />
         <div className="relative flex items-center gap-2.5">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow">
             <Link2 className="size-5" />

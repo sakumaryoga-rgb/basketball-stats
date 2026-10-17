@@ -13,6 +13,7 @@ import { Basketball } from '@/components/fun/Basketball'
 import { CourtLines } from '@/components/fun/CourtLines'
 import { ShareLinkPanel } from '@/components/fun/ShareLinkPanel'
 import { TeamPickerList } from '@/components/fun/TeamPickerList'
+import { Glow } from '@/components/fun/Glow'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -256,7 +257,7 @@ export function Onboarding({ onTeamJoined, hasTeam, teams = [], activeTeamId, on
       {/* ヒーロー: GAMES/TEAMのヒーローカードと同じ紺+コートラインの表現 */}
       <div className="relative overflow-hidden rounded-b-[2rem] bg-secondary px-4 pb-8 pt-[calc(1rem+env(safe-area-inset-top))] text-secondary-foreground shadow-md">
         <CourtLines className="text-white/10" />
-        <div className="absolute -right-10 -top-10 size-40 rounded-full bg-primary/35 blur-3xl" />
+        <Glow className="-right-20 -top-20 size-60" opacity={0.45} />
         <div className="relative mx-auto flex max-w-sm flex-col items-center gap-3 pt-2">
           {hasTeam && (
             <button
