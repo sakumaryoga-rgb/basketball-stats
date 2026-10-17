@@ -1,2 +1,5 @@
+# LINE/X/Slack等のリンクプレビュー用クローラーがOGP(タイトル・画像)を取得できるよう、
+# クロール自体は許可する。検索結果への掲載は各ページのmeta robotsとX-Robots-Tag(noindex)で防ぐ。
+# (Disallow: / にすると、LINEモバイル等のサーバー側プレビュー取得が止まり、プレビューが出なくなる)
 User-agent: *
-Disallow: /
+Allow: /
