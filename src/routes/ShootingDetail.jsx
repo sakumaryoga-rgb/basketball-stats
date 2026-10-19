@@ -120,39 +120,6 @@ function ZoneEntryDialog({ zone, existing, onClose, onConfirm }) {
   )
 }
 
-// 成功率・ホットゾーンを「全体」か選手ごとに切り替えるチップ(上部の枠とHOT ZONESで共通の選択)
-function StatsPlayerPicker({ players, value, onChange, onDark = false }) {
-  const options = [{ id: 'all', name: '全体' }, ...players]
-  return (
-    <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-0.5 [scrollbar-width:none]" data-no-pull-refresh role="tablist">
-      {options.map((p) => {
-        const active = value === p.id
-        return (
-          <button
-            key={p.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(p.id)}
-            className={cn(
-              'min-h-9 max-w-[10rem] shrink-0 truncate rounded-full px-3 text-xs font-bold transition-colors',
-              onDark
-                ? active
-                  ? 'bg-chart-3 text-secondary'
-                  : 'bg-white/10 text-white/80 hover:bg-white/15'
-                : active
-                  ? 'bg-secondary text-secondary-foreground'
-                  : 'border bg-background text-muted-foreground hover:bg-muted'
-            )}
-          >
-            {p.name}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 export function ShootingDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -228,8 +195,9 @@ export function ShootingDetail({ teamId }) {
     [entries, selectedPlayerId]
   )
   const playerHotZones = useMemo(() => aggregateHotZonesFromTallies(playerEntries), [playerEntries])
-  // 成功率・ホットゾーンを表示する対象('all' = 全体、それ以外は選手ID)。記録する選手の選択とは別
-  const [statsPlayerId, setStatsPlayerId] = useState('all')
+  // 成功率(2P%/3P%)・ホットゾーンの表示対象は、PLAYERSで選んだ選手と同じ。
+  // PLAYERSで「全体」を選ぶ(=記録する選手が未選択)と全員分を表示する
+  const statsPlayerId = selectedPlayerId ?? 'all'
   const statsEntries = useMemo(
     () => (statsPlayerId === 'all' ? entries : entries.filter((e) => e.player_id === statsPlayerId)),
     [entries, statsPlayerId]
@@ -342,7 +310,10 @@ export function ShootingDetail({ teamId }) {
           </span>
         </div>
         <div className="relative mt-3 flex flex-col gap-2 rounded-2xl bg-white/[0.08] p-2.5">
-          <StatsPlayerPicker players={visiblePlayers} value={statsPlayerId} onChange={setStatsPlayerId} onDark />
+          <p className="truncate text-center text-xs font-bold text-white/80">
+            {statsPlayerId === 'all' ? '全体' : (visiblePlayers.find((p) => p.id === statsPlayerId)?.name ?? '全体')}
+            <span className="ml-1 font-normal text-white/50">(PLAYERSで切り替え)</span>
+          </p>
           <div className="grid grid-cols-2 gap-2 pt-1">
             {shootingSplits.map((split) => (
               <ShootingRing key={split.key} split={split} onDark />
@@ -413,6 +384,17 @@ export function ShootingDetail({ teamId }) {
           </p>
         ) : (
           <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-1" data-no-pull-refresh>
+            {/* 全体: 全員分の成功率・ホットゾーンを表示する(記録はしない) */}
+            <button
+              onClick={() => setSelectedPlayerId(null)}
+              aria-pressed={!selectedPlayerId}
+              className={cn(
+                'press flex min-h-11 shrink-0 select-none items-center rounded-full border px-4 text-sm font-bold transition-colors',
+                !selectedPlayerId ? 'border-secondary bg-secondary text-secondary-foreground ring-2 ring-chart-3' : 'bg-background hover:bg-muted'
+              )}
+            >
+              全体
+            </button>
             {visiblePlayers.map((p) => (
               <button
                 key={p.id}
@@ -435,7 +417,7 @@ export function ShootingDetail({ teamId }) {
             ? '内容を修正するには「記録を修正する」を押してください'
             : selectedPlayerId
               ? 'コートをタップしてゾーンを選び、試投数・成功数をまとめて記録します'
-              : '先に選手を選択してください'}
+              : '記録するには選手を選んでください(全体では記録できません)'}
         </p>
         <CourtDiagram active={!!selectedPlayerId && !readOnly} onTap={handleCourtTap} />
       </section>
@@ -512,7 +494,10 @@ export function ShootingDetail({ teamId }) {
 
       <section className="flex flex-col gap-2 rounded-3xl border bg-card p-3 shadow-sm">
         <h2 className="font-heading text-lg leading-none tracking-wide">HOT ZONES</h2>
-        <StatsPlayerPicker players={visiblePlayers} value={statsPlayerId} onChange={setStatsPlayerId} />
+        <p className="text-xs text-muted-foreground">
+          {statsPlayerId === 'all' ? '全体' : (visiblePlayers.find((p) => p.id === statsPlayerId)?.name ?? '全体')}
+          (PLAYERSで切り替え)
+        </p>
         <HotZoneChart hotZones={statsHotZones} />
       </section>
 
