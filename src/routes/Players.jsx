@@ -8,9 +8,11 @@ import { POSITIONS, UNSET_POSITION, formatPositions, groupPlayersByPosition } fr
 import { positionColor } from '@/lib/positionStyle'
 import { PageHeader } from '@/components/fun/PageHeader'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { StartingCourt } from '@/components/fun/StartingCourt'
 import { Jersey } from '@/components/fun/Jersey'
 import { GameSetupSheet, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
+import { LineupEditor } from '@/components/fun/LineupEditor'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -267,7 +269,7 @@ function StarterPips({ count }) {
 }
 
 export function Players({ teamId, teams = [] }) {
-  const { players: allPlayers, addPlayer, updatePlayer } = usePlayers(teamId)
+  const { players: allPlayers, loading: playersLoading, addPlayer, updatePlayer } = usePlayers(teamId)
   const players = teamRoster(allPlayers)
   const [viewMode, setViewMode] = useState('starting') // 'starting' | 'roster'
   const [positionFilter, setPositionFilter] = useState('ALL')
@@ -285,7 +287,6 @@ export function Players({ teamId, teams = [] }) {
   const positionGroups = useMemo(() => groupPlayersByPosition(filteredPlayers), [filteredPlayers])
   // STARTING FIVEの人数(5人制限の判定)は検索結果に関わらず常に全選手基準で数える
   const starters = useMemo(() => players.filter((p) => p.is_starter), [players])
-  const bench = useMemo(() => players.filter((p) => !p.is_starter), [players])
   const startersCount = starters.length
   const allGroups = useMemo(() => groupPlayersByPosition(players), [players])
   const countByPosition = useMemo(() => Object.fromEntries(allGroups.map((g) => [g.key, g.players.length])), [allGroups])
@@ -294,7 +295,41 @@ export function Players({ teamId, teams = [] }) {
       ? filteredPlayers
       : (positionGroups.find((g) => g.key === positionFilter)?.players ?? [])
 
+  // STARTINGタブのLINEUP編集の並び。先発かどうか(is_starter)だけがDBに保存され、並び順は
+  // 画面内だけのもの。保存を待たずに表示を更新するため、編集後はこの並びを表示の基準にする
+  // (ROSTERタブの★で変えた場合はnullに戻してDBの値から作り直す)
+  const [lineupOrder, setLineupOrder] = useState(null)
+  const lineup = useMemo(() => {
+    const ids = new Set(players.map((p) => p.id))
+    if (!lineupOrder) {
+      const starterIds = players.filter((p) => p.is_starter).slice(0, 5).map((p) => p.id)
+      return { starters: starterIds, reserves: players.filter((p) => !starterIds.includes(p.id)).map((p) => p.id) }
+    }
+    const known = new Set([...lineupOrder.starters, ...lineupOrder.reserves])
+    const starterIds = lineupOrder.starters.filter((id) => ids.has(id))
+    const reserveIds = lineupOrder.reserves.filter((id) => ids.has(id))
+    for (const p of players) {
+      if (known.has(p.id)) continue
+      if (p.is_starter && starterIds.length < 5) starterIds.push(p.id)
+      else reserveIds.push(p.id)
+    }
+    return { starters: starterIds, reserves: reserveIds }
+  }, [players, lineupOrder])
+
+  const courtStarters = useMemo(
+    () => lineup.starters.map((id) => players.find((p) => p.id === id)).filter(Boolean),
+    [lineup, players]
+  )
+
+  async function handleLineupChange(next) {
+    setLineupOrder(next)
+    const nextStarters = new Set(next.starters)
+    const changed = players.filter((p) => !!p.is_starter !== nextStarters.has(p.id))
+    await Promise.all(changed.map((p) => updatePlayer(p.id, { is_starter: nextStarters.has(p.id) })))
+  }
+
   async function handleToggleStarter(player) {
+    setLineupOrder(null)
     if (!player.is_starter && startersCount >= 5) {
       setSwapTarget(player)
       return
@@ -304,6 +339,7 @@ export function Players({ teamId, teams = [] }) {
 
   async function handleSwap(outgoingPlayer) {
     if (!swapTarget) return
+    setLineupOrder(null)
     const incomingPlayer = swapTarget
     setSwapTarget(null)
     await Promise.all([
@@ -345,7 +381,9 @@ export function Players({ teamId, teams = [] }) {
         </div>
       )}
 
-      {players.length === 0 ? (
+      {players.length === 0 && playersLoading ? (
+        <LoadingState />
+      ) : players.length === 0 ? (
         <EmptyState title="まだ選手が登録されていません" description="「選手を追加」からチームのメンバーを登録しましょう" />
       ) : viewMode === 'roster' ? (
         <div className="flex flex-col gap-3">
@@ -404,40 +442,22 @@ export function Players({ teamId, teams = [] }) {
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <StartingCourt starters={starters} onPickStarter={() => setViewMode('roster')} />
-          {starters.length < 5 && (
+          {/* コートはLINEUPの編集結果をすぐに反映する(DBの保存完了を待たない) */}
+          <StartingCourt starters={courtStarters} onPickStarter={() => setViewMode('roster')} />
+          {courtStarters.length < 5 && (
             <p className="text-xs text-muted-foreground text-center -mt-2">
               空いている枠をタップすると、ROSTERからSTARTING FIVEを選べます
             </p>
           )}
-          {bench.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 px-1">
-                <h2 className="font-heading text-xs tracking-[0.2em] text-muted-foreground">BENCH</h2>
-                <span className="h-px flex-1 bg-border" />
-                <span className="font-heading text-xs tabular-nums text-muted-foreground">{bench.length}</span>
-              </div>
-              <ul
-                data-no-pull-refresh
-                className="flex snap-x snap-proximity gap-2 overflow-x-auto overscroll-x-contain scroll-px-1 px-1 pb-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch]"
-              >
-                {bench.map((player, i) => (
-                  <li key={player.id} className="animate-rise-in shrink-0 snap-start" style={{ '--i': i }}>
-                    <Link
-                      to={`/players/${player.id}`}
-                      className="press flex w-20 flex-col items-center gap-1 rounded-xl border bg-card px-1.5 py-2"
-                    >
-                      <PlayerFace player={player} className="size-10" />
-                      <span className="w-full truncate text-center text-[11px] font-medium">{player.name}</span>
-                      <span className="font-heading text-[9px] tracking-wider text-muted-foreground leading-none">
-                        {formatPositions(player.position, player.position2) || '-'}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+          {/* STARTING FIVE / RESERVEの編集。試合作成画面と同じく長押しドラッグ・タップで入れ替えられる */}
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 px-1">
+              <h2 className="font-heading text-xs tracking-[0.2em] text-muted-foreground">LINEUP</h2>
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-[10px] text-muted-foreground">試合追加時のデフォルト</span>
             </div>
-          )}
+            <LineupEditor players={players} value={lineup} onChange={handleLineupChange} />
+          </section>
         </div>
       )}
 

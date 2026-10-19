@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { Crown } from 'lucide-react'
 import { PageHeader } from '@/components/fun/PageHeader'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { Jersey } from '@/components/fun/Jersey'
 import { positionColor } from '@/lib/positionStyle'
 
@@ -65,11 +66,11 @@ const RANK_STYLE = [
 ]
 
 export function Leaders({ teamId }) {
-  const { players } = usePlayers(teamId)
+  const { players, loading: playersLoading } = usePlayers(teamId)
   const [period, setPeriod] = useState('season')
   // 既存の記録の大半が2Q制のため、デフォルトは2Q制で表示する
   const [periodSystem, setPeriodSystem] = useState('2q')
-  const { periodStats } = usePeriodStats(teamId, period, periodSystem)
+  const { periodStats, loading: statsLoading } = usePeriodStats(teamId, period, periodSystem)
   const [category, setCategory] = useState(LEADER_CATEGORIES[0].key)
 
   const activeCategory = LEADER_CATEGORIES.find((c) => c.key === category)
@@ -153,7 +154,9 @@ export function Leaders({ teamId }) {
         ))}
       </div>
 
-      {ranking.length === 0 ? (
+      {ranking.length === 0 && (playersLoading || statsLoading) ? (
+        <LoadingState />
+      ) : ranking.length === 0 ? (
         <EmptyState title="まだデータがありません" description="試合を記録すると、ここにランキングが並びます" />
       ) : (
         <>

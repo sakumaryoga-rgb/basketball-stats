@@ -11,6 +11,7 @@ import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { summarizeRecord } from '@/lib/record'
 import { GameScoreCard } from '@/components/fun/GameScoreCard'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { DateTile } from '@/components/fun/DateTile'
 import { ResultDots } from '@/components/fun/ResultDots'
 import { GameSetupSheet, OpponentField, SetupSection } from '@/components/fun/GameSetupSheet'
@@ -43,7 +44,7 @@ export function TournamentGames({ teamId }) {
   const { tournamentId } = useParams()
   const navigate = useNavigate()
   const { tournaments, updateTournament, deleteTournament } = useTournaments(teamId)
-  const { games, createGame } = useGames(teamId, 'official', tournamentId)
+  const { games, loading: gamesLoading, createGame } = useGames(teamId, 'official', tournamentId)
   const tournament = tournaments.find((t) => t.id === tournamentId)
   const teamScoresByGameId = useTeamScoresByGame(games.map((g) => g.id))
   const record = useMemo(() => summarizeRecord(games, teamScoresByGameId), [games, teamScoresByGameId])
@@ -257,7 +258,9 @@ export function TournamentGames({ teamId }) {
         </div>
       )}
 
-      {games.length === 0 ? (
+      {games.length === 0 && gamesLoading ? (
+        <LoadingState />
+      ) : games.length === 0 ? (
         <EmptyState title="まだ試合が登録されていません" description="「試合を追加」で対戦相手を登録するとここに並びます" />
       ) : (
         <ul className="flex flex-col gap-2">

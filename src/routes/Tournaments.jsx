@@ -7,6 +7,7 @@ import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { summarizeRecord, streakLabel } from '@/lib/record'
 import { PageHeader } from '@/components/fun/PageHeader'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { CourtLines } from '@/components/fun/CourtLines'
 import { WinRing } from '@/components/fun/WinRing'
 import { ResultDots } from '@/components/fun/ResultDots'
@@ -119,7 +120,7 @@ function SeasonHero({ record, tournamentCount, avgFor, avgAgainst, periodSystem,
 // (過去の記録を大会単位で参照しやすくするため)。日程・会場は大会作成時に入力し、
 // 大会内で試合を追加するたびに同じ内容を入力する手間を省く
 export function Tournaments({ teamId }) {
-  const { tournaments, createTournament, deleteTournament } = useTournaments(teamId)
+  const { tournaments, loading: tournamentsLoading, createTournament, deleteTournament } = useTournaments(teamId)
   // シーズン成績・大会ごとの勝敗を出すため、大会に属する公式戦をまとめて取得する
   const { games: officialGames } = useGames(teamId, 'official')
   const scoresByGameId = useTeamScoresByGame(officialGames.map((g) => g.id))
@@ -243,7 +244,9 @@ export function Tournaments({ teamId }) {
         onPeriodSystemChange={setHeroPeriodSystem}
       />
 
-      {tournaments.length === 0 ? (
+      {tournaments.length === 0 && tournamentsLoading ? (
+        <LoadingState />
+      ) : tournaments.length === 0 ? (
         <EmptyState title="まだ大会が登録されていません" description="「大会を作成」から最初の大会を登録しましょう" />
       ) : (
         <ul className="flex flex-col gap-2">

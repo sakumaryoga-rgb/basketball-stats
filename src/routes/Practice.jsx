@@ -5,6 +5,7 @@ import { useGames } from '@/hooks/useGames'
 import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { PageHeader } from '@/components/fun/PageHeader'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { GameScoreCard } from '@/components/fun/GameScoreCard'
 import { PracticeHeatmap } from '@/components/fun/PracticeHeatmap'
 import { WinRing } from '@/components/fun/WinRing'
@@ -278,8 +279,8 @@ function ringColor(rate) {
 
 export function Practice({ teamId }) {
   const location = useLocation()
-  const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
-  const { games: shootingSessions, createGame: createShooting } = useGames(teamId, 'shooting')
+  const { games: scrimmages, loading: scrimmagesLoading, createGame: createScrimmage } = useGames(teamId, 'practice')
+  const { games: shootingSessions, loading: shootingLoading, createGame: createShooting } = useGames(teamId, 'shooting')
   const { players: allPlayers, addPlayer } = usePlayers(teamId)
   // usePlayersは過去の試合のゲストも含むため、シューティングの選手選択や新しい試合の
   // 初期ロスターにはチームの恒久的なロスターだけを渡す
@@ -324,7 +325,9 @@ export function Practice({ teamId }) {
         {scrimmageLineupWarning && (
           <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{scrimmageLineupWarning}</p>
         )}
-        {scrimmages.length === 0 ? (
+        {scrimmages.length === 0 && scrimmagesLoading ? (
+          <LoadingState />
+        ) : scrimmages.length === 0 ? (
           <EmptyState title="まだスクリメージが登録されていません" description="紅白戦や練習試合もGAME同様に記録できます" />
         ) : (
           <ul className="flex flex-col gap-2">
@@ -347,7 +350,9 @@ export function Practice({ teamId }) {
         <SectionHeader icon={Target} title="SHOOTING" sub="シューティング(直近5件)">
           <CreateShootingDialog createGame={createShooting} players={players} />
         </SectionHeader>
-        {recentShootingSessions.length === 0 ? (
+        {recentShootingSessions.length === 0 && shootingLoading ? (
+          <LoadingState />
+        ) : recentShootingSessions.length === 0 ? (
           <EmptyState title="まだシューティング記録がありません" description="コートをタップしてゾーンごとの成功数を記録しよう" />
         ) : (
           <ul className="flex flex-col gap-2">

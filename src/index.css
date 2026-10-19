@@ -307,3 +307,15 @@ html.app-height-locked {
     animation: none;
   }
 }
+
+/* iOS Safariの日付入力は固有の最小幅を持ち、親の幅を超えてはみ出して画面が左右に揺れる原因になる。
+   幅を親に収め、ネイティブの見た目(中央寄せ)を他の入力欄と同じ左寄せにそろえる */
+input[type='date'] {
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}

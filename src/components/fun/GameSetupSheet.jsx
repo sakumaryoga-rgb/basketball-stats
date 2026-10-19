@@ -54,7 +54,7 @@ export function GameSetupSheet({
             </div>
           </div>
 
-          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 pt-4 pb-6">
+          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col gap-5 overflow-x-hidden overflow-y-auto overscroll-contain px-4 pt-4 pb-6">
             {children}
           </div>
 
