@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowLeftRight, ArrowUp, Hand, Plus } from 'lucide-react'
 import { Jersey } from '@/components/fun/Jersey'
 import { CourtLines } from '@/components/fun/CourtLines'
+import { GuestTag, GUEST_COLOR } from '@/components/fun/GuestTag'
 import { positionColor } from '@/lib/positionStyle'
+import { isGuest } from '@/lib/roster'
 import { MAX_STARTERS, listOf, movePlayer, swapPlayers } from '@/lib/lineupDraft'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +20,16 @@ const PLACEHOLDER_ID = '__placeholder'
 
 function positionLabel(p) {
   return [p.position, p.position2].filter(Boolean).join('/') || 'POS未設定'
+}
+
+function jerseyColor(p) {
+  return isGuest(p) ? GUEST_COLOR : positionColor(p.position)
+}
+
+// 名前の下の補足行。ゲストはポジションの代わりにGUESTタグを出して、チームの選手と見分けられるようにする
+function PlayerSubline({ player, className }) {
+  if (isGuest(player)) return <GuestTag className={cn('mt-0.5', className)} />
+  return <span className={cn('block truncate font-heading text-[10px] tracking-wider', className)}>{positionLabel(player)}</span>
 }
 
 // 指の下にある要素から、ドロップ先(選手カード/空き枠/エリアの余白)を判定する
@@ -80,10 +92,10 @@ function StarterCard({ player, index, pickMode, displaced, ...rest }) {
       {...rest}
     >
       <span className="w-4 shrink-0 text-center font-heading text-base leading-none text-white/45">{index + 1}</span>
-      <Jersey number={player.number} color={positionColor(player.position)} className="size-9 shrink-0 drop-shadow" />
+      <Jersey number={player.number} color={jerseyColor(player)} className="size-9 shrink-0 drop-shadow" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-bold leading-tight">{player.name}</span>
-        <span className="block truncate font-heading text-[10px] tracking-wider text-white/60">{positionLabel(player)}</span>
+        <PlayerSubline player={player} className="text-white/60" />
       </span>
       <span
         aria-hidden
@@ -113,17 +125,16 @@ function ReserveCard({ player, startersFull, picked, displaced, ...rest }) {
       className={cn(
         'lineup-card press relative flex min-h-12 w-full min-w-0 items-center gap-2 rounded-xl border bg-background px-2 py-1.5 text-left shadow-xs transition-[background-color,box-shadow]',
         'hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+        isGuest(player) && 'border-dashed',
         picked && 'border-primary bg-primary/5 ring-2 ring-primary',
         displaced && 'ring-2 ring-chart-3'
       )}
       {...rest}
     >
-      <Jersey number={player.number} color={positionColor(player.position)} className="size-8 shrink-0" />
+      <Jersey number={player.number} color={jerseyColor(player)} className="size-8 shrink-0" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-bold leading-tight">{player.name}</span>
-        <span className="block truncate font-heading text-[10px] tracking-wider text-muted-foreground">
-          {positionLabel(player)}
-        </span>
+        <PlayerSubline player={player} className="text-muted-foreground" />
       </span>
       <span
         aria-hidden
@@ -174,10 +185,10 @@ function DragGhost({ player, drag }) {
         transform: `translate3d(${drag.x - drag.offsetX}px, ${drag.y - drag.offsetY}px, 0) rotate(-2deg) scale(1.04)`,
       }}
     >
-      <Jersey number={player.number} color={positionColor(player.position)} className="size-9 shrink-0" />
+      <Jersey number={player.number} color={jerseyColor(player)} className="size-9 shrink-0" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-bold leading-tight">{player.name}</span>
-        <span className="block truncate font-heading text-[10px] tracking-wider text-white/60">{positionLabel(player)}</span>
+        <PlayerSubline player={player} className="text-white/60" />
       </span>
     </div>,
     document.body
@@ -511,7 +522,7 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
                   index={i}
                   pickMode={!!pickId}
                   displaced={swapWith === id}
-                  aria-label={`${byId.get(id)?.name} (STARTING FIVE ${i + 1}番目)。${pickId ? `${nameOf(pickId)}と入れ替える` : 'タップでRESERVEへ'}`}
+                  aria-label={`${byId.get(id)?.name}${isGuest(byId.get(id)) ? '(ゲスト)' : ''} (STARTING FIVE ${i + 1}番目)。${pickId ? `${nameOf(pickId)}と入れ替える` : 'タップでRESERVEへ'}`}
                   {...cardProps(id)}
                 />
               )}
@@ -575,7 +586,7 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
                     startersFull={startersFull}
                     picked={pickId === id}
                     displaced={swapWith === id}
-                    aria-label={`${byId.get(id)?.name} (RESERVE)。${startersFull ? 'タップで先発と入れ替え' : 'タップでSTARTING FIVEへ'}`}
+                    aria-label={`${byId.get(id)?.name}${isGuest(byId.get(id)) ? '(ゲスト)' : ''} (RESERVE)。${startersFull ? 'タップで先発と入れ替え' : 'タップでSTARTING FIVEへ'}`}
                     aria-pressed={pickId === id}
                     {...cardProps(id)}
                   />

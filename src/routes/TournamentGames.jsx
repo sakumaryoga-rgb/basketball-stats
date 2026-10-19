@@ -4,8 +4,9 @@ import { ChevronLeft, MapPin, Pencil, Plus, Shirt, Swords, Trash2 } from 'lucide
 import { useTournaments } from '@/hooks/useTournaments'
 import { useGames } from '@/hooks/useGames'
 import { usePlayers } from '@/hooks/usePlayers'
-import { applyStartingLineup } from '@/hooks/useGameLineups'
-import { initialLineup, sameStarters } from '@/lib/lineupDraft'
+import { teamRoster } from '@/lib/roster'
+import { useGameSetupDraft } from '@/hooks/useGameSetupDraft'
+import { finishGameSetup } from '@/lib/gameSetup'
 import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { summarizeRecord } from '@/lib/record'
 import { GameScoreCard } from '@/components/fun/GameScoreCard'
@@ -14,6 +15,7 @@ import { DateTile } from '@/components/fun/DateTile'
 import { ResultDots } from '@/components/fun/ResultDots'
 import { GameSetupSheet, OpponentField, SetupSection } from '@/components/fun/GameSetupSheet'
 import { LineupEditor } from '@/components/fun/LineupEditor'
+import { GuestDraftField } from '@/components/fun/GuestDraftField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -51,11 +53,10 @@ export function TournamentGames({ teamId }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const { players } = usePlayers(teamId)
-  const roster = useMemo(() => players.filter((p) => !p.guest_game_id), [players])
-  // STARTING FIVE / RESERVEの下書き。nullの間は(選手の読み込み後も)DBトリガーと同じ初期状態を表示する
-  const [lineupDraft, setLineupDraft] = useState(null)
-  const lineup = lineupDraft ?? initialLineup(roster)
+  const { players, addPlayer } = usePlayers(teamId)
+  // 新しい試合の初期ロスターはチームの選手だけ(過去の試合のゲストは含めない)
+  const roster = useMemo(() => teamRoster(players), [players])
+  const draft = useGameSetupDraft(roster)
   const [lineupWarning, setLineupWarning] = useState('')
   const sheetBodyRef = useRef(null)
 
@@ -77,15 +78,15 @@ export function TournamentGames({ teamId }) {
         location: tournament.location,
         periodSystem: tournament.period_system,
       })
-      // STARTING FIVEを初期状態から変えた場合だけ、作成後のgame_lineupsに反映する
-      if (!sameStarters(lineup, initialLineup(roster))) {
-        try {
-          await applyStartingLineup(game.id, lineup.starters)
-        } catch (lineupErr) {
-          console.error('STARTING FIVEの反映に失敗しました', lineupErr)
-          setLineupWarning(`「vs ${opponentName}」のSTARTING FIVEを反映できませんでした。試合画面の選手交代で設定してください`)
-        }
-      }
+      // 作成画面で追加したゲストの登録と、変更したSTARTING FIVEの反映
+      const warning = await finishGameSetup({
+        gameId: game.id,
+        roster,
+        lineup: draft.lineup,
+        draftGuests: draft.draftGuests,
+        addPlayer,
+      })
+      if (warning) setLineupWarning(`「vs ${opponentName}」: ${warning}`)
       setOpponentName('')
       setOpen(false)
     } catch (err) {
@@ -98,7 +99,7 @@ export function TournamentGames({ teamId }) {
   function handleOpenChange(next) {
     if (next) {
       setOpponentName('')
-      setLineupDraft(null)
+      draft.reset()
       setError('')
       setLineupWarning('')
     }
@@ -229,8 +230,9 @@ export function TournamentGames({ teamId }) {
             </span>
           </div>
         </SetupSection>
-        <SetupSection icon={Shirt} title="LINEUP" sub="この試合のSTARTING FIVE(PLAYERSタブの設定が初期値)">
-          <LineupEditor players={roster} value={lineup} onChange={setLineupDraft} scrollRef={sheetBodyRef} />
+        <SetupSection icon={Shirt} title="LINEUP" sub="この試合のSTARTING FIVE(PLAYERSタブの設定が初期値)とゲスト">
+          <GuestDraftField guests={draft.draftGuests} onAdd={draft.addGuest} onRemove={draft.removeGuest} />
+          <LineupEditor players={draft.editorPlayers} value={draft.lineup} onChange={draft.setLineupDraft} scrollRef={sheetBodyRef} />
         </SetupSection>
       </GameSetupSheet>
 

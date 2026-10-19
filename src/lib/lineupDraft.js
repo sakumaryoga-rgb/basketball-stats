@@ -2,13 +2,15 @@
 // { starters: [playerId...], reserves: [playerId...] } を不変データとして扱う。
 // 保存先(game_lineups.on_court)は「先発かどうか」だけを持ち、並び順の列はない。
 // そのため並び順は作成画面の中だけの並べ替えで、DBには保存されない
+import { teamRoster } from '@/lib/roster'
+
 export const MAX_STARTERS = 5
 
 // DBトリガー(seed_game_lineups)が試合作成時に作る初期状態と同じ並び・同じ先発を再現する。
 // is_starterの選手が先発。1人もいなければsort_order→背番号順の先頭5人が先発になる。
 // 万一is_starterが6人以上いる古いデータでも、下書きの先発は5人までに収める
 export function initialLineup(players) {
-  const roster = players.filter((p) => !p.guest_game_id)
+  const roster = teamRoster(players)
   let starterIds = roster.filter((p) => p.is_starter).map((p) => p.id)
   if (starterIds.length === 0) {
     starterIds = [...roster]

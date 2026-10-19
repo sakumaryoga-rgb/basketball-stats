@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { ChevronLeft, Trash2, Check, Pencil } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
 import { useGames } from '@/hooks/useGames'
 import { useShootingEntries } from '@/hooks/useShootingEntries'
 import { formatDate } from '@/lib/format'
@@ -117,7 +118,9 @@ export function ShootingDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { players } = usePlayers(teamId)
+  const { players: allPlayers } = usePlayers(teamId)
+  // シューティングはチームの選手だけが対象。過去の試合のゲストは選手一覧に出さない
+  const players = useMemo(() => teamRoster(allPlayers), [allPlayers])
   const { games, updateGame, deleteGame } = useGames(teamId, 'shooting')
   const { entries, addTally, resetZone } = useShootingEntries(id)
   // シューティング追加時に選手を選んでいれば、その選手だけをこの画面に表示し、1人目を

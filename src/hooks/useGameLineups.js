@@ -68,16 +68,22 @@ export function useGameLineups(gameId) {
 }
 
 // 試合作成直後、作成画面で編集したSTARTING FIVEをgame_lineupsへ反映する。
-// 行自体はDBトリガー(seed_game_lineups)が試合作成と同時に作るので、ここでは
+// チームの選手の行はDBトリガー(seed_game_lineups)が試合作成と同時に作るので、ここでは
 // トリガーが入れたon_courtと違う選手だけをsubstituteと同じupsertで書き換える
-// (変更がなければ何も書き込まず、従来の作成処理とまったく同じ状態になる)
+// (変更がなければ何も書き込まず、従来の作成処理とまったく同じ状態になる)。
+// ゲストはトリガーの対象外で行が無いため、STARTING FIVEに入れたゲストだけ行を作る
+// (RESERVEのゲストは、試合画面でゲストを追加したときと同じく行を作らない)
 export async function applyStartingLineup(gameId, starterIds) {
   const { data, error } = await supabase.from('game_lineups').select('player_id, on_court').eq('game_id', gameId)
   if (error) throw error
   const wanted = new Set(starterIds)
+  const existing = new Set((data ?? []).map((row) => row.player_id))
   const changes = (data ?? [])
     .filter((row) => row.on_court !== wanted.has(row.player_id))
     .map((row) => ({ game_id: gameId, player_id: row.player_id, on_court: wanted.has(row.player_id) }))
+  for (const id of starterIds) {
+    if (!existing.has(id)) changes.push({ game_id: gameId, player_id: id, on_court: true })
+  }
   if (changes.length === 0) return 0
   const { error: upsertError } = await supabase.from('game_lineups').upsert(changes, { onConflict: 'game_id,player_id' })
   if (upsertError) throw upsertError

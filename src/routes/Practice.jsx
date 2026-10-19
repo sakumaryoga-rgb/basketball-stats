@@ -10,10 +10,12 @@ import { PracticeHeatmap } from '@/components/fun/PracticeHeatmap'
 import { WinRing } from '@/components/fun/WinRing'
 import { DateTile } from '@/components/fun/DateTile'
 import { usePlayers } from '@/hooks/usePlayers'
-import { applyStartingLineup } from '@/hooks/useGameLineups'
-import { initialLineup, sameStarters } from '@/lib/lineupDraft'
+import { teamRoster } from '@/lib/roster'
+import { useGameSetupDraft } from '@/hooks/useGameSetupDraft'
+import { finishGameSetup } from '@/lib/gameSetup'
 import { GameSetupSheet, OpponentField, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
 import { LineupEditor } from '@/components/fun/LineupEditor'
+import { GuestDraftField } from '@/components/fun/GuestDraftField'
 import { useShootingParticipants } from '@/hooks/useShootingParticipants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,22 +38,20 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function CreateScrimmageDialog({ createGame, players, onLineupWarning }) {
+function CreateScrimmageDialog({ createGame, players, addPlayer, onLineupWarning }) {
   const [open, setOpen] = useState(false)
   const [opponentName, setOpponentName] = useState('')
   const [gameDate, setGameDate] = useState(todayStr())
   const [location, setLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const roster = useMemo(() => players.filter((p) => !p.guest_game_id), [players])
-  // STARTING FIVE / RESERVEの下書き。nullの間はDBトリガーと同じ初期状態(PLAYERSタブの設定)を表示する
-  const [lineupDraft, setLineupDraft] = useState(null)
-  const lineup = lineupDraft ?? initialLineup(roster)
+  const roster = useMemo(() => teamRoster(players), [players])
+  const draft = useGameSetupDraft(roster)
   const bodyRef = useRef(null)
 
   function handleOpenChange(next) {
     if (next) {
-      setLineupDraft(null)
+      draft.reset()
       setError('')
       onLineupWarning('')
     }
@@ -64,15 +64,15 @@ function CreateScrimmageDialog({ createGame, players, onLineupWarning }) {
     setError('')
     try {
       const game = await createGame({ opponentName, gameDate, location })
-      // STARTING FIVEを初期状態から変えた場合だけ、作成後のgame_lineupsに反映する
-      if (!sameStarters(lineup, initialLineup(roster))) {
-        try {
-          await applyStartingLineup(game.id, lineup.starters)
-        } catch (lineupErr) {
-          console.error('STARTING FIVEの反映に失敗しました', lineupErr)
-          onLineupWarning('スクリメージは作成しましたが、STARTING FIVEを反映できませんでした。試合画面の選手交代で設定してください')
-        }
-      }
+      // 作成画面で追加したゲストの登録と、変更したSTARTING FIVEの反映
+      const warning = await finishGameSetup({
+        gameId: game.id,
+        roster,
+        lineup: draft.lineup,
+        draftGuests: draft.draftGuests,
+        addPlayer,
+      })
+      if (warning) onLineupWarning(`スクリメージは作成しました。${warning}`)
       setOpponentName('')
       setLocation('')
       setOpen(false)
@@ -121,8 +121,9 @@ function CreateScrimmageDialog({ createGame, players, onLineupWarning }) {
             </SetupField>
           </div>
         </SetupSection>
-        <SetupSection icon={Shirt} title="LINEUP" sub="このスクリメージのSTARTING FIVE(PLAYERSタブの設定が初期値)">
-          <LineupEditor players={roster} value={lineup} onChange={setLineupDraft} scrollRef={bodyRef} />
+        <SetupSection icon={Shirt} title="LINEUP" sub="このスクリメージのSTARTING FIVE(PLAYERSタブの設定が初期値)とゲスト">
+          <GuestDraftField guests={draft.draftGuests} onAdd={draft.addGuest} onRemove={draft.removeGuest} />
+          <LineupEditor players={draft.editorPlayers} value={draft.lineup} onChange={draft.setLineupDraft} scrollRef={bodyRef} />
         </SetupSection>
       </GameSetupSheet>
     </>
@@ -292,7 +293,10 @@ export function Practice({ teamId }) {
   const location = useLocation()
   const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
   const { games: shootingSessions, createGame: createShooting } = useGames(teamId, 'shooting')
-  const { players } = usePlayers(teamId)
+  const { players: allPlayers, addPlayer } = usePlayers(teamId)
+  // usePlayersは過去の試合のゲストも含むため、シューティングの選手選択や新しい試合の
+  // 初期ロスターにはチームの恒久的なロスターだけを渡す
+  const players = useMemo(() => teamRoster(allPlayers), [allPlayers])
   const [scrimmageLineupWarning, setScrimmageLineupWarning] = useState('')
   // useGamesは日付の新しい順に返すため、先頭5件が直近のワークアウトになる
   const recentShootingSessions = shootingSessions.slice(0, 5)
@@ -328,7 +332,7 @@ export function Practice({ teamId }) {
 
       <div className="flex flex-col gap-3">
         <SectionHeader icon={Swords} title="SCRIMMAGE" sub="スクリメージ">
-          <CreateScrimmageDialog createGame={createScrimmage} players={players} onLineupWarning={setScrimmageLineupWarning} />
+          <CreateScrimmageDialog createGame={createScrimmage} players={players} addPlayer={addPlayer} onLineupWarning={setScrimmageLineupWarning} />
         </SectionHeader>
         {scrimmageLineupWarning && (
           <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{scrimmageLineupWarning}</p>

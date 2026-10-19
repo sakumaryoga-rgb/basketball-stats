@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
 import { usePeriodStats } from '@/hooks/usePeriodStats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { LEADER_CATEGORIES, LEADER_PERIODS, formatAvg, formatPct, pct, perGame } from '@/lib/stats'
@@ -76,7 +77,7 @@ export function Leaders({ teamId }) {
 
   const ranking = useMemo(() => {
     // ゲスト選手(その試合限定の助っ人)はリーダーボードには出さない
-    const playersById = new Map(players.filter((p) => !p.guest_game_id).map((p) => [p.id, p]))
+    const playersById = new Map(teamRoster(players).map((p) => [p.id, p]))
     const list = periodStats
       .filter((s) => s.games_played > 0)
       .map((s) => {

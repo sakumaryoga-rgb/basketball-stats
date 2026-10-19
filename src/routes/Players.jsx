@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Search, Star } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
 import { POSITIONS, UNSET_POSITION, formatPositions, groupPlayersByPosition } from '@/lib/stats'
 import { positionColor } from '@/lib/positionStyle'
@@ -267,7 +268,7 @@ function StarterPips({ count }) {
 
 export function Players({ teamId, teams = [] }) {
   const { players: allPlayers, addPlayer, updatePlayer } = usePlayers(teamId)
-  const players = allPlayers.filter((p) => !p.guest_game_id)
+  const players = teamRoster(allPlayers)
   const [viewMode, setViewMode] = useState('starting') // 'starting' | 'roster'
   const [positionFilter, setPositionFilter] = useState('ALL')
   const [search, setSearch] = useState('')

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeftRight, ChevronDown, LogOut, Pencil, Plus, RefreshCw, Trash2, TriangleAlert } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
 import { useGames } from '@/hooks/useGames'
 import { useTeamPeriodStats } from '@/hooks/useTeamPeriodStats'
 import { useShotChart } from '@/hooks/useShotChart'
@@ -338,10 +339,10 @@ function SegmentToggle({ value, onChange }) {
 export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) {
   const navigate = useNavigate()
   const { players: allPlayers } = usePlayers(team.id)
-  const players = allPlayers.filter((p) => !p.guest_game_id)
+  const players = teamRoster(allPlayers)
   const { games } = useGames(team.id)
   const { stats: periodStats, loading: periodLoading } = useTeamPeriodStats(team.id)
-  // シュート成功率・シーズン合計は全公式戦(ゲスト選手を含むチームの記録)の合計から出す。
+  // シュート成功率・シーズン合計は全公式戦の合計から出す(ゲスト選手は含まない)。
   // 1試合平均と同じ集計元(useTeamPeriodStats)を使い、対象範囲を揃える
   const totals = periodLoading ? null : periodStats.all.totals
   const { shots } = useShotChart(team.id)
@@ -356,7 +357,7 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
   const periodBucket = periodStats[periodMode]
   const otherTeams = teams.filter((t) => t.id !== team.id)
 
-  // シュート成功率は全公式戦(2Q制・4Q制の合算、ゲスト選手を含む、スクリメージ/シューティングは
+  // シュート成功率は全公式戦(2Q制・4Q制の合算、ゲスト選手・スクリメージ/シューティングは
   // 含まない)の成功数・試投数から計算する。1試合平均の2Q/4Q切り替えとは連動しない
   const shooting = useMemo(() => shootingSplits(totals), [totals])
   useEffect(() => {
