@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { initialLineup } from '@/lib/lineupDraft'
+import { MAX_STARTERS, initialLineup } from '@/lib/lineupDraft'
 import { DRAFT_GUEST_PREFIX } from '@/lib/gameSetup'
 
 // 試合/スクリメージ作成画面の下書き(STARTING FIVE / RESERVEと、この試合だけのゲスト)。
@@ -15,6 +15,13 @@ export function useGameSetupDraft(roster) {
     () => [...roster, ...draftGuests.map((g) => ({ id: g.id, name: g.name, number: g.number, position: null, guest_game_id: 'draft' }))],
     [roster, draftGuests]
   )
+
+  // STARTING FIVEは5人そろえてから作成する(選手が5人未満のチームは全員)
+  const requiredStarters = Math.min(MAX_STARTERS, editorPlayers.length)
+  const startersError =
+    lineup.starters.length < requiredStarters
+      ? `STARTING FIVEを${requiredStarters}人選んでください(現在${lineup.starters.length}人)`
+      : ''
 
   function addGuest({ name, number }) {
     const id = `${DRAFT_GUEST_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
@@ -39,5 +46,5 @@ export function useGameSetupDraft(roster) {
     setDraftGuests([])
   }
 
-  return { lineup, setLineupDraft, draftGuests, editorPlayers, addGuest, removeGuest, reset }
+  return { lineup, setLineupDraft, draftGuests, editorPlayers, startersError, addGuest, removeGuest, reset }
 }

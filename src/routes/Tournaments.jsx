@@ -220,7 +220,7 @@ export function Tournaments({ teamId }) {
           </SetupField>
         </SetupSection>
         <SetupSection icon={CalendarDays} title="DATE & PLACE">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-3">
             <SetupField id="tournament-date" label="日程">
               <Input id="tournament-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} className="h-11 rounded-xl text-base" />
             </SetupField>

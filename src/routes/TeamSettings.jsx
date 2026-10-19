@@ -7,6 +7,7 @@ import { teamRoster } from '@/lib/roster'
 import { useGames } from '@/hooks/useGames'
 import { useTeamPeriodStats } from '@/hooks/useTeamPeriodStats'
 import { useShotChart } from '@/hooks/useShotChart'
+import { EmptyState } from '@/components/fun/EmptyState'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
 import { getShareUrl, saveShareUrl } from '@/lib/shareUrlStore'
 import { formatAvg, formatPct, perGame, shootingSplits } from '@/lib/stats'
@@ -345,7 +346,10 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
   // シュート成功率・シーズン合計は全公式戦の合計から出す(ゲスト選手は含まない)。
   // 1試合平均と同じ集計元(useTeamPeriodStats)を使い、対象範囲を揃える
   const totals = periodLoading ? null : periodStats.all.totals
-  const { shots } = useShotChart(team.id)
+  const { shots, loading: shotsLoading } = useShotChart(team.id)
+  // PER GAME / SHOOTING / SEASON TOTALS / HOT ZONESは、全部の読み込みが終わってから一度に表示する
+  // (先に読み込みが終わったHOT ZONESだけが一瞬上に出て、あとから他が差し込まれるのを防ぐ)
+  const statsReady = !periodLoading && !shotsLoading
   const [leaving, setLeaving] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -485,8 +489,12 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
         )}
       </div>
 
-      {totals && (
-        <>
+      {!statsReady ? (
+        <div className="rounded-2xl border bg-card">
+          <EmptyState title="読み込み中..." description="チームの成績を集計しています" />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 animate-in fade-in duration-300">
           <section className="flex flex-col gap-2">
             <SectionLabel right={<SegmentToggle value={periodMode} onChange={setPeriodMode} />}>PER GAME</SectionLabel>
             <div className="rounded-2xl border bg-card p-3">
@@ -531,15 +539,15 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
               <StatTile label="TO" value={totals.tov} index={5} />
             </div>
           </section>
-        </>
-      )}
 
-      <section className="flex flex-col gap-2">
-        <SectionLabel>HOT ZONES</SectionLabel>
-        <div className="[&>div]:rounded-2xl [&>div]:bg-card">
-          <HotZoneSection shots={shots} />
+          <section className="flex flex-col gap-2">
+            <SectionLabel>HOT ZONES</SectionLabel>
+            <div className="[&>div]:rounded-2xl [&>div]:bg-card">
+              <HotZoneSection shots={shots} />
+            </div>
+          </section>
         </div>
-      </section>
+      )}
 
       <ShareUrlSection key={team.id} team={team} onTeamUpdated={onTeamUpdated} />
 

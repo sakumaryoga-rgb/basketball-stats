@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Star } from 'lucide-react'
+import { MapPinned, Plus, Search, Star, UserRound, Users } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { teamRoster } from '@/lib/roster'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
@@ -10,10 +10,10 @@ import { PageHeader } from '@/components/fun/PageHeader'
 import { EmptyState } from '@/components/fun/EmptyState'
 import { StartingCourt } from '@/components/fun/StartingCourt'
 import { Jersey } from '@/components/fun/Jersey'
+import { GameSetupSheet, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { PositionSelect } from '@/components/PositionSelect'
 import { cn } from '@/lib/utils'
 import {
@@ -23,7 +23,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog'
 
@@ -82,104 +81,105 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
     }
   }
 
+  function handleOpenChange(next) {
+    if (!next) reset()
+    setOpen(next)
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset()
-        setOpen(next)
-      }}
-    >
-      <DialogTrigger render={<Button size="sm" />}>
+    <>
+      <Button size="sm" onClick={() => handleOpenChange(true)}>
         <Plus className="size-4" />
         選手を追加
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>選手を追加</DialogTitle>
-          <DialogDescription>ロスターに新しい選手を登録します</DialogDescription>
-        </DialogHeader>
-
+      </Button>
+      <GameSetupSheet
+        open={open}
+        onOpenChange={handleOpenChange}
+        eyebrow="NEW PLAYER"
+        title="選手を追加"
+        description="ロスターに新しい選手を登録します"
+        onSubmit={mode === 'new' ? handleAdd : (e) => e.preventDefault()}
+        submitLabel={mode === 'new' ? '追加する' : undefined}
+        savingLabel="追加中..."
+        saving={saving}
+        error={error}
+      >
         {teams.length > 1 && (
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === 'new' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setMode('new')}
-            >
-              新規登録
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === 'existing' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setMode('existing')}
-            >
-              既存の選手から追加
-            </Button>
+          <div className="grid grid-cols-2 rounded-xl bg-muted p-1" role="tablist">
+            {[
+              { key: 'new', label: '新規登録' },
+              { key: 'existing', label: '既存の選手から追加' },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={mode === t.key}
+                onClick={() => setMode(t.key)}
+                className={cn(
+                  'min-h-10 rounded-lg text-sm font-bold transition-colors',
+                  mode === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
         )}
 
         {mode === 'new' ? (
-          <form onSubmit={handleAdd} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="player-name">名前</Label>
-              <Input id="player-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 山田太郎" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="player-number">背番号</Label>
-                <Input id="player-number" type="number" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="例: 7" />
+          <>
+            <SetupSection icon={UserRound} title="PROFILE">
+              <div className="flex items-center gap-3">
+                <Jersey number={number === '' ? null : number} color={positionColor(position)} className="size-14 shrink-0 drop-shadow" />
+                <div className="flex min-w-0 flex-1 flex-col gap-3">
+                  <SetupField id="player-name" label="名前">
+                    <Input id="player-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 山田太郎" className="h-11 rounded-xl text-base" />
+                  </SetupField>
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="player-position">ポジション</Label>
-                <PositionSelect id="player-position" value={position} onChange={setPosition} />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="player-position2">ポジション(第2)</Label>
-              <PositionSelect id="player-position2" value={position2} onChange={setPosition2} />
-            </div>
-            {error && <p className="text-destructive text-sm">{error}</p>}
-            <DialogFooter>
-              <Button type="submit" disabled={saving}>
-                {saving ? '追加中...' : '追加する'}
-              </Button>
-            </DialogFooter>
-          </form>
+              <SetupField id="player-number" label="背番号">
+                <Input id="player-number" type="number" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="例: 7" className="h-11 rounded-xl text-base" />
+              </SetupField>
+            </SetupSection>
+            <SetupSection icon={MapPinned} title="POSITION">
+              <SetupField id="player-position" label="ポジション">
+                <PositionSelect id="player-position" value={position} onChange={setPosition} className="h-11 w-full rounded-xl text-base" />
+              </SetupField>
+              <SetupField id="player-position2" label="ポジション(第2)">
+                <PositionSelect id="player-position2" value={position2} onChange={setPosition2} className="h-11 w-full rounded-xl text-base" />
+              </SetupField>
+            </SetupSection>
+          </>
         ) : (
-          <div className="flex flex-col gap-2">
+          <SetupSection icon={Users} title="OTHER TEAMS" sub="所属している他のチームの選手を、このチームにも登録します">
             {otherLoading ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">読み込み中...</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">読み込み中...</p>
             ) : otherPlayers.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">他のチームに選手が登録されていません</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">他のチームに選手が登録されていません</p>
             ) : (
-              <ul className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+              <ul className="flex flex-col gap-1.5">
                 {otherPlayers.map((p) => (
-                  <li key={p.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
-                    <Avatar className="size-8 shrink-0 text-xs font-medium">
+                  <li key={p.id} className="flex min-h-14 items-center gap-3 rounded-xl border bg-background px-3 py-2">
+                    <Avatar className="size-9 shrink-0 text-xs font-medium">
                       <AvatarImage src={p.photo_url} alt={p.name} />
                       <AvatarFallback className="tabular-nums">{p.number ?? '-'}</AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{p.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{p.teams?.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold">{p.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{p.teams?.name}</p>
                     </div>
-                    <Button type="button" size="sm" variant="outline" disabled={saving} onClick={() => handleAddExisting(p)}>
+                    <Button type="button" size="sm" variant="outline" className="h-9 rounded-lg" disabled={saving} onClick={() => handleAddExisting(p)}>
                       追加
                     </Button>
                   </li>
                 ))}
               </ul>
             )}
-            {error && <p className="text-destructive text-sm">{error}</p>}
-          </div>
+          </SetupSection>
         )}
-      </DialogContent>
-    </Dialog>
+      </GameSetupSheet>
+    </>
   )
 }
 

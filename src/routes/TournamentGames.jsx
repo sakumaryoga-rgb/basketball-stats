@@ -69,6 +69,10 @@ export function TournamentGames({ teamId }) {
 
   async function handleCreate(e) {
     e.preventDefault()
+    if (draft.startersError) {
+      setError(draft.startersError)
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -231,8 +235,8 @@ export function TournamentGames({ teamId }) {
           </div>
         </SetupSection>
         <SetupSection icon={Shirt} title="LINEUP" sub="この試合のSTARTING FIVE(PLAYERSタブの設定が初期値)とゲスト">
-          <GuestDraftField guests={draft.draftGuests} onAdd={draft.addGuest} onRemove={draft.removeGuest} />
           <LineupEditor players={draft.editorPlayers} value={draft.lineup} onChange={draft.setLineupDraft} scrollRef={sheetBodyRef} />
+          <GuestDraftField guests={draft.draftGuests} onAdd={draft.addGuest} onRemove={draft.removeGuest} />
         </SetupSection>
       </GameSetupSheet>
 

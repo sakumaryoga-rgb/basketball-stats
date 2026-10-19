@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Undo2, ChevronLeft, Minus, Plus, Play, Pause, UserPlus, Check, Repeat, FileText, Flag, Pencil, Trash2, X } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
@@ -199,6 +200,72 @@ function AssistDialog({ pending, players, onSelect, onSkip }) {
 }
 
 const STATUS_LABEL = { scheduled: '予定', in_progress: '試合中', final: '終了' }
+
+// 試合終了直後に出すまとめ。最終スコア・勝敗・チーム最多得点と、スコアシートへの導線
+function FinishSummaryDialog({ open, onOpenChange, game, teamScore, topScorer }) {
+  const opp = game.opponent_score ?? 0
+  const result = teamScore > opp ? 'WIN' : teamScore < opp ? 'LOSS' : 'TIE'
+  const resultLabel = { WIN: '勝利', LOSS: '敗戦', TIE: '引き分け' }[result]
+  const official = game.game_type === 'official'
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="overflow-hidden p-0">
+        <div className="relative overflow-hidden bg-secondary px-5 pt-5 pb-6 text-center text-secondary-foreground">
+          <CourtLines className="text-white/[0.07]" />
+          <Glow className="-right-16 -top-20 size-52" opacity={0.45} />
+          <p className="relative font-heading text-[11px] tracking-[0.3em] text-chart-3">FINAL</p>
+          <DialogTitle className="relative mt-1 truncate text-base font-bold text-secondary-foreground">
+            {game.opponent_name ? `vs ${game.opponent_name}` : 'スクリメージ'}
+          </DialogTitle>
+          <div className="relative mt-3 flex items-center justify-center gap-4">
+            <div className="min-w-0">
+              <p className="font-heading text-[10px] tracking-[0.2em] text-white/60">自チーム</p>
+              <p className="font-heading text-6xl leading-none tabular-nums">{teamScore}</p>
+            </div>
+            <span className="font-heading text-2xl text-white/40">-</span>
+            <div className="min-w-0">
+              <p className="truncate font-heading text-[10px] tracking-[0.2em] text-white/60">{game.opponent_name || '相手'}</p>
+              <p className="font-heading text-6xl leading-none tabular-nums text-white/80">{opp}</p>
+            </div>
+          </div>
+          <span
+            className={cn(
+              'relative mt-3 inline-block rounded-full px-3 py-0.5 font-heading text-sm tracking-wider',
+              result === 'WIN' ? 'bg-primary text-primary-foreground' : 'bg-white/15 text-white'
+            )}
+          >
+            {result} ・ {resultLabel}
+          </span>
+        </div>
+        <div className="flex flex-col gap-3 px-5 pb-5">
+          <DialogDescription className="flex items-start gap-2 text-sm text-foreground">
+            <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+            {official
+              ? 'スタッツを記録しました。TEAM・LEADERS・PLAYERSの成績に反映されます'
+              : 'スクリメージの記録を保存しました(公式スタッツには反映されません)'}
+          </DialogDescription>
+          {topScorer && (
+            <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+              <span className="font-heading text-[10px] tracking-[0.2em] text-muted-foreground">TOP SCORER</span>
+              <span className="min-w-0 flex-1 truncate font-bold">{topScorer.name}</span>
+              <span className="font-heading text-lg tabular-nums">{topScorer.pts}</span>
+            </div>
+          )}
+          {game.game_type !== 'shooting' && (
+            <Link
+              to={`/scoresheet/${game.id}`}
+              className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-primary font-bold text-primary-foreground hover:bg-primary/90"
+            >
+              <FileText className="size-4" />
+              スコアシートを表示
+            </Link>
+          )}
+          <DialogClose render={<Button type="button" variant="outline" className="h-11 rounded-xl" />}>閉じる</DialogClose>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 const HOT_ZONE_ENABLED_KEY = 'hotZoneEnabled'
 
 const EMPTY_STATS = {
@@ -232,9 +299,13 @@ export function GameDetail({ teamId }) {
   const flashTimerRef = useRef(null)
   const [timePickerOpen, setTimePickerOpen] = useState(false)
   const [substitutionTarget, setSubstitutionTarget] = useState(null)
+  const [finishSummaryOpen, setFinishSummaryOpen] = useState(false)
+  // ON COURTでドラッグ中の選手({ id, x, y, overId, moved })
+  const [courtDrag, setCourtDrag] = useState(null)
+  const courtPressRef = useRef(null)
+  const courtPanelRef = useRef(null)
   const [substituting, setSubstituting] = useState(false)
   const pendingSecondsRef = useRef(0)
-  const longPressTimerRef = useRef(null)
   const longPressFiredRef = useRef(false)
   // 長押しで交代ダイアログを開いてから少しの間は、交代先のタップを受け付けない。
   // 指を離した瞬間のタップが、開いたばかりのダイアログの選手ボタンに当たって
@@ -247,16 +318,36 @@ export function GameDetail({ teamId }) {
   // この試合のロスター: 通常の選手全員 + この試合限定のゲスト(他の試合のゲストは含めない)
   const gamePlayers = useMemo(() => gameParticipants(players, game?.id), [players, game])
 
+  // 記録したことを知らせる表示。同じ選手・同じスタッツを続けて記録したときは「×回数」を
+  // 増やし、1回ごとに表示を弾ませて何回押したか分かるようにする(seqで毎回作り直す)
   function showRecordedFlash(playerId, statKey) {
     const playerName = gamePlayers.find((p) => p.id === playerId)?.name ?? '?'
+    const key = `${playerId}:${statKey}`
     clearTimeout(flashTimerRef.current)
-    setRecordedFlash(`${playerName}: ${STAT_KEY_LABEL[statKey]} を記録しました`)
-    flashTimerRef.current = setTimeout(() => setRecordedFlash(null), 1600)
+    setRecordedFlash((prev) => ({
+      seq: (prev?.seq ?? 0) + 1,
+      key,
+      text: `${playerName}: ${STAT_KEY_LABEL[statKey]} を記録しました`,
+      count: prev?.key === key ? prev.count + 1 : 1,
+    }))
+    flashTimerRef.current = setTimeout(() => setRecordedFlash(null), 2200)
   }
 
   useEffect(() => () => clearTimeout(flashTimerRef.current), [])
-  useEffect(() => () => clearTimeout(longPressTimerRef.current), [])
   useEffect(() => () => clearTimeout(substitutionReadyTimerRef.current), [])
+  useEffect(() => () => cleanupCourtPress(), [])
+  // つかんでいる間だけ縦スクロールを止める。ブラウザはタッチ開始時点でpreventDefaultしうる
+  // リスナーの有無を判定するため、記録パネルに常設しておく(つかんでいなければ何もしない)
+  const recordingPanelVisible = !!game && game.status !== 'final'
+  useEffect(() => {
+    const panel = courtPanelRef.current
+    if (!panel) return
+    const onTouchMove = (ev) => {
+      if (courtPressRef.current?.armed && ev.cancelable) ev.preventDefault()
+    }
+    panel.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => panel.removeEventListener('touchmove', onTouchMove)
+  }, [recordingPanelVisible])
 
   useEffect(() => {
     if (!clockRunning) return
@@ -363,6 +454,12 @@ export function GameDetail({ teamId }) {
     await updateGame(game.id, { status: 'final' })
   }
 
+  // 「試合終了」ボタン: 試合を終了したあと、最終スコアのまとめを表示する
+  async function handleFinishClick() {
+    await handleFinish()
+    setFinishSummaryOpen(true)
+  }
+
   async function handleReopen() {
     await updateGame(game.id, { status: 'in_progress' })
   }
@@ -402,20 +499,110 @@ export function GameDetail({ teamId }) {
     setSecondsLeft((s) => Math.max(0, s + delta))
   }
 
-  function handlePlayerPressStart(player) {
-    longPressFiredRef.current = false
-    clearTimeout(longPressTimerRef.current)
-    longPressTimerRef.current = setTimeout(() => {
-      longPressFiredRef.current = true
-      substitutionReadyRef.current = false
-      clearTimeout(substitutionReadyTimerRef.current)
-      substitutionReadyTimerRef.current = setTimeout(() => (substitutionReadyRef.current = true), 400)
-      setSubstitutionTarget(player)
-    }, 500)
+  // ON COURTの選手の長押し/ドラッグ。
+  // - 長押しして動かさずに離す → 交代ダイアログ(従来どおり)
+  // - 長押ししたまま(マウスは押したまま)反対側(コート⇔RESERVE)の選手の上へ運んで離す → その2人を交代
+  // - 長押しが成立する前に指が動いたらスクロールとして扱い、何もしない
+  // タッチはTouchイベントで追う(Pointerイベントはスクロール開始時にpointercancelになるため)
+  function cleanupCourtPress() {
+    const press = courtPressRef.current
+    if (!press) return
+    clearTimeout(press.timer)
+    for (const [target, type, fn] of press.listeners) target.removeEventListener(type, fn)
+    courtPressRef.current = null
   }
 
-  function handlePlayerPressEnd() {
-    clearTimeout(longPressTimerRef.current)
+  function startCourtPress(player, x, y, type, touchTarget) {
+    cleanupCourtPress()
+    longPressFiredRef.current = false
+    const press = { player, startX: x, startY: y, armed: false, moved: false, overId: null, listeners: [], timer: null }
+    courtPressRef.current = press
+    const listen = (target, eventType, fn, options) => {
+      target.addEventListener(eventType, fn, options)
+      press.listeners.push([target, eventType, fn])
+    }
+    const arm = (ax, ay) => {
+      press.armed = true
+      longPressFiredRef.current = true
+      navigator.vibrate?.(8)
+      setCourtDrag({ id: player.id, x: ax, y: ay, overId: null, moved: false })
+    }
+    const move = (mx, my) => {
+      if (courtPressRef.current !== press) return
+      const dist = Math.hypot(mx - press.startX, my - press.startY)
+      if (!press.armed) {
+        if (type === 'mouse') {
+          if (dist > 6) arm(mx, my)
+          else return
+        } else {
+          if (dist > 8) cleanupCourtPress()
+          return
+        }
+      }
+      if (dist > 8) press.moved = true
+      const el = document.elementFromPoint(mx, my)?.closest('[data-court-player]')
+      const overId = el && el.dataset.courtPlayer !== player.id ? el.dataset.courtPlayer : null
+      press.overId = overId
+      setCourtDrag({ id: player.id, x: mx, y: my, overId, moved: press.moved })
+    }
+    const end = () => {
+      if (courtPressRef.current !== press) return
+      const { armed, moved, overId } = press
+      cleanupCourtPress()
+      setCourtDrag(null)
+      if (!armed) return
+      if (!moved) {
+        // 動かさずに離した長押し: 従来どおり交代ダイアログを開く
+        substitutionReadyRef.current = false
+        clearTimeout(substitutionReadyTimerRef.current)
+        substitutionReadyTimerRef.current = setTimeout(() => (substitutionReadyRef.current = true), 400)
+        setSubstitutionTarget(player)
+        return
+      }
+      const other = overId ? gamePlayers.find((p) => p.id === overId) : null
+      if (other && onCourtIds.has(player.id) !== onCourtIds.has(other.id)) {
+        const playerOutId = onCourtIds.has(player.id) ? player.id : other.id
+        const playerInId = onCourtIds.has(player.id) ? other.id : player.id
+        setSubstituting(true)
+        substitute(playerOutId, playerInId).finally(() => setSubstituting(false))
+      }
+    }
+    const cancel = () => {
+      if (courtPressRef.current !== press) return
+      cleanupCourtPress()
+      setCourtDrag(null)
+    }
+    if (type === 'mouse') {
+      listen(window, 'pointermove', (ev) => move(ev.clientX, ev.clientY))
+      listen(window, 'pointerup', end)
+      listen(window, 'pointercancel', cancel)
+    } else {
+      // 指を置いた要素はドラッグ中も残るが、念のためwindowでも受ける(courtPressRefで二重処理を防ぐ)
+      for (const target of [touchTarget, window]) {
+        listen(target, 'touchmove', (ev) => ev.touches[0] && move(ev.touches[0].clientX, ev.touches[0].clientY))
+        listen(target, 'touchend', end)
+        listen(target, 'touchcancel', cancel)
+      }
+    }
+    press.timer = setTimeout(() => {
+      if (courtPressRef.current === press && !press.armed) arm(x, y)
+    }, 450)
+  }
+
+  function courtPlayerHandlers(player) {
+    return {
+      'data-court-player': player.id,
+      onPointerDown: (e) => {
+        if (e.pointerType === 'touch') return
+        if (e.pointerType === 'mouse' && e.button !== 0) return
+        startCourtPress(player, e.clientX, e.clientY, 'mouse')
+      },
+      onTouchStart: (e) => {
+        if (e.touches.length !== 1) return
+        startCourtPress(player, e.touches[0].clientX, e.touches[0].clientY, 'touch', e.target)
+      },
+      onContextMenu: (e) => e.preventDefault(),
+    }
   }
 
   function handlePlayerClick(player) {
@@ -519,6 +706,12 @@ export function GameDetail({ teamId }) {
     navigate(listPath)
   }
 
+  // ドラッグ中、離すと交代になる相手(コート⇔RESERVEの反対側の選手)
+  const courtDraggedPlayer = courtDrag ? gamePlayers.find((p) => p.id === courtDrag.id) : null
+  const courtDropTargetId =
+    courtDrag?.overId && courtDraggedPlayer && onCourtIds.has(courtDrag.id) !== onCourtIds.has(courtDrag.overId)
+      ? courtDrag.overId
+      : null
   const isLive = game.status === 'in_progress'
   const recording = game.status !== 'final'
   const selectedPlayer = selectedPlayerId ? gamePlayers.find((p) => p.id === selectedPlayerId) : null
@@ -716,6 +909,14 @@ export function GameDetail({ teamId }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <FinishSummaryDialog
+        open={finishSummaryOpen}
+        onOpenChange={setFinishSummaryOpen}
+        game={game}
+        teamScore={teamScore}
+        topScorer={rows[0]?.pts > 0 ? rows[0] : null}
+      />
+
       <AssistDialog
         pending={pendingAssist}
         players={starters}
@@ -760,17 +961,41 @@ export function GameDetail({ teamId }) {
       </Dialog>
 
       {recording && (
-        <section className="flex flex-col gap-3 rounded-3xl border bg-card p-3 shadow-sm">
+        <section ref={courtPanelRef} className="flex flex-col gap-3 rounded-3xl border bg-card p-3 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h2 className="font-heading text-lg leading-none tracking-wide">ON COURT</h2>
               <p className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
                 <Repeat className="size-3 shrink-0" />
-                タップで選択・長押しで交代
+                タップで選択・長押しで交代(そのまま運んでも交代)
               </p>
             </div>
             <AddGuestDialog addPlayer={addPlayer} gameId={game.id} onAdded={(guest) => guest && setSelectedPlayerId(guest.id)} />
           </div>
+
+          {courtDrag && courtDraggedPlayer && (
+            <>
+              <p className="-mt-1 rounded-xl bg-chart-3/15 px-3 py-1.5 text-center text-xs font-bold" aria-live="polite">
+                {courtDropTargetId
+                  ? `離すと ${courtDraggedPlayer.name} と ${gamePlayers.find((p) => p.id === courtDropTargetId)?.name} を交代します`
+                  : onCourtIds.has(courtDraggedPlayer.id)
+                    ? 'RESERVEの選手の上で離すと交代します'
+                    : 'コートの選手の上で離すと交代します'}
+              </p>
+              {courtDrag.moved &&
+                createPortal(
+                  <div
+                    aria-hidden
+                    className="pointer-events-none fixed z-[100] flex items-center gap-1.5 rounded-full bg-secondary py-1 pr-3 pl-1 text-sm font-bold text-secondary-foreground shadow-2xl ring-2 ring-chart-3"
+                    style={{ left: 0, top: 0, transform: `translate3d(${courtDrag.x - 24}px, ${courtDrag.y - 44}px, 0) rotate(-3deg)` }}
+                  >
+                    <Jersey number={courtDraggedPlayer.number} color={playerColor(courtDraggedPlayer)} className="size-7" />
+                    {courtDraggedPlayer.name}
+                  </div>,
+                  document.body
+                )}
+            </>
+          )}
 
           {gamePlayers.length === 0 ? (
             <p className="text-sm text-muted-foreground">先に選手を登録してください</p>
@@ -786,14 +1011,13 @@ export function GameDetail({ teamId }) {
                     <button
                       key={p.id}
                       onClick={() => handlePlayerClick(p)}
-                      onPointerDown={() => handlePlayerPressStart(p)}
-                      onPointerUp={handlePlayerPressEnd}
-                      onPointerLeave={handlePlayerPressEnd}
-                      onContextMenu={(e) => e.preventDefault()}
+                      {...courtPlayerHandlers(p)}
                       aria-pressed={selectedPlayerId === p.id}
                       aria-label={`${p.number != null ? `#${p.number} ` : ''}${p.name}${isGuest(p) ? '(ゲスト)' : ''} ${playerPtsById.get(p.id) ?? 0}点`}
                       className={cn(
-                        'press relative flex min-h-24 min-w-0 select-none flex-col items-center justify-start gap-0.5 rounded-2xl border px-0.5 pt-1.5 pb-1 transition-[background-color,transform,box-shadow] [-webkit-touch-callout:none]',
+                        'press relative flex min-h-24 min-w-0 select-none flex-col items-center justify-start gap-0.5 rounded-2xl border px-0.5 pt-1.5 pb-1 transition-[background-color,transform,box-shadow,opacity] [-webkit-touch-callout:none]',
+                        courtDrag?.id === p.id && 'scale-95 opacity-40',
+                        courtDropTargetId === p.id && 'ring-2 ring-chart-3 ring-offset-2 ring-offset-card',
                         selectedPlayerId === p.id
                           ? 'border-secondary bg-secondary text-secondary-foreground shadow-md ring-2 ring-chart-3 -translate-y-0.5'
                           : 'bg-background hover:bg-muted',
@@ -829,14 +1053,13 @@ export function GameDetail({ teamId }) {
                       <button
                         key={p.id}
                         onClick={() => handlePlayerClick(p)}
-                        onPointerDown={() => handlePlayerPressStart(p)}
-                        onPointerUp={handlePlayerPressEnd}
-                        onPointerLeave={handlePlayerPressEnd}
-                        onContextMenu={(e) => e.preventDefault()}
+                        {...courtPlayerHandlers(p)}
                         aria-pressed={selectedPlayerId === p.id}
                         aria-label={`${p.number != null ? `#${p.number} ` : ''}${p.name}${isGuest(p) ? '(ゲスト)' : ''} ${playerPtsById.get(p.id) ?? 0}点`}
                         className={cn(
-                          'press flex min-h-10 max-w-[11rem] shrink-0 select-none items-center gap-1.5 rounded-full border py-1 pr-3 pl-1 text-sm transition-colors [-webkit-touch-callout:none]',
+                          'press flex min-h-10 max-w-[11rem] shrink-0 select-none items-center gap-1.5 rounded-full border py-1 pr-3 pl-1 text-sm transition-[background-color,opacity] [-webkit-touch-callout:none]',
+                          courtDrag?.id === p.id && 'opacity-40',
+                          courtDropTargetId === p.id && 'ring-2 ring-chart-3 ring-offset-2 ring-offset-card',
                           selectedPlayerId === p.id
                             ? 'border-secondary bg-secondary text-secondary-foreground ring-2 ring-chart-3'
                             : 'bg-background hover:bg-muted',
@@ -904,13 +1127,13 @@ export function GameDetail({ teamId }) {
                 onClick={() => handleShotOutcome('miss')}
                 aria-pressed={pendingOutcome?.statKey === activeCategory.miss}
                 className={cn(
-                  'press flex min-h-16 items-center justify-center gap-2 rounded-2xl border-2 font-heading text-xl tracking-wider transition-colors disabled:opacity-40',
+                  'press flex min-h-12 items-center justify-center gap-1.5 rounded-xl border-2 font-heading text-base tracking-wider transition-colors disabled:opacity-40',
                   pendingOutcome?.statKey === activeCategory.miss
                     ? 'border-secondary bg-secondary text-secondary-foreground'
                     : 'border-border bg-background text-foreground hover:bg-muted'
                 )}
               >
-                <X className="size-5" />
+                <X className="size-4" />
                 失敗
               </button>
               <button
@@ -918,13 +1141,13 @@ export function GameDetail({ teamId }) {
                 onClick={() => handleShotOutcome('make')}
                 aria-pressed={pendingOutcome?.statKey === activeCategory.make}
                 className={cn(
-                  'press flex min-h-16 items-center justify-center gap-2 rounded-2xl border-2 font-heading text-xl tracking-wider shadow-sm transition-colors disabled:opacity-40',
+                  'press flex min-h-12 items-center justify-center gap-1.5 rounded-xl border-2 font-heading text-base tracking-wider transition-colors disabled:opacity-40',
                   pendingOutcome?.statKey === activeCategory.make
                     ? 'border-secondary bg-secondary text-secondary-foreground'
-                    : 'border-primary bg-primary text-primary-foreground hover:bg-primary/90'
+                    : 'border-primary/40 bg-background text-primary hover:bg-primary/5'
                 )}
               >
-                <Check className="size-5" />
+                <Check className="size-4" />
                 成功
               </button>
             </div>
@@ -937,7 +1160,7 @@ export function GameDetail({ teamId }) {
                   key={side.key}
                   disabled={!selectedPlayerId}
                   onClick={() => handlePairClick(side.key)}
-                  className="press min-h-16 rounded-2xl border-2 border-primary bg-primary font-heading text-lg tracking-wider text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-40"
+                  className="press min-h-12 rounded-xl border-2 border-primary/40 bg-background font-heading text-base tracking-wider text-primary hover:bg-primary/5 disabled:opacity-40"
                 >
                   {side.label}
                 </button>
@@ -949,7 +1172,7 @@ export function GameDetail({ teamId }) {
             <button
               disabled={!selectedPlayerId}
               onClick={handleSingleClick}
-              className="press min-h-16 rounded-2xl border-2 border-primary bg-primary font-heading text-lg tracking-wider text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-40"
+              className="press min-h-12 rounded-xl border-2 border-primary/40 bg-background font-heading text-base tracking-wider text-primary hover:bg-primary/5 disabled:opacity-40"
             >
               {activeCategory.label}を記録
             </button>
@@ -971,13 +1194,13 @@ export function GameDetail({ teamId }) {
                     ? 'コートをタップして位置を記録'
                     : '成功・失敗を選ぶとコートが有効になります'}
               </p>
-              {recordedFlash && <RecordedFlash key={recordedFlash} message={recordedFlash} />}
+              {recordedFlash && <RecordedFlash key={recordedFlash.seq} flash={recordedFlash} />}
               <CourtDiagram active={hotZoneEnabled && !!pendingOutcome} onTap={handleCourtTap} />
             </>
           )}
 
           <div className="flex flex-col gap-1.5">
-            {activeCategory.kind !== 'shot' && recordedFlash && <RecordedFlash key={recordedFlash} message={recordedFlash} />}
+            {activeCategory.kind !== 'shot' && recordedFlash && <RecordedFlash key={recordedFlash.seq} flash={recordedFlash} />}
             <button
               disabled={!lastEvent}
               onClick={undoLast}
@@ -1062,7 +1285,7 @@ export function GameDetail({ teamId }) {
         <h2 className="font-heading text-sm tracking-[0.2em] text-muted-foreground">GAME</h2>
         {/* 試合開始・記録を修正する はスコアボード側に出す */}
         {game.status === 'in_progress' && (
-          <Button className="h-12 w-full rounded-xl bg-secondary font-heading text-base tracking-wider text-secondary-foreground hover:bg-secondary/90" onClick={handleFinish}>
+          <Button className="h-12 w-full rounded-xl bg-secondary font-heading text-base tracking-wider text-secondary-foreground hover:bg-secondary/90" onClick={handleFinishClick}>
             <Flag className="size-4" />
             試合終了
           </Button>
@@ -1104,13 +1327,16 @@ function TeamCounter({ label, value, alert, onMinus, onPlus }) {
   )
 }
 
-function RecordedFlash({ message }) {
+function RecordedFlash({ flash }) {
   return (
-    <p
-      className="flex items-center justify-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary animate-in fade-in-0 slide-in-from-bottom-1"
-    >
+    <p className="flex items-center justify-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary animate-in fade-in-0 zoom-in-95 duration-150">
       <Check className="size-3.5 shrink-0" />
-      {message}
+      <span className="min-w-0 truncate">{flash.text}</span>
+      {flash.count > 1 && (
+        <span className="shrink-0 rounded-full bg-primary px-1.5 font-heading text-[11px] leading-5 tabular-nums text-primary-foreground">
+          ×{flash.count}
+        </span>
+      )}
     </p>
   )
 }

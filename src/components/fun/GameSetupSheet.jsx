@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { Check as CheckIcon, X } from 'lucide-react'
 import { Sheet, SheetContent, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { CourtLines } from '@/components/fun/CourtLines'
@@ -20,6 +20,7 @@ export function GameSetupSheet({
   saving,
   error,
   bodyRef,
+  submitDisabled = false,
   children,
 }) {
   return (
@@ -57,12 +58,18 @@ export function GameSetupSheet({
             {children}
           </div>
 
-          <div className="shrink-0 border-t bg-popover/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
-            {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
-            <Button type="submit" disabled={saving} className="h-12 w-full rounded-xl font-heading text-base tracking-wider">
-              {saving ? savingLabel : submitLabel}
-            </Button>
-          </div>
+          {/* submitLabelを渡さない場合は作成ボタンを出さない(既存の選手から選ぶ画面など) */}
+          {(submitLabel || error) && (
+            <div className="shrink-0 border-t bg-popover/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
+              {error && <p className={cn('text-sm text-destructive', submitLabel && 'mb-2')}>{error}</p>}
+              {submitLabel && (
+                <Button type="submit" disabled={saving || submitDisabled} className="h-12 w-full rounded-xl font-heading text-base tracking-wider">
+                  {saving ? savingLabel : submitLabel}
+                </Button>
+              )}
+            </div>
+          )}
+          {!submitLabel && !error && <div className="shrink-0 pb-[env(safe-area-inset-bottom)]" />}
         </form>
       </SheetContent>
     </Sheet>
@@ -153,5 +160,42 @@ export function PeriodSystemPicker({ value, onChange }) {
         )
       })}
     </div>
+  )
+}
+
+// 選手の複数選択リスト(シューティングの参加メンバー選択などで使う)
+export function PlayerToggleList({ players, selectedIds, onToggle, renderJersey }) {
+  return (
+    <ul className="grid grid-cols-2 gap-1.5">
+      {players.map((p) => {
+        const checked = selectedIds.includes(p.id)
+        return (
+          <li key={p.id} className="min-w-0">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={checked}
+              onClick={() => onToggle(p.id)}
+              className={cn(
+                'press flex min-h-12 w-full min-w-0 items-center gap-2 rounded-xl border px-2 text-left transition-colors',
+                checked ? 'border-secondary bg-secondary text-secondary-foreground shadow-sm' : 'bg-background hover:bg-muted'
+              )}
+            >
+              {renderJersey(p)}
+              <span className="min-w-0 flex-1 truncate text-[13px] font-bold">{p.name}</span>
+              <span
+                className={cn(
+                  'flex size-5 shrink-0 items-center justify-center rounded-full border',
+                  checked ? 'border-chart-3 bg-chart-3 text-secondary' : 'border-border'
+                )}
+                aria-hidden
+              >
+                {checked && <CheckIcon className="size-3" strokeWidth={3} />}
+              </span>
+            </button>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
