@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Flame, Plus, Snowflake, Trash2, Trophy } from 'lucide-react'
+import { CalendarDays, ChevronRight, Flame, Plus, Snowflake, Timer, Trash2, Trophy } from 'lucide-react'
 import { useTournaments } from '@/hooks/useTournaments'
 import { useGames } from '@/hooks/useGames'
 import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
@@ -12,18 +12,9 @@ import { WinRing } from '@/components/fun/WinRing'
 import { ResultDots } from '@/components/fun/ResultDots'
 import { DateTile } from '@/components/fun/DateTile'
 import { Glow } from '@/components/fun/Glow'
+import { GameSetupSheet, PeriodSystemPicker, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -166,6 +157,11 @@ export function Tournaments({ teamId }) {
   const [error, setError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
 
+  function handleOpenChange(next) {
+    if (next) setError('')
+    setOpen(next)
+  }
+
   async function handleCreate(e) {
     e.preventDefault()
     setSaving(true)
@@ -193,71 +189,50 @@ export function Tournaments({ teamId }) {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="GAMES" eyebrow="GAME DAY">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger render={<Button size="sm" />}>
-            <Plus className="size-4" />
-            大会を作成
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>大会を作成</DialogTitle>
-              <DialogDescription>大会の中に複数の試合を追加できます</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="tournament-name">大会名</Label>
-                <Input
-                  id="tournament-name"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="例: 〇〇カップ"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="tournament-date">日程</Label>
-                  <Input id="tournament-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="tournament-location">会場</Label>
-                  <Input id="tournament-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="任意" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>クォーター制</Label>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={periodSystem === '2q' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => setPeriodSystem('2q')}
-                  >
-                    2Q制(前半・後半)
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={periodSystem === '4q' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => setPeriodSystem('4q')}
-                  >
-                    4Q制(1〜4Q)
-                  </Button>
-                </div>
-                <p className="text-[11px] text-muted-foreground">作成後は変更できません</p>
-              </div>
-              {error && <p className="text-destructive text-sm">{error}</p>}
-              <DialogFooter>
-                <Button type="submit" disabled={saving}>
-                  {saving ? '作成中...' : '作成する'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button size="sm" onClick={() => handleOpenChange(true)}>
+          <Plus className="size-4" />
+          大会を作成
+        </Button>
       </PageHeader>
+
+      <GameSetupSheet
+        open={open}
+        onOpenChange={handleOpenChange}
+        eyebrow="NEW TOURNAMENT"
+        title="大会を作成"
+        description="大会の中に複数の試合を追加できます"
+        onSubmit={handleCreate}
+        submitLabel="大会を作成"
+        savingLabel="作成中..."
+        saving={saving}
+        error={error}
+      >
+        <SetupSection icon={Trophy} title="TOURNAMENT">
+          <SetupField id="tournament-name" label="大会名">
+            <Input
+              id="tournament-name"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="例: 〇〇カップ"
+              className="h-11 rounded-xl text-base"
+            />
+          </SetupField>
+        </SetupSection>
+        <SetupSection icon={CalendarDays} title="DATE & PLACE">
+          <div className="grid grid-cols-2 gap-3">
+            <SetupField id="tournament-date" label="日程">
+              <Input id="tournament-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} className="h-11 rounded-xl text-base" />
+            </SetupField>
+            <SetupField id="tournament-location" label="会場">
+              <Input id="tournament-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="任意" className="h-11 rounded-xl text-base" />
+            </SetupField>
+          </div>
+        </SetupSection>
+        <SetupSection icon={Timer} title="QUARTERS" sub="作成後は変更できません">
+          <PeriodSystemPicker value={periodSystem} onChange={setPeriodSystem} />
+        </SetupSection>
+      </GameSetupSheet>
 
       <SeasonHero
         record={seasonRecord}

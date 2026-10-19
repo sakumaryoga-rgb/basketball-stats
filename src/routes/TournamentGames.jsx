@@ -1,14 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, MapPin, Pencil, Plus, Shirt, Swords, Trash2 } from 'lucide-react'
 import { useTournaments } from '@/hooks/useTournaments'
 import { useGames } from '@/hooks/useGames'
+import { usePlayers } from '@/hooks/usePlayers'
+import { applyStartingLineup } from '@/hooks/useGameLineups'
+import { initialLineup, sameStarters } from '@/lib/lineupDraft'
 import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { summarizeRecord } from '@/lib/record'
 import { GameScoreCard } from '@/components/fun/GameScoreCard'
 import { EmptyState } from '@/components/fun/EmptyState'
 import { DateTile } from '@/components/fun/DateTile'
 import { ResultDots } from '@/components/fun/ResultDots'
+import { GameSetupSheet, OpponentField, SetupSection } from '@/components/fun/GameSetupSheet'
+import { LineupEditor } from '@/components/fun/LineupEditor'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +24,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -47,6 +51,13 @@ export function TournamentGames({ teamId }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const { players } = usePlayers(teamId)
+  const roster = useMemo(() => players.filter((p) => !p.guest_game_id), [players])
+  // STARTING FIVE / RESERVEの下書き。nullの間は(選手の読み込み後も)DBトリガーと同じ初期状態を表示する
+  const [lineupDraft, setLineupDraft] = useState(null)
+  const lineup = lineupDraft ?? initialLineup(roster)
+  const [lineupWarning, setLineupWarning] = useState('')
+  const sheetBodyRef = useRef(null)
 
   const [editOpen, setEditOpen] = useState(false)
   const [editName, setEditName] = useState('')
@@ -60,12 +71,21 @@ export function TournamentGames({ teamId }) {
     setSaving(true)
     setError('')
     try {
-      await createGame({
+      const game = await createGame({
         opponentName,
         gameDate: tournament.game_date,
         location: tournament.location,
         periodSystem: tournament.period_system,
       })
+      // STARTING FIVEを初期状態から変えた場合だけ、作成後のgame_lineupsに反映する
+      if (!sameStarters(lineup, initialLineup(roster))) {
+        try {
+          await applyStartingLineup(game.id, lineup.starters)
+        } catch (lineupErr) {
+          console.error('STARTING FIVEの反映に失敗しました', lineupErr)
+          setLineupWarning(`「vs ${opponentName}」のSTARTING FIVEを反映できませんでした。試合画面の選手交代で設定してください`)
+        }
+      }
       setOpponentName('')
       setOpen(false)
     } catch (err) {
@@ -73,6 +93,16 @@ export function TournamentGames({ teamId }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleOpenChange(next) {
+    if (next) {
+      setOpponentName('')
+      setLineupDraft(null)
+      setError('')
+      setLineupWarning('')
+    }
+    setOpen(next)
   }
 
   function openEdit() {
@@ -130,36 +160,10 @@ export function TournamentGames({ teamId }) {
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger render={<Button size="sm" />}>
-              <Plus className="size-4" />
-              試合を追加
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>試合を追加</DialogTitle>
-                <DialogDescription>対戦相手を入力してください(日程・会場は大会の設定を使用します)</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreate} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="opponent-name">対戦相手</Label>
-                  <Input
-                    id="opponent-name"
-                    required
-                    value={opponentName}
-                    onChange={(e) => setOpponentName(e.target.value)}
-                    placeholder="ここにチーム名を入力"
-                  />
-                </div>
-                {error && <p className="text-destructive text-sm">{error}</p>}
-                <DialogFooter>
-                  <Button type="submit" disabled={saving}>
-                    {saving ? '作成中...' : '作成する'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button size="sm" onClick={() => handleOpenChange(true)}>
+            <Plus className="size-4" />
+            試合を追加
+          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -180,6 +184,55 @@ export function TournamentGames({ teamId }) {
           </Button>
         </div>
       </div>
+
+      {lineupWarning && (
+        <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{lineupWarning}</p>
+      )}
+
+      <GameSetupSheet
+        open={open}
+        onOpenChange={handleOpenChange}
+        eyebrow="NEW GAME"
+        title="試合を追加"
+        description={`${tournament.name} の試合を追加します`}
+        onSubmit={handleCreate}
+        submitLabel="試合を作成"
+        savingLabel="作成中..."
+        saving={saving}
+        error={error}
+        bodyRef={sheetBodyRef}
+      >
+        <SetupSection icon={Swords} title="MATCHUP" sub="日程・会場・クォーター制は大会の設定を使います">
+          <OpponentField
+            id="opponent-name"
+            label="対戦相手"
+            required
+            value={opponentName}
+            onChange={setOpponentName}
+            placeholder="ここにチーム名を入力"
+          />
+          <div className="flex items-center gap-3 rounded-2xl bg-muted px-3 py-2.5">
+            <DateTile date={tournament.game_date} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold">{tournament.name}</p>
+              <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                {tournament.location && (
+                  <>
+                    <MapPin className="size-3 shrink-0" />
+                    <span className="truncate">{tournament.location}</span>
+                  </>
+                )}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg bg-secondary px-2 py-1 font-heading text-xs tracking-wider text-secondary-foreground">
+              {tournament.period_system === '2q' ? '2Q制' : '4Q制'}
+            </span>
+          </div>
+        </SetupSection>
+        <SetupSection icon={Shirt} title="LINEUP" sub="この試合のSTARTING FIVE(PLAYERSタブの設定が初期値)">
+          <LineupEditor players={roster} value={lineup} onChange={setLineupDraft} scrollRef={sheetBodyRef} />
+        </SetupSection>
+      </GameSetupSheet>
 
       {games.length > 0 && (
         <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2 animate-rise-in">

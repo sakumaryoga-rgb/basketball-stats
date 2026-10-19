@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronRight, Plus, Swords, Target, X } from 'lucide-react'
+import { CalendarDays, ChevronRight, Plus, Shirt, Swords, Target, X } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { PageHeader } from '@/components/fun/PageHeader'
@@ -10,6 +10,10 @@ import { PracticeHeatmap } from '@/components/fun/PracticeHeatmap'
 import { WinRing } from '@/components/fun/WinRing'
 import { DateTile } from '@/components/fun/DateTile'
 import { usePlayers } from '@/hooks/usePlayers'
+import { applyStartingLineup } from '@/hooks/useGameLineups'
+import { initialLineup, sameStarters } from '@/lib/lineupDraft'
+import { GameSetupSheet, OpponentField, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
+import { LineupEditor } from '@/components/fun/LineupEditor'
 import { useShootingParticipants } from '@/hooks/useShootingParticipants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,20 +36,43 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function CreateScrimmageDialog({ createGame }) {
+function CreateScrimmageDialog({ createGame, players, onLineupWarning }) {
   const [open, setOpen] = useState(false)
   const [opponentName, setOpponentName] = useState('')
   const [gameDate, setGameDate] = useState(todayStr())
   const [location, setLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const roster = useMemo(() => players.filter((p) => !p.guest_game_id), [players])
+  // STARTING FIVE / RESERVEの下書き。nullの間はDBトリガーと同じ初期状態(PLAYERSタブの設定)を表示する
+  const [lineupDraft, setLineupDraft] = useState(null)
+  const lineup = lineupDraft ?? initialLineup(roster)
+  const bodyRef = useRef(null)
+
+  function handleOpenChange(next) {
+    if (next) {
+      setLineupDraft(null)
+      setError('')
+      onLineupWarning('')
+    }
+    setOpen(next)
+  }
 
   async function handleCreate(e) {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
-      await createGame({ opponentName, gameDate, location })
+      const game = await createGame({ opponentName, gameDate, location })
+      // STARTING FIVEを初期状態から変えた場合だけ、作成後のgame_lineupsに反映する
+      if (!sameStarters(lineup, initialLineup(roster))) {
+        try {
+          await applyStartingLineup(game.id, lineup.starters)
+        } catch (lineupErr) {
+          console.error('STARTING FIVEの反映に失敗しました', lineupErr)
+          onLineupWarning('スクリメージは作成しましたが、STARTING FIVEを反映できませんでした。試合画面の選手交代で設定してください')
+        }
+      }
       setOpponentName('')
       setLocation('')
       setOpen(false)
@@ -57,47 +84,48 @@ function CreateScrimmageDialog({ createGame }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>
+    <>
+      <Button size="sm" onClick={() => handleOpenChange(true)}>
         <Plus className="size-4" />
         スクリメージを追加
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>スクリメージを追加</DialogTitle>
-          <DialogDescription>
-            GAME同様に記録できますが、公式スタッツ(TEAM/個人記録)には反映されません
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scrimmage-opponent">対戦相手 (任意)</Label>
-            <Input
-              id="scrimmage-opponent"
-              value={opponentName}
-              onChange={(e) => setOpponentName(e.target.value)}
-              placeholder="例: 紅白戦"
-            />
-          </div>
+      </Button>
+      <GameSetupSheet
+        open={open}
+        onOpenChange={handleOpenChange}
+        eyebrow="NEW SCRIMMAGE"
+        title="スクリメージを追加"
+        description="GAME同様に記録できますが、公式スタッツ(TEAM/個人記録)には反映されません"
+        onSubmit={handleCreate}
+        submitLabel="スクリメージを作成"
+        savingLabel="作成中..."
+        saving={saving}
+        error={error}
+        bodyRef={bodyRef}
+      >
+        <SetupSection icon={Swords} title="MATCHUP">
+          <OpponentField
+            id="scrimmage-opponent"
+            label="対戦相手 (任意)"
+            value={opponentName}
+            onChange={setOpponentName}
+            placeholder="例: 紅白戦"
+          />
+        </SetupSection>
+        <SetupSection icon={CalendarDays} title="DATE & PLACE">
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="scrimmage-date">日付</Label>
-              <Input id="scrimmage-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="scrimmage-location">会場</Label>
-              <Input id="scrimmage-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="任意" />
-            </div>
+            <SetupField id="scrimmage-date" label="日付">
+              <Input id="scrimmage-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} className="h-11 rounded-xl text-base" />
+            </SetupField>
+            <SetupField id="scrimmage-location" label="会場">
+              <Input id="scrimmage-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="任意" className="h-11 rounded-xl text-base" />
+            </SetupField>
           </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
-          <DialogFooter>
-            <Button type="submit" disabled={saving}>
-              {saving ? '作成中...' : '作成する'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </SetupSection>
+        <SetupSection icon={Shirt} title="LINEUP" sub="このスクリメージのSTARTING FIVE(PLAYERSタブの設定が初期値)">
+          <LineupEditor players={roster} value={lineup} onChange={setLineupDraft} scrollRef={bodyRef} />
+        </SetupSection>
+      </GameSetupSheet>
+    </>
   )
 }
 
@@ -265,6 +293,7 @@ export function Practice({ teamId }) {
   const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
   const { games: shootingSessions, createGame: createShooting } = useGames(teamId, 'shooting')
   const { players } = usePlayers(teamId)
+  const [scrimmageLineupWarning, setScrimmageLineupWarning] = useState('')
   // useGamesは日付の新しい順に返すため、先頭5件が直近のワークアウトになる
   const recentShootingSessions = shootingSessions.slice(0, 5)
   // 追加時に選んだだけの選手ではなく、実際にshooting_entriesへ記録がある選手だけを参加者とする
@@ -299,8 +328,11 @@ export function Practice({ teamId }) {
 
       <div className="flex flex-col gap-3">
         <SectionHeader icon={Swords} title="SCRIMMAGE" sub="スクリメージ">
-          <CreateScrimmageDialog createGame={createScrimmage} />
+          <CreateScrimmageDialog createGame={createScrimmage} players={players} onLineupWarning={setScrimmageLineupWarning} />
         </SectionHeader>
+        {scrimmageLineupWarning && (
+          <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{scrimmageLineupWarning}</p>
+        )}
         {scrimmages.length === 0 ? (
           <EmptyState title="まだスクリメージが登録されていません" description="紅白戦や練習試合もGAME同様に記録できます" />
         ) : (
