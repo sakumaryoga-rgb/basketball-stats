@@ -5,7 +5,7 @@ import { usePlayers } from '@/hooks/usePlayers'
 import { teamRoster } from '@/lib/roster'
 import { loadShootingParticipants, saveShootingParticipants } from '@/lib/shootingParticipants'
 import { positionColor } from '@/lib/positionStyle'
-import { Jersey } from '@/components/fun/Jersey'
+import { PlayerIcon } from '@/components/fun/PlayerIcon'
 import { CourtLines } from '@/components/fun/CourtLines'
 import { Glow } from '@/components/fun/Glow'
 import { GameSetupSheet, PlayerToggleList } from '@/components/fun/GameSetupSheet'
@@ -405,7 +405,7 @@ export function ShootingDetail({ teamId }) {
                   selectedPlayerId === p.id ? 'border-secondary bg-secondary text-secondary-foreground ring-2 ring-chart-3' : 'bg-background hover:bg-muted'
                 )}
               >
-                <Jersey number={p.number} color={positionColor(p.position)} className="size-8 shrink-0" />
+                <PlayerIcon player={p} color={positionColor(p.position)} className="size-8 shrink-0" />
                 <span className="min-w-0 truncate">{p.name}</span>
               </button>
             ))}
@@ -448,7 +448,7 @@ export function ShootingDetail({ teamId }) {
             players={addCandidates}
             selectedIds={addSelection}
             onToggle={(pid) => setAddSelection((prev) => (prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid]))}
-            renderJersey={(p) => <Jersey number={p.number} color={positionColor(p.position)} className="size-8 shrink-0" />}
+            renderJersey={(p) => <PlayerIcon player={p} color={positionColor(p.position)} className="size-8 shrink-0" />}
           />
         )}
       </GameSetupSheet>

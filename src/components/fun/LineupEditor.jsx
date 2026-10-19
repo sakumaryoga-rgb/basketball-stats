@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowDown, ArrowLeftRight, ArrowUp, Hand, Plus } from 'lucide-react'
-import { Jersey } from '@/components/fun/Jersey'
+import { PlayerIcon } from '@/components/fun/PlayerIcon'
 import { CourtLines } from '@/components/fun/CourtLines'
 import { GuestTag, GUEST_COLOR } from '@/components/fun/GuestTag'
 import { positionColor } from '@/lib/positionStyle'
@@ -100,7 +100,7 @@ function StarterCard({ player, slotIndex, pickMode, displaced, ...rest }) {
       {...rest}
     >
       <SlotNumber index={slotIndex} />
-      <Jersey number={player.number} color={jerseyColor(player)} className="size-9 shrink-0 drop-shadow" />
+      <PlayerIcon player={player} color={jerseyColor(player)} className="size-9 shrink-0 drop-shadow" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-bold leading-tight">{player.name}</span>
         <PlayerSubline player={player} className="text-white/60" />
@@ -149,7 +149,7 @@ function ReserveCard({ player, startersFull, picked, displaced, ...rest }) {
       )}
       {...rest}
     >
-      <Jersey number={player.number} color={jerseyColor(player)} className="size-8 shrink-0" />
+      <PlayerIcon player={player} color={jerseyColor(player)} className="size-8 shrink-0" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-bold leading-tight">{player.name}</span>
         <PlayerSubline player={player} className="text-muted-foreground" />
@@ -203,7 +203,7 @@ function DragGhost({ player, drag }) {
         transform: `translate3d(${drag.x - drag.offsetX}px, ${drag.y - drag.offsetY}px, 0) rotate(-2deg) scale(1.04)`,
       }}
     >
-      <Jersey number={player.number} color={jerseyColor(player)} className="size-9 shrink-0" />
+      <PlayerIcon player={player} color={jerseyColor(player)} className="size-9 shrink-0" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-bold leading-tight">{player.name}</span>
         <PlayerSubline player={player} className="text-white/60" />

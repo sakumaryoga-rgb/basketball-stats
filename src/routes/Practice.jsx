@@ -15,7 +15,7 @@ import { teamRoster } from '@/lib/roster'
 import { useGameSetupDraft } from '@/hooks/useGameSetupDraft'
 import { finishGameSetup } from '@/lib/gameSetup'
 import { GameSetupSheet, OpponentField, PlayerToggleList, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
-import { Jersey } from '@/components/fun/Jersey'
+import { PlayerIcon } from '@/components/fun/PlayerIcon'
 import { positionColor } from '@/lib/positionStyle'
 import { saveShootingParticipants } from '@/lib/shootingParticipants'
 import { LineupEditor } from '@/components/fun/LineupEditor'
@@ -209,7 +209,7 @@ function CreateShootingDialog({ createGame, players }) {
               players={players}
               selectedIds={selectedPlayerIds}
               onToggle={togglePlayer}
-              renderJersey={(p) => <Jersey number={p.number} color={positionColor(p.position)} className="size-8 shrink-0" />}
+              renderJersey={(p) => <PlayerIcon player={p} color={positionColor(p.position)} className="size-8 shrink-0" />}
             />
           )}
         </SetupSection>

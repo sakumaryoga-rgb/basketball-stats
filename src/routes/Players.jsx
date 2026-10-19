@@ -11,8 +11,11 @@ import { EmptyState } from '@/components/fun/EmptyState'
 import { LoadingState } from '@/components/fun/LoadingState'
 import { StartingCourt } from '@/components/fun/StartingCourt'
 import { Jersey } from '@/components/fun/Jersey'
+import { PlayerIcon } from '@/components/fun/PlayerIcon'
 import { GameSetupSheet, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
 import { useLongPressDrag } from '@/hooks/useLongPressDrag'
+import { PlayerPhotoField } from '@/components/fun/PlayerPhotoField'
+import { applyPlayerPhotoChange } from '@/lib/uploadPlayerPhoto'
 import { createPortal } from 'react-dom'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -38,6 +41,7 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
   const [position2, setPosition2] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [photo, setPhoto] = useState({ displayUrl: null, blob: null, removed: false })
   const { players: otherPlayers, loading: otherLoading } = useOtherTeamPlayers(teams, teamId)
 
   function reset() {
@@ -47,6 +51,7 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
     setPosition2('')
     setError('')
     setMode('new')
+    setPhoto({ displayUrl: null, blob: null, removed: false })
   }
 
   async function handleAdd(e) {
@@ -54,7 +59,9 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
     setSaving(true)
     setError('')
     try {
-      await addPlayer({ name, number: number ? Number(number) : null, position, position2 })
+      // 画像は任意。選んでいれば先にアップロードしてから選手を登録する(選手IDはまだ無いので仮のフォルダ)
+      const photoUrl = await applyPlayerPhotoChange({ folder: `new-${crypto.randomUUID()}`, photo, currentUrl: null })
+      await addPlayer({ name, number: number ? Number(number) : null, position, position2, photoUrl: photoUrl ?? null })
       reset()
       setOpen(false)
     } catch (err) {
@@ -133,14 +140,10 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
         {mode === 'new' ? (
           <>
             <SetupSection icon={UserRound} title="PROFILE">
-              <div className="flex items-center gap-3">
-                <Jersey number={number === '' ? null : number} color={positionColor(position)} className="size-14 shrink-0 drop-shadow" />
-                <div className="flex min-w-0 flex-1 flex-col gap-3">
-                  <SetupField id="player-name" label="名前">
-                    <Input id="player-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 山田太郎" className="h-11 rounded-xl text-base" />
-                  </SetupField>
-                </div>
-              </div>
+              <PlayerPhotoField value={photo} onChange={setPhoto} number={number} color={positionColor(position)} />
+              <SetupField id="player-name" label="名前">
+                <Input id="player-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 山田太郎" className="h-11 rounded-xl text-base" />
+              </SetupField>
               <SetupField id="player-number" label="背番号">
                 <Input id="player-number" type="number" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="例: 7" className="h-11 rounded-xl text-base" />
               </SetupField>
@@ -525,7 +528,7 @@ export function Players({ teamId, teams = [] }) {
                 className="pointer-events-none fixed z-[100] flex flex-col items-center"
                 style={{ left: 0, top: 0, transform: `translate3d(${drag.x - 28}px, ${drag.y - 64}px, 0) rotate(-4deg)` }}
               >
-                <Jersey number={draggedPlayer.number} color={positionColor(draggedPlayer.position)} className="size-14 drop-shadow-xl" />
+                <PlayerIcon player={draggedPlayer} color={positionColor(draggedPlayer.position)} className="size-14 drop-shadow-xl" />
                 <span className="-mt-1 max-w-28 truncate rounded-full bg-secondary px-2 py-0.5 text-[11px] font-bold text-secondary-foreground shadow ring-2 ring-chart-3">
                   {draggedPlayer.name}
                 </span>

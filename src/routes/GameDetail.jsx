@@ -40,7 +40,7 @@ import {
 import { cn } from '@/lib/utils'
 import { gameParticipants, isGuest } from '@/lib/roster'
 import { positionColor } from '@/lib/positionStyle'
-import { Jersey } from '@/components/fun/Jersey'
+import { PlayerIcon } from '@/components/fun/PlayerIcon'
 import { GuestTag, GUEST_COLOR } from '@/components/fun/GuestTag'
 import { CourtLines } from '@/components/fun/CourtLines'
 import { Glow } from '@/components/fun/Glow'
@@ -183,7 +183,7 @@ function AssistDialog({ pending, players, onSelect, onSkip }) {
                 onClick={() => onSelect(p.id)}
                 className="press flex min-h-12 min-w-0 items-center gap-2 rounded-xl border bg-background px-2 text-left hover:bg-muted"
               >
-                <Jersey number={p.number} color={playerColor(p)} className="size-8 shrink-0" />
+                <PlayerIcon player={p} color={playerColor(p)} className="size-8 shrink-0" />
                 <span className="min-w-0 truncate text-sm font-bold">{p.name}</span>
               </button>
             ))}
@@ -946,7 +946,7 @@ export function GameDetail({ teamId }) {
                   onClick={() => handleSubstitute(p)}
                   className="press flex min-h-12 items-center gap-2.5 rounded-xl border bg-background px-2.5 text-left hover:bg-muted disabled:opacity-50"
                 >
-                  <Jersey number={p.number} color={playerColor(p)} className="size-8 shrink-0" />
+                  <PlayerIcon player={p} color={playerColor(p)} className="size-8 shrink-0" />
                   <span className="min-w-0 flex-1 truncate text-sm font-bold">{p.name}</span>
                   {isGuest(p) && <GuestTag className="text-muted-foreground" />}
                   <Repeat className="size-4 shrink-0 text-muted-foreground" />
@@ -989,7 +989,7 @@ export function GameDetail({ teamId }) {
                     className="pointer-events-none fixed z-[100] flex items-center gap-1.5 rounded-full bg-secondary py-1 pr-3 pl-1 text-sm font-bold text-secondary-foreground shadow-2xl ring-2 ring-chart-3"
                     style={{ left: 0, top: 0, transform: `translate3d(${courtDrag.x - 24}px, ${courtDrag.y - 44}px, 0) rotate(-3deg)` }}
                   >
-                    <Jersey number={courtDraggedPlayer.number} color={playerColor(courtDraggedPlayer)} className="size-7" />
+                    <PlayerIcon player={courtDraggedPlayer} color={playerColor(courtDraggedPlayer)} className="size-7" />
                     {courtDraggedPlayer.name}
                   </div>,
                   document.body
@@ -1024,7 +1024,7 @@ export function GameDetail({ teamId }) {
                         isGuest(p) && selectedPlayerId !== p.id && 'border-dashed'
                       )}
                     >
-                      <Jersey number={p.number} color={playerColor(p)} className="size-9" />
+                      <PlayerIcon player={p} color={playerColor(p)} className="size-9" />
                       <span className="w-full truncate px-0.5 text-center text-[11px] font-bold leading-tight">{p.name}</span>
                       <span className="font-heading text-sm leading-none tabular-nums">
                         {playerPtsById.get(p.id) ?? 0}
@@ -1066,7 +1066,7 @@ export function GameDetail({ teamId }) {
                           isGuest(p) && selectedPlayerId !== p.id && 'border-dashed'
                         )}
                       >
-                        <Jersey number={p.number} color={playerColor(p)} className="size-7 shrink-0" />
+                        <PlayerIcon player={p} color={playerColor(p)} className="size-7 shrink-0" />
                         <span className="min-w-0 truncate font-bold">{p.name}</span>
                         {isGuest(p) && <GuestTag className="opacity-70" />}
                         <span className="shrink-0 font-heading tabular-nums opacity-70">{playerPtsById.get(p.id) ?? 0}</span>
@@ -1088,7 +1088,7 @@ export function GameDetail({ teamId }) {
           >
             {selectedPlayer ? (
               <>
-                <Jersey number={selectedPlayer.number} color={playerColor(selectedPlayer)} className="size-7 shrink-0" />
+                <PlayerIcon player={selectedPlayer} color={playerColor(selectedPlayer)} className="size-7 shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-sm font-bold">{selectedPlayer.name}</span>
                 {isGuest(selectedPlayer) && <GuestTag className="text-white/70" />}
                 <span className="shrink-0 font-heading text-[10px] tracking-[0.2em] text-chart-3">RECORDING</span>

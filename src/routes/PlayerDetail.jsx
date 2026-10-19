@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ChevronLeft, Pencil, X } from 'lucide-react'
+import { ChevronLeft, Pencil } from 'lucide-react'
 import { supabase } from '@/supabaseClient'
 import { usePlayers } from '@/hooks/usePlayers'
 import { useShotChart } from '@/hooks/useShotChart'
 import { usePracticeStats } from '@/hooks/usePracticeStats'
-import { uploadPlayerPhoto, deletePlayerPhoto } from '@/lib/uploadPlayerPhoto'
+import { applyPlayerPhotoChange } from '@/lib/uploadPlayerPhoto'
+import { PlayerPhotoField } from '@/components/fun/PlayerPhotoField'
+import { positionColor } from '@/lib/positionStyle'
 import { formatAvg, formatClock, formatPct, formatPlusMinus, formatPositions, pct, perGame } from '@/lib/stats'
 import { formatMadeAttempt, formatDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -88,9 +90,8 @@ function EditProfileDialog({ player, updatePlayer, removePlayer, onDeleted, chil
   const [number, setNumber] = useState(player.number ?? '')
   const [position, setPosition] = useState(player.position ?? '')
   const [position2, setPosition2] = useState(player.position2 ?? '')
-  const [photoFile, setPhotoFile] = useState(null)
-  const [photoPreview, setPhotoPreview] = useState(player.photo_url ?? '')
-  const [removePhoto, setRemovePhoto] = useState(false)
+  // 画像の選択・位置調整・削除は「選手を追加」と同じPlayerPhotoFieldを使う
+  const [photo, setPhoto] = useState({ displayUrl: player.photo_url ?? null, blob: null, removed: false })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -102,9 +103,7 @@ function EditProfileDialog({ player, updatePlayer, removePlayer, onDeleted, chil
       setNumber(player.number ?? '')
       setPosition(player.position ?? '')
       setPosition2(player.position2 ?? '')
-      setPhotoFile(null)
-      setPhotoPreview(player.photo_url ?? '')
-      setRemovePhoto(false)
+      setPhoto({ displayUrl: player.photo_url ?? null, blob: null, removed: false })
       setError('')
       setConfirmDelete(false)
     }
@@ -124,33 +123,13 @@ function EditProfileDialog({ player, updatePlayer, removePlayer, onDeleted, chil
     }
   }
 
-  function handlePhotoChange(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPhotoFile(file)
-    setPhotoPreview(URL.createObjectURL(file))
-    setRemovePhoto(false)
-  }
-
-  function handleRemovePhoto() {
-    setPhotoFile(null)
-    setPhotoPreview('')
-    setRemovePhoto(true)
-  }
-
   async function handleSave(e) {
     e.preventDefault()
     setSaving(true)
     setError('')
     try {
-      let photoUrl = player.photo_url ?? null
-      if (photoFile) {
-        photoUrl = await uploadPlayerPhoto(player.id, photoFile)
-        if (player.photo_url) await deletePlayerPhoto(player.photo_url)
-      } else if (removePhoto) {
-        if (player.photo_url) await deletePlayerPhoto(player.photo_url)
-        photoUrl = null
-      }
+      const changed = await applyPlayerPhotoChange({ folder: player.id, photo, currentUrl: player.photo_url ?? null })
+      const photoUrl = changed === undefined ? (player.photo_url ?? null) : changed
       await updatePlayer(player.id, {
         name,
         number: number ? Number(number) : null,
@@ -195,26 +174,7 @@ function EditProfileDialog({ player, updatePlayer, removePlayer, onDeleted, chil
               <DialogDescription>選手の情報と写真を更新します</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSave} className="flex flex-col gap-4">
-              <div className="flex items-center gap-4">
-                <Avatar size="lg" className="size-16">
-                  <AvatarImage src={photoPreview} alt={name} />
-                  <AvatarFallback className="text-base">{number || '-'}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="player-photo">写真</Label>
-                  <Input id="player-photo" type="file" accept="image/*" onChange={handlePhotoChange} />
-                  {photoPreview && (
-                    <button
-                      type="button"
-                      onClick={handleRemovePhoto}
-                      className="flex items-center gap-1 text-xs text-destructive self-start"
-                    >
-                      <X className="size-3" />
-                      写真を削除
-                    </button>
-                  )}
-                </div>
-              </div>
+              <PlayerPhotoField value={photo} onChange={setPhoto} number={number} color={positionColor(position)} />
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="edit-name">名前</Label>
                 <Input id="edit-name" required value={name} onChange={(e) => setName(e.target.value)} />
