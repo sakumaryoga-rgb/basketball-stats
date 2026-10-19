@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MapPinned, Plus, Search, Star, UserRound, Users } from 'lucide-react'
+import { Hand, MapPinned, Plus, Search, Star, UserRound, Users } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
 import { teamRoster } from '@/lib/roster'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
@@ -12,7 +12,8 @@ import { LoadingState } from '@/components/fun/LoadingState'
 import { StartingCourt } from '@/components/fun/StartingCourt'
 import { Jersey } from '@/components/fun/Jersey'
 import { GameSetupSheet, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
-import { LineupEditor } from '@/components/fun/LineupEditor'
+import { useLongPressDrag } from '@/hooks/useLongPressDrag'
+import { createPortal } from 'react-dom'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -295,41 +296,60 @@ export function Players({ teamId, teams = [] }) {
       ? filteredPlayers
       : (positionGroups.find((g) => g.key === positionFilter)?.players ?? [])
 
-  // STARTINGタブのLINEUP編集の並び。先発かどうか(is_starter)だけがDBに保存され、並び順は
-  // 画面内だけのもの。保存を待たずに表示を更新するため、編集後はこの並びを表示の基準にする
-  // (ROSTERタブの★で変えた場合はnullに戻してDBの値から作り直す)
-  const [lineupOrder, setLineupOrder] = useState(null)
-  const lineup = useMemo(() => {
-    const ids = new Set(players.map((p) => p.id))
-    if (!lineupOrder) {
-      const starterIds = players.filter((p) => p.is_starter).slice(0, 5).map((p) => p.id)
-      return { starters: starterIds, reserves: players.filter((p) => !starterIds.includes(p.id)).map((p) => p.id) }
-    }
-    const known = new Set([...lineupOrder.starters, ...lineupOrder.reserves])
-    const starterIds = lineupOrder.starters.filter((id) => ids.has(id))
-    const reserveIds = lineupOrder.reserves.filter((id) => ids.has(id))
-    for (const p of players) {
-      if (known.has(p.id)) continue
-      if (p.is_starter && starterIds.length < 5) starterIds.push(p.id)
-      else reserveIds.push(p.id)
-    }
-    return { starters: starterIds, reserves: reserveIds }
-  }, [players, lineupOrder])
+  // STARTINGタブのドラッグ&ドロップで変えた先発(is_starter)を、保存の完了を待たずに表示へ反映する上書き。
+  // ROSTERタブの★で変えた場合は空に戻し、DBの値をそのまま使う
+  const [starterOverrides, setStarterOverrides] = useState({})
+  const isStarter = (p) => (p.id in starterOverrides ? starterOverrides[p.id] : !!p.is_starter)
+  const courtStarters = players.filter(isStarter).slice(0, 5)
+  const reservePlayers = players.filter((p) => !courtStarters.includes(p))
+  const courtStarterIds = new Set(courtStarters.map((p) => p.id))
 
-  const courtStarters = useMemo(
-    () => lineup.starters.map((id) => players.find((p) => p.id === id)).filter(Boolean),
-    [lineup, players]
-  )
-
-  async function handleLineupChange(next) {
-    setLineupOrder(next)
-    const nextStarters = new Set(next.starters)
-    const changed = players.filter((p) => !!p.is_starter !== nextStarters.has(p.id))
-    await Promise.all(changed.map((p) => updatePlayer(p.id, { is_starter: nextStarters.has(p.id) })))
+  async function applyStarterChanges(changes) {
+    setStarterOverrides((prev) => ({ ...prev, ...changes }))
+    try {
+      await Promise.all(Object.entries(changes).map(([id, value]) => updatePlayer(id, { is_starter: value })))
+    } catch (err) {
+      console.error('STARTING FIVEの更新に失敗しました', err)
+      setStarterOverrides((prev) => {
+        const next = { ...prev }
+        for (const id of Object.keys(changes)) delete next[id]
+        return next
+      })
+    }
   }
 
+  // ドロップ先: 'court'(コートの余白) / 'slot:PG'(空き枠) / 'player:<id>'(選手) / 'reserve'(RESERVEの列)
+  function canDropOn(dragId, dropKey) {
+    const fromCourt = courtStarterIds.has(dragId)
+    if (dropKey.startsWith('player:')) {
+      const otherId = dropKey.slice(7)
+      return otherId !== dragId && courtStarterIds.has(otherId) !== fromCourt
+    }
+    if (dropKey === 'reserve') return fromCourt
+    // コートへ入れられるのは、RESERVEの選手で、かつ先発が5人未満のときだけ(5人なら選手の上で入れ替え)
+    return !fromCourt && courtStarters.length < 5
+  }
+
+  function handleDrop(dragId, dropKey) {
+    if (!canDropOn(dragId, dropKey)) return
+    const fromCourt = courtStarterIds.has(dragId)
+    if (dropKey.startsWith('player:')) {
+      const otherId = dropKey.slice(7)
+      applyStarterChanges({ [dragId]: !fromCourt, [otherId]: fromCourt })
+    } else if (dropKey === 'reserve') {
+      applyStarterChanges({ [dragId]: false })
+    } else {
+      applyStarterChanges({ [dragId]: true })
+    }
+  }
+
+  const { drag, bind, rootRef } = useLongPressDrag({ onDrop: handleDrop })
+  const draggedPlayer = drag ? players.find((p) => p.id === drag.id) : null
+  const draggingFromCourt = drag ? courtStarterIds.has(drag.id) : false
+  const courtDnd = { bind, drag, canDropOn: (key) => (drag ? canDropOn(drag.id, key) : false) }
+
   async function handleToggleStarter(player) {
-    setLineupOrder(null)
+    setStarterOverrides({})
     if (!player.is_starter && startersCount >= 5) {
       setSwapTarget(player)
       return
@@ -339,7 +359,7 @@ export function Players({ teamId, teams = [] }) {
 
   async function handleSwap(outgoingPlayer) {
     if (!swapTarget) return
-    setLineupOrder(null)
+    setStarterOverrides({})
     const incomingPlayer = swapTarget
     setSwapTarget(null)
     await Promise.all([
@@ -441,23 +461,77 @@ export function Players({ teamId, teams = [] }) {
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          {/* コートはLINEUPの編集結果をすぐに反映する(DBの保存完了を待たない) */}
-          <StartingCourt starters={courtStarters} onPickStarter={() => setViewMode('roster')} />
+        <div ref={rootRef} className="flex flex-col gap-4">
+          <p className="-mb-2 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+            <Hand className="size-3.5" />
+            長押ししてコートとRESERVEの間で運ぶと入れ替えられます
+          </p>
+          <StartingCourt starters={courtStarters} onPickStarter={() => setViewMode('roster')} dnd={courtDnd} />
           {courtStarters.length < 5 && (
             <p className="text-xs text-muted-foreground text-center -mt-2">
-              空いている枠をタップすると、ROSTERからSTARTING FIVEを選べます
+              空いている枠をタップするとROSTERから選べます。RESERVEの選手を運んで入れることもできます
             </p>
           )}
-          {/* STARTING FIVE / RESERVEの編集。試合作成画面と同じく長押しドラッグ・タップで入れ替えられる */}
-          <section className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 px-1">
-              <h2 className="font-heading text-xs tracking-[0.2em] text-muted-foreground">LINEUP</h2>
+              <h2 className="font-heading text-xs tracking-[0.2em] text-muted-foreground">RESERVE</h2>
               <span className="h-px flex-1 bg-border" />
-              <span className="text-[10px] text-muted-foreground">試合追加時のデフォルト</span>
+              <span className="font-heading text-xs tabular-nums text-muted-foreground">{reservePlayers.length}</span>
             </div>
-            <LineupEditor players={players} value={lineup} onChange={handleLineupChange} />
-          </section>
+            <ul
+              data-no-pull-refresh
+              data-drop="reserve"
+              className={cn(
+                'flex min-h-24 snap-x snap-proximity gap-2 overflow-x-auto overscroll-x-contain scroll-px-1 rounded-2xl px-1 py-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] transition-shadow',
+                draggingFromCourt && 'bg-primary/5 ring-2 ring-primary/60 ring-inset'
+              )}
+            >
+              {reservePlayers.length === 0 && (
+                <li className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+                  {draggingFromCourt ? 'ここで離すとRESERVEへ' : 'RESERVEの選手はいません'}
+                </li>
+              )}
+              {reservePlayers.map((player, i) => {
+                const over = drag?.over === `player:${player.id}` && courtDnd.canDropOn(`player:${player.id}`)
+                return (
+                  <li key={player.id} className="animate-rise-in shrink-0 snap-start" style={{ '--i': i }}>
+                    <Link
+                      to={`/players/${player.id}`}
+                      draggable={false}
+                      {...bind(player.id)}
+                      data-drop={`player:${player.id}`}
+                      className={cn(
+                        'press flex w-20 select-none flex-col items-center gap-1 rounded-xl border bg-card px-1.5 py-2 transition-[opacity,box-shadow] [-webkit-touch-callout:none]',
+                        drag?.id === player.id && 'opacity-40',
+                        over && 'ring-2 ring-chart-3'
+                      )}
+                    >
+                      <PlayerFace player={player} className="size-10" />
+                      <span className="w-full truncate text-center text-[11px] font-medium">{player.name}</span>
+                      <span className="font-heading text-[9px] tracking-wider text-muted-foreground leading-none">
+                        {formatPositions(player.position, player.position2) || '-'}
+                      </span>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          {drag?.moved &&
+            draggedPlayer &&
+            createPortal(
+              <div
+                aria-hidden
+                className="pointer-events-none fixed z-[100] flex flex-col items-center"
+                style={{ left: 0, top: 0, transform: `translate3d(${drag.x - 28}px, ${drag.y - 64}px, 0) rotate(-4deg)` }}
+              >
+                <Jersey number={draggedPlayer.number} color={positionColor(draggedPlayer.position)} className="size-14 drop-shadow-xl" />
+                <span className="-mt-1 max-w-28 truncate rounded-full bg-secondary px-2 py-0.5 text-[11px] font-bold text-secondary-foreground shadow ring-2 ring-chart-3">
+                  {draggedPlayer.name}
+                </span>
+              </div>,
+              document.body
+            )}
         </div>
       )}
 

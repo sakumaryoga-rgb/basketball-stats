@@ -1,15 +1,26 @@
 import { Link } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { Plus } from 'lucide-react'
 import { Jersey } from '@/components/fun/Jersey'
 import { formatPositions } from '@/lib/stats'
 import { COURT_SLOTS, assignStartersToSlots, positionColor } from '@/lib/positionStyle'
 
-// STARTING FIVEをハーフコートの上に並べて、誰がどこを守るのかをひと目で分かるようにする
-export function StartingCourt({ starters, onPickStarter }) {
+// STARTING FIVEをハーフコートの上に並べて、誰がどこを守るのかをひと目で分かるようにする。
+// dndを渡すと、選手を長押しで運んでRESERVEと入れ替えられる(PLAYERSタブ)。
+// dnd: { bind(id), drag, canDropOn(dropKey) } — useLongPressDragの戻り値+ドロップ可否
+export function StartingCourt({ starters, onPickStarter, dnd }) {
   const slots = assignStartersToSlots(starters)
+  const drag = dnd?.drag
+  const isOver = (key) => drag?.over === key && dnd.canDropOn(key)
+  // RESERVEの選手を運んでいる間はコート全体を光らせ、置けることを示す
+  const acceptsDrop = drag && dnd.canDropOn('court')
   return (
     <div
-      className="relative aspect-[5/4] w-full overflow-hidden rounded-2xl shadow-md animate-rise-in"
+      data-drop={dnd ? 'court' : undefined}
+      className={cn(
+        'relative aspect-[5/4] w-full overflow-hidden rounded-2xl shadow-md animate-rise-in transition-shadow',
+        acceptsDrop && 'ring-4 ring-chart-3 ring-offset-2 ring-offset-background'
+      )}
       style={{
         background:
           'repeating-linear-gradient(90deg, oklch(0.84 0.075 68) 0 34px, oklch(0.81 0.08 66) 34px 36px), oklch(0.84 0.075 68)',
@@ -39,10 +50,17 @@ export function StartingCourt({ starters, onPickStarter }) {
               key={slot.key}
               type="button"
               onClick={onPickStarter}
+              data-drop={dnd ? `slot:${slot.key}` : undefined}
               className="press animate-rise-in absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1"
               style={style}
             >
-              <span className="flex size-12 items-center justify-center rounded-full border-2 border-dashed border-white bg-white/25 text-white">
+              <span
+                className={cn(
+                  'flex size-12 items-center justify-center rounded-full border-2 border-dashed border-white bg-white/25 text-white transition-transform',
+                  acceptsDrop && 'animate-pulse',
+                  isOver(`slot:${slot.key}`) && 'scale-125 border-chart-3 bg-chart-3/60'
+                )}
+              >
                 <Plus className="size-5" />
               </span>
               <span className="rounded-full bg-black/40 px-2 py-0.5 font-heading text-[10px] tracking-wider text-white">
@@ -55,10 +73,21 @@ export function StartingCourt({ starters, onPickStarter }) {
           <Link
             key={slot.key}
             to={`/players/${player.id}`}
-            className="press animate-rise-in absolute flex w-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+            draggable={false}
+            {...(dnd ? dnd.bind(player.id) : {})}
+            data-drop={dnd ? `player:${player.id}` : undefined}
+            className={cn(
+              'press animate-rise-in absolute flex w-24 -translate-x-1/2 -translate-y-1/2 select-none flex-col items-center transition-opacity [-webkit-touch-callout:none]',
+              drag?.id === player.id && 'opacity-40'
+            )}
             style={style}
           >
-            <span className="relative">
+            <span
+              className={cn(
+                'relative rounded-full transition-transform',
+                isOver(`player:${player.id}`) && 'scale-110 ring-4 ring-chart-3'
+              )}
+            >
               <Jersey number={player.number} color={positionColor(player.position)} className="size-14 drop-shadow-md" />
               {player.photo_url && (
                 <img
