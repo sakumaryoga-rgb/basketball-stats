@@ -6,7 +6,7 @@ import { CourtLines } from '@/components/fun/CourtLines'
 import { GuestTag, GUEST_COLOR } from '@/components/fun/GuestTag'
 import { positionColor } from '@/lib/positionStyle'
 import { isGuest } from '@/lib/roster'
-import { MAX_STARTERS, listOf, movePlayer, swapPlayers } from '@/lib/lineupDraft'
+import { MAX_STARTERS, STARTER_SLOTS, listOf, movePlayer, preferredEmptySlot, starterCount, swapPlayers } from '@/lib/lineupDraft'
 import { cn } from '@/lib/utils'
 
 // タッチは長押しでつかむ(すぐ指を動かした場合は縦スクロールとして扱う)。マウスは少し動かした時点でつかむ
@@ -38,45 +38,53 @@ function hitTest(x, y) {
   if (!el) return null
   const card = el.closest('[data-lineup-card]')
   if (card) return { kind: 'card', id: card.dataset.id, list: card.dataset.list }
-  if (el.closest('[data-lineup-slot]')) return { kind: 'slot', list: 'starters' }
+  const slot = el.closest('[data-lineup-slot]')
+  if (slot) return { kind: 'slot', list: 'starters', index: Number(slot.dataset.index) }
   const zone = el.closest('[data-lineup-zone]')
   if (zone) return { kind: 'zone', list: zone.dataset.lineupZone }
   return null
 }
 
 // つかんだ選手(dragId)を指の位置に落とした場合の結果を、元の並び(origin)から計算する。
-// - 同じエリアの選手の上 → その位置へ並べ替え
-// - 反対のエリアの選手の上 → その選手と入れ替え(STARTING FIVEの人数は変わらない)
-// - STARTING FIVEの空き枠 → STARTING FIVEに追加
-// - 反対のエリアの余白 → そのエリアへ移動(STARTING FIVEが5人なら不可)
+// STARTING FIVEは1=PG〜5=Cの固定枠。番号は枠に付き、移動した選手は移動先の枠の番号になる。
+// - STARTING FIVEの選手の上 → その選手と入れ替え(枠どうしでもRESERVEとでも)
+// - RESERVEどうし → その位置へ並べ替え
+// - STARTING FIVEの空き枠 → その枠へ移動(RESERVEからなら追加)
+// - STARTING FIVEの余白 → 空き枠があれば、選手のポジションに合う空き枠(なければ最初の空き枠)へ
+// - RESERVEの余白 → RESERVEへ下げる
 // 戻り値のpreviewは画面にそのまま反映し、指を離したときに確定する
-function resolveDrop(origin, dragId, hit, previous) {
+function resolveDrop(origin, dragId, hit, previous, player) {
   const from = listOf(origin, dragId)
   if (!hit) return { preview: origin, action: null }
   if (hit.kind === 'card') {
     // 自分自身(=プレビュー中の空き枠)の上では直前の判定を保つ。指の下でプレビューが入れ替わり続けないように
     if (hit.id === dragId || hit.id === PLACEHOLDER_ID) return previous ?? { preview: origin, action: null }
     // 表示上の位置はプレビューで動いているため、どちらのエリアの選手かは元の並びで判定する
-    if (listOf(origin, hit.id) === from) {
-      const index = origin[from].indexOf(hit.id)
-      return { preview: movePlayer(origin, dragId, from, index), action: 'reorder' }
+    const hitList = listOf(origin, hit.id)
+    if (hitList === 'reserves' && from === 'reserves') {
+      const index = origin.reserves.indexOf(hit.id)
+      return { preview: movePlayer(origin, dragId, 'reserves', index), action: 'reorder' }
     }
-    return { preview: swapPlayers(origin, dragId, hit.id), action: 'swap', swapWith: hit.id }
+    const action = hitList === 'starters' && from === 'starters' ? 'reposition' : 'swap'
+    return { preview: swapPlayers(origin, dragId, hit.id), action, swapWith: hit.id }
   }
   if (hit.kind === 'slot') {
-    if (from === 'starters') return previous ?? { preview: origin, action: null }
-    return { preview: movePlayer(origin, dragId, 'starters', origin.starters.length), action: 'add' }
+    return {
+      preview: movePlayer(origin, dragId, 'starters', hit.index),
+      action: from === 'starters' ? 'reposition' : 'add',
+    }
   }
   // エリアの余白
   if (hit.list === from) return previous ?? { preview: origin, action: null }
-  if (hit.list === 'starters' && origin.starters.length >= MAX_STARTERS) {
-    return { preview: origin, action: 'blocked' }
+  if (hit.list === 'starters') {
+    const slot = preferredEmptySlot(origin, player)
+    if (slot == null) return { preview: origin, action: 'blocked' }
+    return { preview: movePlayer(origin, dragId, 'starters', slot), action: 'add' }
   }
-  const index = hit.list === 'reserves' ? 0 : origin.starters.length
-  return { preview: movePlayer(origin, dragId, hit.list, index), action: hit.list === 'reserves' ? 'bench' : 'add' }
+  return { preview: movePlayer(origin, dragId, 'reserves', 0), action: 'bench' }
 }
 
-function StarterCard({ player, index, pickMode, displaced, ...rest }) {
+function StarterCard({ player, slotIndex, pickMode, displaced, ...rest }) {
   return (
     <button
       type="button"
@@ -91,7 +99,7 @@ function StarterCard({ player, index, pickMode, displaced, ...rest }) {
       )}
       {...rest}
     >
-      <span className="w-4 shrink-0 text-center font-heading text-base leading-none text-white/45">{index + 1}</span>
+      <SlotNumber index={slotIndex} />
       <Jersey number={player.number} color={jerseyColor(player)} className="size-9 shrink-0 drop-shadow" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-bold leading-tight">{player.name}</span>
@@ -112,6 +120,16 @@ function StarterCard({ player, index, pickMode, displaced, ...rest }) {
         </span>
       )}
     </button>
+  )
+}
+
+// STARTING FIVEのポジション番号(1=PG〜5=C)。選手の背番号ではなく枠の番号
+function SlotNumber({ index, muted = false }) {
+  return (
+    <span className={cn('flex w-7 shrink-0 flex-col items-center leading-none', muted ? 'text-white/45' : 'text-chart-3')}>
+      <span className="font-heading text-lg">{index + 1}</span>
+      <span className="font-heading text-[8px] tracking-wider opacity-80">{STARTER_SLOTS[index]}</span>
+    </span>
   )
 }
 
@@ -197,6 +215,7 @@ function DragGhost({ player, drag }) {
 
 const ACTION_HINT = {
   reorder: '並び順を入れ替えます',
+  reposition: 'ポジションを入れ替えます',
   swap: '選手を入れ替えます',
   add: 'STARTING FIVEに入れます',
   bench: 'RESERVEに下げます',
@@ -223,7 +242,7 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
   })
 
   const shown = drag?.result?.preview ?? value
-  const startersFull = value.starters.length >= MAX_STARTERS
+  const startersFull = starterCount(value) >= MAX_STARTERS
   const nameOf = (id) => byId.get(id)?.name ?? ''
 
   function commit(next, message) {
@@ -234,7 +253,7 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
   function updateDrag(x, y) {
     const current = dragRef.current
     if (!current) return
-    const result = resolveDrop(current.origin, current.id, hitTest(x, y), current.result)
+    const result = resolveDrop(current.origin, current.id, hitTest(x, y), current.result, byId.get(current.id))
     const next = { ...current, x, y, result }
     dragRef.current = next
     setDrag(next)
@@ -314,6 +333,7 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
     const name = nameOf(d.id)
     const messages = {
       reorder: `${name}の並び順を変更しました`,
+      reposition: `${name}を${(d.result.preview.starters.indexOf(d.id) + 1) || ''}番に移しました`,
       swap: `${name}と${nameOf(d.result.swapWith)}を入れ替えました`,
       add: `${name}をSTARTING FIVEに入れました`,
       bench: `${name}をRESERVEに下げました`,
@@ -427,7 +447,8 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
         setPickId(null)
         setAnnounce('入れ替えをキャンセルしました')
       } else if (!startersFull) {
-        commit(movePlayer(value, id, 'starters', value.starters.length), `${nameOf(id)}をSTARTING FIVEに入れました`)
+        const slot = preferredEmptySlot(value, byId.get(id))
+        commit(movePlayer(value, id, 'starters', slot), `${nameOf(id)}をSTARTING FIVEの${slot + 1}番(${STARTER_SLOTS[slot]})に入れました`)
       } else {
         setPickId(id)
         setAnnounce(`${nameOf(id)}と入れ替えるSTARTING FIVEの選手を選んでください`)
@@ -454,8 +475,8 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
   const dragging = !!drag
   const dragFrom = drag ? listOf(drag.origin, drag.id) : null
   const action = drag?.result?.action
-  const swapWith = action === 'swap' ? drag.result.swapWith : null
-  const emptySlots = Math.max(0, MAX_STARTERS - shown.starters.length)
+  const swapWith = action === 'swap' || action === 'reposition' ? drag.result.swapWith : null
+  const shownStarterCount = starterCount(shown)
   const draggedPlayer = drag ? byId.get(drag.id) : null
 
   if (players.length === 0) {
@@ -497,12 +518,12 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
           <div className="flex items-baseline gap-2">
             <h3 className="font-heading text-lg leading-none tracking-wide">STARTING FIVE</h3>
             <span className="font-heading text-sm tabular-nums text-chart-3">
-              {shown.starters.length}/{MAX_STARTERS}
+              {shownStarterCount}/{MAX_STARTERS}
             </span>
           </div>
           <div className="flex gap-1" aria-hidden>
             {Array.from({ length: MAX_STARTERS }, (_, i) => (
-              <span key={i} className={cn('h-1.5 w-3 rounded-full', i < shown.starters.length ? 'bg-chart-3' : 'bg-white/20')} />
+              <span key={i} className={cn('h-1.5 w-3 rounded-full', shown.starters[i] ? 'bg-chart-3' : 'bg-white/20')} />
             ))}
           </div>
         </div>
@@ -511,36 +532,35 @@ export function LineupEditor({ players, value, onChange, scrollRef }) {
             {action ? ACTION_HINT[action] : startersFull ? '選手の上で離すと入れ替えます' : '空き枠か選手の上で離してください'}
           </p>
         )}
+        {/* 1=PG〜5=Cの固定枠。番号は枠に付き、選手の背番号とは別 */}
         <ol className="relative flex flex-col gap-1.5">
           {shown.starters.map((id, i) => (
-            <li key={id}>
-              {drag?.id === id ? (
+            <li key={STARTER_SLOTS[i]}>
+              {id && drag?.id === id ? (
                 <Placeholder list="starters" />
-              ) : (
+              ) : id ? (
                 <StarterCard
                   player={byId.get(id)}
-                  index={i}
+                  slotIndex={i}
                   pickMode={!!pickId}
                   displaced={swapWith === id}
-                  aria-label={`${byId.get(id)?.name}${isGuest(byId.get(id)) ? '(ゲスト)' : ''} (STARTING FIVE ${i + 1}番目)。${pickId ? `${nameOf(pickId)}と入れ替える` : 'タップでRESERVEへ'}`}
+                  aria-label={`${byId.get(id)?.name}${isGuest(byId.get(id)) ? '(ゲスト)' : ''} (STARTING FIVE ${i + 1}番 ${STARTER_SLOTS[i]})。${pickId ? `${nameOf(pickId)}と入れ替える` : 'タップでRESERVEへ'}`}
                   {...cardProps(id)}
                 />
+              ) : (
+                <div
+                  data-lineup-slot
+                  data-index={i}
+                  className={cn(
+                    'flex min-h-12 items-center gap-2.5 rounded-xl border-2 border-dashed border-white/20 px-2.5 text-white/45 transition-colors',
+                    dragging && 'border-chart-3/70 bg-chart-3/10 text-chart-3'
+                  )}
+                >
+                  <SlotNumber index={i} muted={!dragging} />
+                  <Plus className="size-4" />
+                  <span className="text-xs font-bold">空き</span>
+                </div>
               )}
-            </li>
-          ))}
-          {Array.from({ length: emptySlots }, (_, i) => (
-            <li key={`slot-${i}`}>
-              <div
-                data-lineup-slot
-                className={cn(
-                  'flex min-h-12 items-center gap-2.5 rounded-xl border-2 border-dashed border-white/20 px-2.5 text-white/45 transition-colors',
-                  dragging && dragFrom === 'reserves' && 'border-chart-3/70 bg-chart-3/10 text-chart-3'
-                )}
-              >
-                <span className="w-4 text-center font-heading text-base leading-none">{shown.starters.length + i + 1}</span>
-                <Plus className="size-4" />
-                <span className="text-xs font-bold">空き</span>
-              </div>
             </li>
           ))}
         </ol>

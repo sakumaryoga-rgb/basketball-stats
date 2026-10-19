@@ -1,5 +1,5 @@
 import { applyStartingLineup } from '@/hooks/useGameLineups'
-import { initialLineup, sameStarters } from '@/lib/lineupDraft'
+import { initialLineup, sameStarters, starterIds } from '@/lib/lineupDraft'
 
 // 作成画面で追加したゲストの仮ID。試合を作るまではDBに行が無いので、画面内だけで使う
 export const DRAFT_GUEST_PREFIX = 'draft-guest-'
@@ -25,8 +25,8 @@ export async function finishGameSetup({ gameId, roster, lineup, draftGuests, add
       failedGuests.push(guest.name)
     }
   }
-  const starters = lineup.starters.map((id) => (isDraftGuestId(id) ? idMap.get(id) : id)).filter(Boolean)
-  const guestStarter = lineup.starters.some(isDraftGuestId)
+  const starters = starterIds(lineup).map((id) => (isDraftGuestId(id) ? idMap.get(id) : id)).filter(Boolean)
+  const guestStarter = starterIds(lineup).some(isDraftGuestId)
   const warnings = []
   if (failedGuests.length > 0) warnings.push(`ゲスト(${failedGuests.join('、')})を追加できませんでした。試合画面の「ゲストを追加」から追加してください`)
   if (guestStarter || !sameStarters(lineup, initialLineup(roster))) {
