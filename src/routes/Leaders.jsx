@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
 import { usePeriodStats } from '@/hooks/usePeriodStats'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { LEADER_CATEGORIES, LEADER_PERIODS, formatAvg, formatPct, pct, perGame } from '@/lib/stats'
@@ -8,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { Crown } from 'lucide-react'
 import { PageHeader } from '@/components/fun/PageHeader'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { Jersey } from '@/components/fun/Jersey'
 import { positionColor } from '@/lib/positionStyle'
 
@@ -64,11 +66,11 @@ const RANK_STYLE = [
 ]
 
 export function Leaders({ teamId }) {
-  const { players } = usePlayers(teamId)
+  const { players, loading: playersLoading } = usePlayers(teamId)
   const [period, setPeriod] = useState('season')
   // 既存の記録の大半が2Q制のため、デフォルトは2Q制で表示する
   const [periodSystem, setPeriodSystem] = useState('2q')
-  const { periodStats } = usePeriodStats(teamId, period, periodSystem)
+  const { periodStats, loading: statsLoading } = usePeriodStats(teamId, period, periodSystem)
   const [category, setCategory] = useState(LEADER_CATEGORIES[0].key)
 
   const activeCategory = LEADER_CATEGORIES.find((c) => c.key === category)
@@ -76,7 +78,7 @@ export function Leaders({ teamId }) {
 
   const ranking = useMemo(() => {
     // ゲスト選手(その試合限定の助っ人)はリーダーボードには出さない
-    const playersById = new Map(players.filter((p) => !p.guest_game_id).map((p) => [p.id, p]))
+    const playersById = new Map(teamRoster(players).map((p) => [p.id, p]))
     const list = periodStats
       .filter((s) => s.games_played > 0)
       .map((s) => {
@@ -152,7 +154,9 @@ export function Leaders({ teamId }) {
         ))}
       </div>
 
-      {ranking.length === 0 ? (
+      {ranking.length === 0 && (playersLoading || statsLoading) ? (
+        <LoadingState />
+      ) : ranking.length === 0 ? (
         <EmptyState title="まだデータがありません" description="試合を記録すると、ここにランキングが並びます" />
       ) : (
         <>

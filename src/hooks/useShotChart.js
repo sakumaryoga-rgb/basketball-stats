@@ -16,7 +16,7 @@ export function useShotChart(teamId, playerId = null, gameTypes = ['official']) 
       setLoading(false)
       return
     }
-    setLoading(true)
+    // loadingは初回読み込みの間だけtrue(記録の変更通知で再取得するたびに表示がちらつかないように)
     let query = supabase
       .from('stat_events')
       .select('shot_x, shot_y, stat_key, games!inner(team_id, game_type), players!inner(guest_game_id)')

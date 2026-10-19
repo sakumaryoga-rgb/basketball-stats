@@ -1,51 +1,75 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ChevronRight, Plus, Swords, Target, X } from 'lucide-react'
+import { CalendarDays, ChevronRight, Plus, Shirt, Swords, Target, X } from 'lucide-react'
 import { useGames } from '@/hooks/useGames'
 import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { PageHeader } from '@/components/fun/PageHeader'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { GameScoreCard } from '@/components/fun/GameScoreCard'
 import { PracticeHeatmap } from '@/components/fun/PracticeHeatmap'
 import { WinRing } from '@/components/fun/WinRing'
 import { DateTile } from '@/components/fun/DateTile'
 import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
+import { useGameSetupDraft } from '@/hooks/useGameSetupDraft'
+import { finishGameSetup } from '@/lib/gameSetup'
+import { GameSetupSheet, OpponentField, PlayerToggleList, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
+import { Jersey } from '@/components/fun/Jersey'
+import { positionColor } from '@/lib/positionStyle'
+import { saveShootingParticipants } from '@/lib/shootingParticipants'
+import { LineupEditor } from '@/components/fun/LineupEditor'
+import { GuestDraftField } from '@/components/fun/GuestDraftField'
 import { useShootingParticipants } from '@/hooks/useShootingParticipants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 
 function todayStr() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function CreateScrimmageDialog({ createGame }) {
+function CreateScrimmageDialog({ createGame, players, addPlayer, onLineupWarning }) {
   const [open, setOpen] = useState(false)
   const [opponentName, setOpponentName] = useState('')
   const [gameDate, setGameDate] = useState(todayStr())
   const [location, setLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const roster = useMemo(() => teamRoster(players), [players])
+  const draft = useGameSetupDraft(roster)
+  const bodyRef = useRef(null)
+
+  function handleOpenChange(next) {
+    if (next) {
+      draft.reset()
+      setError('')
+      onLineupWarning('')
+    }
+    setOpen(next)
+  }
 
   async function handleCreate(e) {
     e.preventDefault()
+    if (draft.startersError) {
+      setError(draft.startersError)
+      return
+    }
     setSaving(true)
     setError('')
     try {
-      await createGame({ opponentName, gameDate, location })
+      const game = await createGame({ opponentName, gameDate, location })
+      // 作成画面で追加したゲストの登録と、変更したSTARTING FIVEの反映
+      const warning = await finishGameSetup({
+        gameId: game.id,
+        roster,
+        lineup: draft.lineup,
+        draftGuests: draft.draftGuests,
+        addPlayer,
+      })
+      if (warning) onLineupWarning(`スクリメージは作成しました。${warning}`)
       setOpponentName('')
       setLocation('')
       setOpen(false)
@@ -57,47 +81,49 @@ function CreateScrimmageDialog({ createGame }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>
+    <>
+      <Button size="sm" onClick={() => handleOpenChange(true)}>
         <Plus className="size-4" />
         スクリメージを追加
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>スクリメージを追加</DialogTitle>
-          <DialogDescription>
-            GAME同様に記録できますが、公式スタッツ(TEAM/個人記録)には反映されません
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="scrimmage-opponent">対戦相手 (任意)</Label>
-            <Input
-              id="scrimmage-opponent"
-              value={opponentName}
-              onChange={(e) => setOpponentName(e.target.value)}
-              placeholder="例: 紅白戦"
-            />
+      </Button>
+      <GameSetupSheet
+        open={open}
+        onOpenChange={handleOpenChange}
+        eyebrow="NEW SCRIMMAGE"
+        title="スクリメージを追加"
+        description="GAME同様に記録できますが、公式スタッツ(TEAM/個人記録)には反映されません"
+        onSubmit={handleCreate}
+        submitLabel="スクリメージを作成"
+        savingLabel="作成中..."
+        saving={saving}
+        error={error}
+        bodyRef={bodyRef}
+      >
+        <SetupSection icon={Swords} title="MATCHUP">
+          <OpponentField
+            id="scrimmage-opponent"
+            label="対戦相手 (任意)"
+            value={opponentName}
+            onChange={setOpponentName}
+            placeholder="例: 紅白戦"
+          />
+        </SetupSection>
+        <SetupSection icon={CalendarDays} title="DATE & PLACE">
+          <div className="flex flex-col gap-3">
+            <SetupField id="scrimmage-date" label="日付">
+              <Input id="scrimmage-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} className="h-11 rounded-xl text-base" />
+            </SetupField>
+            <SetupField id="scrimmage-location" label="会場">
+              <Input id="scrimmage-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="任意" className="h-11 rounded-xl text-base" />
+            </SetupField>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="scrimmage-date">日付</Label>
-              <Input id="scrimmage-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="scrimmage-location">会場</Label>
-              <Input id="scrimmage-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="任意" />
-            </div>
-          </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
-          <DialogFooter>
-            <Button type="submit" disabled={saving}>
-              {saving ? '作成中...' : '作成する'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </SetupSection>
+        <SetupSection icon={Shirt} title="LINEUP" sub="このスクリメージのSTARTING FIVE(PLAYERSタブの設定が初期値)とゲスト">
+          <LineupEditor players={draft.editorPlayers} value={draft.lineup} onChange={draft.setLineupDraft} scrollRef={bodyRef} />
+          <GuestDraftField guests={draft.draftGuests} onAdd={draft.addGuest} onRemove={draft.removeGuest} />
+        </SetupSection>
+      </GameSetupSheet>
+    </>
   )
 }
 
@@ -136,6 +162,8 @@ function CreateShootingDialog({ createGame, players }) {
     setError('')
     try {
       const game = await createGame({ opponentName: memo, gameDate })
+      // 参加メンバーを保存しておき、記録画面を開き直してもこのメンバーだけを表示する
+      saveShootingParticipants(game.id, selectedPlayerIds)
       setOpen(false)
       navigate(`/shooting/${game.id}`, { state: { playerIds: selectedPlayerIds } })
     } catch (err) {
@@ -146,58 +174,47 @@ function CreateShootingDialog({ createGame, players }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>
+    <>
+      <Button size="sm" variant="outline" onClick={() => handleOpenChange(true)}>
         <Plus className="size-4" />
         シューティングを追加
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>シューティングを追加</DialogTitle>
-          <DialogDescription>
-            コートをタップしてゾーンごとの試投数・成功数をまとめて記録します(公式スタッツには反映されません)
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="shooting-date">日付</Label>
-            <Input id="shooting-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} />
+      </Button>
+      <GameSetupSheet
+        open={open}
+        onOpenChange={handleOpenChange}
+        eyebrow="NEW SHOOTING"
+        title="シューティングを追加"
+        description="コートをタップしてゾーンごとの試投数・成功数をまとめて記録します(公式スタッツには反映されません)"
+        onSubmit={handleCreate}
+        submitLabel={selectedPlayerIds.length > 0 ? `${selectedPlayerIds.length}人で作成する` : '作成する'}
+        savingLabel="作成中..."
+        saving={saving}
+        error={error}
+      >
+        <SetupSection icon={CalendarDays} title="DATE & MEMO">
+          <div className="flex flex-col gap-3">
+            <SetupField id="shooting-date" label="日付">
+              <Input id="shooting-date" type="date" required value={gameDate} onChange={(e) => setGameDate(e.target.value)} className="h-11 rounded-xl text-base" />
+            </SetupField>
+            <SetupField id="shooting-memo" label="メモ (任意)">
+              <Input id="shooting-memo" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="例: 朝練シュート" className="h-11 rounded-xl text-base" />
+            </SetupField>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="shooting-memo">メモ (任意)</Label>
-            <Input id="shooting-memo" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="例: 朝練シュート" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>シューティングを行う選手(複数選択可)</Label>
-            {players.length === 0 ? (
-              <p className="text-sm text-muted-foreground">先に選手を登録してください</p>
-            ) : (
-              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto -mx-1 px-1">
-                {players.map((p) => (
-                  <label
-                    key={p.id}
-                    className="flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm cursor-pointer hover:bg-muted/50"
-                  >
-                    <Checkbox
-                      checked={selectedPlayerIds.includes(p.id)}
-                      onCheckedChange={() => togglePlayer(p.id)}
-                    />
-                    {p.number != null ? `#${p.number} ` : ''}
-                    {p.name}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-          {error && <p className="text-destructive text-sm">{error}</p>}
-          <DialogFooter>
-            <Button type="submit" disabled={saving}>
-              {saving ? '作成中...' : '作成する'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </SetupSection>
+        <SetupSection icon={Target} title="PLAYERS" sub="シューティングを行う選手(複数選択可)。あとから記録画面で追加もできます">
+          {players.length === 0 ? (
+            <p className="text-sm text-muted-foreground">先に選手を登録してください</p>
+          ) : (
+            <PlayerToggleList
+              players={players}
+              selectedIds={selectedPlayerIds}
+              onToggle={togglePlayer}
+              renderJersey={(p) => <Jersey number={p.number} color={positionColor(p.position)} className="size-8 shrink-0" />}
+            />
+          )}
+        </SetupSection>
+      </GameSetupSheet>
+    </>
   )
 }
 
@@ -262,9 +279,13 @@ function ringColor(rate) {
 
 export function Practice({ teamId }) {
   const location = useLocation()
-  const { games: scrimmages, createGame: createScrimmage } = useGames(teamId, 'practice')
-  const { games: shootingSessions, createGame: createShooting } = useGames(teamId, 'shooting')
-  const { players } = usePlayers(teamId)
+  const { games: scrimmages, loading: scrimmagesLoading, createGame: createScrimmage } = useGames(teamId, 'practice')
+  const { games: shootingSessions, loading: shootingLoading, createGame: createShooting } = useGames(teamId, 'shooting')
+  const { players: allPlayers, addPlayer } = usePlayers(teamId)
+  // usePlayersは過去の試合のゲストも含むため、シューティングの選手選択や新しい試合の
+  // 初期ロスターにはチームの恒久的なロスターだけを渡す
+  const players = useMemo(() => teamRoster(allPlayers), [allPlayers])
+  const [scrimmageLineupWarning, setScrimmageLineupWarning] = useState('')
   // useGamesは日付の新しい順に返すため、先頭5件が直近のワークアウトになる
   const recentShootingSessions = shootingSessions.slice(0, 5)
   // 追加時に選んだだけの選手ではなく、実際にshooting_entriesへ記録がある選手だけを参加者とする
@@ -299,9 +320,14 @@ export function Practice({ teamId }) {
 
       <div className="flex flex-col gap-3">
         <SectionHeader icon={Swords} title="SCRIMMAGE" sub="スクリメージ">
-          <CreateScrimmageDialog createGame={createScrimmage} />
+          <CreateScrimmageDialog createGame={createScrimmage} players={players} addPlayer={addPlayer} onLineupWarning={setScrimmageLineupWarning} />
         </SectionHeader>
-        {scrimmages.length === 0 ? (
+        {scrimmageLineupWarning && (
+          <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{scrimmageLineupWarning}</p>
+        )}
+        {scrimmages.length === 0 && scrimmagesLoading ? (
+          <LoadingState />
+        ) : scrimmages.length === 0 ? (
           <EmptyState title="まだスクリメージが登録されていません" description="紅白戦や練習試合もGAME同様に記録できます" />
         ) : (
           <ul className="flex flex-col gap-2">
@@ -324,7 +350,9 @@ export function Practice({ teamId }) {
         <SectionHeader icon={Target} title="SHOOTING" sub="シューティング(直近5件)">
           <CreateShootingDialog createGame={createShooting} players={players} />
         </SectionHeader>
-        {recentShootingSessions.length === 0 ? (
+        {recentShootingSessions.length === 0 && shootingLoading ? (
+          <LoadingState />
+        ) : recentShootingSessions.length === 0 ? (
           <EmptyState title="まだシューティング記録がありません" description="コートをタップしてゾーンごとの成功数を記録しよう" />
         ) : (
           <ul className="flex flex-col gap-2">

@@ -1,14 +1,22 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, MapPin, Pencil, Plus, Shirt, Swords, Trash2 } from 'lucide-react'
 import { useTournaments } from '@/hooks/useTournaments'
 import { useGames } from '@/hooks/useGames'
+import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
+import { useGameSetupDraft } from '@/hooks/useGameSetupDraft'
+import { finishGameSetup } from '@/lib/gameSetup'
 import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { summarizeRecord } from '@/lib/record'
 import { GameScoreCard } from '@/components/fun/GameScoreCard'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { DateTile } from '@/components/fun/DateTile'
 import { ResultDots } from '@/components/fun/ResultDots'
+import { GameSetupSheet, OpponentField, SetupSection } from '@/components/fun/GameSetupSheet'
+import { LineupEditor } from '@/components/fun/LineupEditor'
+import { GuestDraftField } from '@/components/fun/GuestDraftField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +27,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   AlertDialog,
@@ -37,7 +44,7 @@ export function TournamentGames({ teamId }) {
   const { tournamentId } = useParams()
   const navigate = useNavigate()
   const { tournaments, updateTournament, deleteTournament } = useTournaments(teamId)
-  const { games, createGame } = useGames(teamId, 'official', tournamentId)
+  const { games, loading: gamesLoading, createGame } = useGames(teamId, 'official', tournamentId)
   const tournament = tournaments.find((t) => t.id === tournamentId)
   const teamScoresByGameId = useTeamScoresByGame(games.map((g) => g.id))
   const record = useMemo(() => summarizeRecord(games, teamScoresByGameId), [games, teamScoresByGameId])
@@ -47,6 +54,12 @@ export function TournamentGames({ teamId }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const { players, addPlayer } = usePlayers(teamId)
+  // 新しい試合の初期ロスターはチームの選手だけ(過去の試合のゲストは含めない)
+  const roster = useMemo(() => teamRoster(players), [players])
+  const draft = useGameSetupDraft(roster)
+  const [lineupWarning, setLineupWarning] = useState('')
+  const sheetBodyRef = useRef(null)
 
   const [editOpen, setEditOpen] = useState(false)
   const [editName, setEditName] = useState('')
@@ -57,15 +70,28 @@ export function TournamentGames({ teamId }) {
 
   async function handleCreate(e) {
     e.preventDefault()
+    if (draft.startersError) {
+      setError(draft.startersError)
+      return
+    }
     setSaving(true)
     setError('')
     try {
-      await createGame({
+      const game = await createGame({
         opponentName,
         gameDate: tournament.game_date,
         location: tournament.location,
         periodSystem: tournament.period_system,
       })
+      // 作成画面で追加したゲストの登録と、変更したSTARTING FIVEの反映
+      const warning = await finishGameSetup({
+        gameId: game.id,
+        roster,
+        lineup: draft.lineup,
+        draftGuests: draft.draftGuests,
+        addPlayer,
+      })
+      if (warning) setLineupWarning(`「vs ${opponentName}」: ${warning}`)
       setOpponentName('')
       setOpen(false)
     } catch (err) {
@@ -73,6 +99,16 @@ export function TournamentGames({ teamId }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleOpenChange(next) {
+    if (next) {
+      setOpponentName('')
+      draft.reset()
+      setError('')
+      setLineupWarning('')
+    }
+    setOpen(next)
   }
 
   function openEdit() {
@@ -130,36 +166,10 @@ export function TournamentGames({ teamId }) {
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger render={<Button size="sm" />}>
-              <Plus className="size-4" />
-              試合を追加
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>試合を追加</DialogTitle>
-                <DialogDescription>対戦相手を入力してください(日程・会場は大会の設定を使用します)</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreate} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="opponent-name">対戦相手</Label>
-                  <Input
-                    id="opponent-name"
-                    required
-                    value={opponentName}
-                    onChange={(e) => setOpponentName(e.target.value)}
-                    placeholder="ここにチーム名を入力"
-                  />
-                </div>
-                {error && <p className="text-destructive text-sm">{error}</p>}
-                <DialogFooter>
-                  <Button type="submit" disabled={saving}>
-                    {saving ? '作成中...' : '作成する'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button size="sm" onClick={() => handleOpenChange(true)}>
+            <Plus className="size-4" />
+            試合を追加
+          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
@@ -181,6 +191,56 @@ export function TournamentGames({ teamId }) {
         </div>
       </div>
 
+      {lineupWarning && (
+        <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{lineupWarning}</p>
+      )}
+
+      <GameSetupSheet
+        open={open}
+        onOpenChange={handleOpenChange}
+        eyebrow="NEW GAME"
+        title="試合を追加"
+        description={`${tournament.name} の試合を追加します`}
+        onSubmit={handleCreate}
+        submitLabel="試合を作成"
+        savingLabel="作成中..."
+        saving={saving}
+        error={error}
+        bodyRef={sheetBodyRef}
+      >
+        <SetupSection icon={Swords} title="MATCHUP" sub="日程・会場・クォーター制は大会の設定を使います">
+          <OpponentField
+            id="opponent-name"
+            label="対戦相手"
+            required
+            value={opponentName}
+            onChange={setOpponentName}
+            placeholder="ここにチーム名を入力"
+          />
+          <div className="flex items-center gap-3 rounded-2xl bg-muted px-3 py-2.5">
+            <DateTile date={tournament.game_date} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold">{tournament.name}</p>
+              <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                {tournament.location && (
+                  <>
+                    <MapPin className="size-3 shrink-0" />
+                    <span className="truncate">{tournament.location}</span>
+                  </>
+                )}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg bg-secondary px-2 py-1 font-heading text-xs tracking-wider text-secondary-foreground">
+              {tournament.period_system === '2q' ? '2Q制' : '4Q制'}
+            </span>
+          </div>
+        </SetupSection>
+        <SetupSection icon={Shirt} title="LINEUP" sub="この試合のSTARTING FIVE(PLAYERSタブの設定が初期値)とゲスト">
+          <LineupEditor players={draft.editorPlayers} value={draft.lineup} onChange={draft.setLineupDraft} scrollRef={sheetBodyRef} />
+          <GuestDraftField guests={draft.draftGuests} onAdd={draft.addGuest} onRemove={draft.removeGuest} />
+        </SetupSection>
+      </GameSetupSheet>
+
       {games.length > 0 && (
         <div className="flex items-center justify-between rounded-xl bg-muted px-3 py-2 animate-rise-in">
           <div className="flex items-baseline gap-2">
@@ -198,7 +258,9 @@ export function TournamentGames({ teamId }) {
         </div>
       )}
 
-      {games.length === 0 ? (
+      {games.length === 0 && gamesLoading ? (
+        <LoadingState />
+      ) : games.length === 0 ? (
         <EmptyState title="まだ試合が登録されていません" description="「試合を追加」で対戦相手を登録するとここに並びます" />
       ) : (
         <ul className="flex flex-col gap-2">

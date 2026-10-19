@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { ChevronLeft, Trash2, Check, Pencil } from 'lucide-react'
+import { ChevronLeft, Trash2, Check, Pencil, UserPlus } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
+import { loadShootingParticipants, saveShootingParticipants } from '@/lib/shootingParticipants'
+import { positionColor } from '@/lib/positionStyle'
+import { Jersey } from '@/components/fun/Jersey'
+import { CourtLines } from '@/components/fun/CourtLines'
+import { Glow } from '@/components/fun/Glow'
+import { GameSetupSheet, PlayerToggleList } from '@/components/fun/GameSetupSheet'
 import { useGames } from '@/hooks/useGames'
 import { useShootingEntries } from '@/hooks/useShootingEntries'
 import { formatDate } from '@/lib/format'
@@ -10,7 +17,6 @@ import { ZONES, ZONE_ORDER, classifyShotZone, aggregateHotZonesFromTallies } fro
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { CourtDiagram } from '@/components/CourtDiagram'
 import { HotZoneChart } from '@/components/HotZoneChart'
 import { cn } from '@/lib/utils'
@@ -117,14 +123,17 @@ export function ShootingDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { players } = usePlayers(teamId)
+  const { players: allPlayers } = usePlayers(teamId)
+  // シューティングはチームの選手だけが対象。過去の試合のゲストは選手一覧に出さない
+  const players = useMemo(() => teamRoster(allPlayers), [allPlayers])
   const { games, updateGame, deleteGame } = useGames(teamId, 'shooting')
   const { entries, addTally, resetZone } = useShootingEntries(id)
   // シューティング追加時に選手を選んでいれば、その選手だけをこの画面に表示し、1人目を
   // 最初から選択済みにしておく(追加直後にもう一度選手を選び直す手間を省く)。
   // location.stateはマウント直後にuseActiveShareToken(App.jsx)がURLへ?t=を付与するための
   // replaceナビゲーションで失われてしまうため、マウント時に一度だけstateで捕まえておく
-  const [participantIds] = useState(() => location.state?.playerIds ?? null)
+  // stateが無い(一覧から開き直した等)場合は、作成時にこの端末へ保存した参加メンバーを使う
+  const [participantIds] = useState(() => location.state?.playerIds ?? loadShootingParticipants(id))
   const [selectedPlayerId, setSelectedPlayerId] = useState(() => participantIds?.[0] ?? null)
   const [pendingZone, setPendingZone] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -156,10 +165,27 @@ export function ShootingDetail({ teamId }) {
       return changed ? next : prev
     })
   }, [entries])
-  const visiblePlayers = useMemo(() => {
-    if (visiblePlayerIds.size > 0) return players.filter((p) => visiblePlayerIds.has(p.id))
-    return players
-  }, [players, visiblePlayerIds])
+  // 参加メンバーだけを表示する(チーム全員に戻すことはしない)。メンバーを増やすときは「選手を追加」から
+  const visiblePlayers = useMemo(() => players.filter((p) => visiblePlayerIds.has(p.id)), [players, visiblePlayerIds])
+  useEffect(() => {
+    if (visiblePlayerIds.size > 0) saveShootingParticipants(id, [...visiblePlayerIds])
+  }, [id, visiblePlayerIds])
+  const [addOpen, setAddOpen] = useState(false)
+  const [addSelection, setAddSelection] = useState([])
+  const addCandidates = useMemo(() => players.filter((p) => !visiblePlayerIds.has(p.id)), [players, visiblePlayerIds])
+
+  function handleAddOpenChange(next) {
+    if (next) setAddSelection([])
+    setAddOpen(next)
+  }
+
+  function handleAddPlayers(e) {
+    e.preventDefault()
+    if (addSelection.length === 0) return
+    setVisiblePlayerIds((prev) => new Set([...prev, ...addSelection]))
+    if (!selectedPlayerId) setSelectedPlayerId(addSelection[0])
+    setAddOpen(false)
+  }
 
   const session = games.find((g) => g.id === id)
 
@@ -239,30 +265,62 @@ export function ShootingDetail({ teamId }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <button onClick={() => navigate('/practice')} className="flex items-center gap-1 text-sm text-muted-foreground">
+      <button onClick={() => navigate('/practice')} className="flex min-h-9 items-center gap-1 self-start text-sm text-muted-foreground">
         <ChevronLeft className="size-4" />
         PRACTICE一覧
       </button>
 
-      <div className="flex flex-col gap-1 rounded-lg border p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="font-medium truncate">{session.opponent_name || 'シューティング'}</p>
-            <Badge variant={session.status === 'final' ? 'secondary' : 'outline'} className="shrink-0">
-              {session.status === 'final' ? '完了' : '下書き'}
-            </Badge>
+      <section className="relative overflow-hidden rounded-3xl bg-secondary p-4 text-secondary-foreground shadow-lg">
+        <CourtLines className="text-white/[0.07]" />
+        <Glow className="-right-16 -top-20 size-52" opacity={0.4} />
+        <div className="relative flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-heading text-[10px] tracking-[0.25em] text-chart-3">SHOOTING</p>
+            <p className="truncate text-xl font-bold leading-tight">{session.opponent_name || 'シューティング'}</p>
+            <p className="text-[11px] text-white/60">{formatDate(session.game_date)}</p>
           </div>
-          <Button variant="ghost" size="sm" className="text-destructive shrink-0" onClick={() => setConfirmDelete(true)}>
-            削除
-          </Button>
+          <span
+            className={cn(
+              'shrink-0 rounded-full px-2 py-0.5 font-heading text-[11px] tracking-wider',
+              session.status === 'final' ? 'bg-white/15 text-white' : 'bg-chart-3 text-secondary'
+            )}
+          >
+            {session.status === 'final' ? '完了' : '下書き'}
+          </span>
         </div>
-        <p className="text-xs text-muted-foreground">{formatDate(session.game_date)}</p>
+        <div className="relative mt-3 grid grid-cols-3 gap-2 text-center">
+          {[
+            { label: 'PLAYERS', value: visiblePlayers.length },
+            { label: 'MAKES', value: entries.reduce((n, e) => n + e.makes, 0) },
+            { label: 'ATTEMPTS', value: entries.reduce((n, e) => n + e.attempts, 0) },
+          ].map((t) => (
+            <div key={t.label} className="rounded-xl bg-white/[0.08] py-2">
+              <p className="font-heading text-2xl leading-none tabular-nums">{t.value}</p>
+              <p className="mt-0.5 font-heading text-[9px] tracking-[0.2em] text-white/60">{t.label}</p>
+            </div>
+          ))}
+        </div>
         {session.status !== 'final' && (
-          <p className="text-xs text-muted-foreground">
-            「ワークアウトを完了する」を押すまで、個人のPRACTICE記録には反映されません
-          </p>
+          <p className="relative mt-2 text-[11px] text-white/60">「ワークアウトを完了する」を押すまで、個人のPRACTICE記録には反映されません</p>
         )}
-      </div>
+        <div className="relative mt-3">
+          {readOnly ? (
+            <Button className="h-11 w-full rounded-xl bg-white/10 text-white hover:bg-white/20" onClick={handleStartEditing}>
+              <Pencil className="size-4" />
+              記録を修正する
+            </Button>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <Button className="h-12 w-full rounded-xl font-heading text-base tracking-wider" disabled={entries.length === 0} onClick={handleCompleteWorkout}>
+                <Check className="size-4" />
+                ワークアウトを完了する
+              </Button>
+              {entries.length === 0 && <p className="text-center text-xs text-white/60">まだ記録がありません</p>}
+              {completeError && <p className="text-center text-xs text-[oklch(0.75_0.17_25)]">{completeError}</p>}
+            </div>
+          )}
+        </div>
+      </section>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
@@ -277,23 +335,6 @@ export function ShootingDetail({ teamId }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {readOnly ? (
-        <Button variant="outline" className="w-full" onClick={handleStartEditing}>
-          <Pencil className="size-4" />
-          記録を修正する
-        </Button>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          <Button variant="destructive" className="w-full" disabled={entries.length === 0} onClick={handleCompleteWorkout}>
-            ワークアウトを完了する
-          </Button>
-          {entries.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center">まだ記録がありません</p>
-          )}
-          {completeError && <p className="text-xs text-destructive text-center">{completeError}</p>}
-        </div>
-      )}
-
       <Dialog open={showCompleteAnimation}>
         <DialogContent showCloseButton={false} className="flex flex-col items-center gap-4 py-10 text-center">
           <div className="flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 animate-check-pop">
@@ -303,41 +344,52 @@ export function ShootingDetail({ teamId }) {
         </DialogContent>
       </Dialog>
 
-      <div className="flex flex-col gap-2">
-        <p className="text-xs font-heading tracking-wide text-muted-foreground">選手を選択</p>
+      <section className="flex flex-col gap-3 rounded-3xl border bg-card p-3 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-heading text-lg leading-none tracking-wide">PLAYERS</h2>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => handleAddOpenChange(true)}
+              className="press flex min-h-10 items-center gap-1.5 rounded-full border border-dashed px-3 text-sm font-bold text-muted-foreground hover:bg-muted"
+            >
+              <UserPlus className="size-4" />
+              選手を追加
+            </button>
+          )}
+        </div>
         {visiblePlayers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">先に選手を登録してください</p>
+          <p className="rounded-xl border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+            {readOnly ? '記録のある選手はいません' : '「選手を追加」からシューティングを行う選手を選んでください'}
+          </p>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-1" data-no-pull-refresh>
             {visiblePlayers.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setSelectedPlayerId(p.id)}
+                aria-pressed={selectedPlayerId === p.id}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors select-none',
-                  selectedPlayerId === p.id
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-background hover:bg-muted'
+                  'press flex min-h-11 max-w-[11rem] shrink-0 select-none items-center gap-1.5 rounded-full border py-1 pr-3 pl-1 text-sm font-bold transition-colors',
+                  selectedPlayerId === p.id ? 'border-secondary bg-secondary text-secondary-foreground ring-2 ring-chart-3' : 'bg-background hover:bg-muted'
                 )}
               >
-                {p.number != null ? `#${p.number} ` : ''}
-                {p.name}
+                <Jersey number={p.number} color={positionColor(p.position)} className="size-8 shrink-0" />
+                <span className="min-w-0 truncate">{p.name}</span>
               </button>
             ))}
           </div>
         )}
-      </div>
 
-      <div className="flex flex-col gap-2">
-        <p className="text-xs text-muted-foreground text-center">
+        <p className={cn('text-center text-xs', selectedPlayerId && !readOnly ? 'font-bold text-primary' : 'text-muted-foreground')}>
           {readOnly
-            ? '内容を修正するには上の「記録を修正する」を押してください'
+            ? '内容を修正するには「記録を修正する」を押してください'
             : selectedPlayerId
               ? 'コートをタップしてゾーンを選び、試投数・成功数をまとめて記録します'
               : '先に選手を選択してください'}
         </p>
         <CourtDiagram active={!!selectedPlayerId && !readOnly} onTap={handleCourtTap} />
-      </div>
+      </section>
 
       <ZoneEntryDialog
         zone={pendingZone}
@@ -346,26 +398,56 @@ export function ShootingDetail({ teamId }) {
         onConfirm={handleConfirmZone}
       />
 
+      <GameSetupSheet
+        open={addOpen}
+        onOpenChange={handleAddOpenChange}
+        eyebrow="ADD PLAYERS"
+        title="選手を追加"
+        description="このシューティングに参加する選手を追加します"
+        onSubmit={handleAddPlayers}
+        submitLabel={addSelection.length > 0 ? `${addSelection.length}人を追加する` : '選手を選んでください'}
+        savingLabel="追加中..."
+        saving={false}
+        submitDisabled={addSelection.length === 0}
+      >
+        {addCandidates.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">追加できる選手はいません</p>
+        ) : (
+          <PlayerToggleList
+            players={addCandidates}
+            selectedIds={addSelection}
+            onToggle={(pid) => setAddSelection((prev) => (prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid]))}
+            renderJersey={(p) => <Jersey number={p.number} color={positionColor(p.position)} className="size-8 shrink-0" />}
+          />
+        )}
+      </GameSetupSheet>
+
       {selectedPlayerId && (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">
-            この選手の記録 {playerTotals.attempts > 0 && `(${playerTotals.makes}/${playerTotals.attempts})`}
-          </p>
+        <section className="flex flex-col gap-2 rounded-3xl border bg-card p-3 shadow-sm">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="font-heading text-lg leading-none tracking-wide">ZONES</h2>
+            {playerTotals.attempts > 0 && (
+              <span className="font-heading text-sm tabular-nums text-muted-foreground">
+                {playerTotals.makes}/{playerTotals.attempts}
+              </span>
+            )}
+          </div>
           {playerEntries.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">まだ記録がありません</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">まだ記録がありません</p>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {ZONE_ORDER.filter((key) => playerHotZones[key].attempts > 0).map((key) => (
-                <li key={key} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-                  <span>{ZONES[key].label}</span>
-                  <div className="flex items-center gap-3">
+                <li key={key} className="flex min-h-11 items-center justify-between gap-2 rounded-xl border bg-background px-3 py-2 text-sm">
+                  <span className="min-w-0 truncate font-bold">{ZONES[key].label}</span>
+                  <div className="flex shrink-0 items-center gap-3">
                     <span className="tabular-nums text-muted-foreground">
-                      {playerHotZones[key].makes}/{playerHotZones[key].attempts} ({formatPct(playerHotZones[key].pct)})
+                      {playerHotZones[key].makes}/{playerHotZones[key].attempts}
+                      <span className="ml-1 font-heading text-foreground">{formatPct(playerHotZones[key].pct)}</span>
                     </span>
                     {!readOnly && (
                       <button
                         onClick={() => handleResetZone(key)}
-                        className="text-muted-foreground hover:text-destructive"
+                        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
                         aria-label="リセット"
                       >
                         <Trash2 className="size-4" />
@@ -376,13 +458,22 @@ export function ShootingDetail({ teamId }) {
               ))}
             </ul>
           )}
-        </div>
+        </section>
       )}
 
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">セッション全体のホットゾーン</p>
+      <section className="flex flex-col gap-2 rounded-3xl border bg-card p-3 shadow-sm">
+        <h2 className="font-heading text-lg leading-none tracking-wide">SESSION HOT ZONES</h2>
         <HotZoneChart hotZones={sessionHotZones} />
-      </div>
+      </section>
+
+      <button
+        type="button"
+        onClick={() => setConfirmDelete(true)}
+        className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-sm text-destructive hover:bg-destructive/10"
+      >
+        <Trash2 className="size-4" />
+        このシューティングを削除
+      </button>
     </div>
   )
 }

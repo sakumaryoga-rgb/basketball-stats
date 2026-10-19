@@ -1,18 +1,22 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Star } from 'lucide-react'
+import { Hand, MapPinned, Plus, Search, Star, UserRound, Users } from 'lucide-react'
 import { usePlayers } from '@/hooks/usePlayers'
+import { teamRoster } from '@/lib/roster'
 import { useOtherTeamPlayers } from '@/hooks/useOtherTeamPlayers'
 import { POSITIONS, UNSET_POSITION, formatPositions, groupPlayersByPosition } from '@/lib/stats'
 import { positionColor } from '@/lib/positionStyle'
 import { PageHeader } from '@/components/fun/PageHeader'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { LoadingState } from '@/components/fun/LoadingState'
 import { StartingCourt } from '@/components/fun/StartingCourt'
 import { Jersey } from '@/components/fun/Jersey'
+import { GameSetupSheet, SetupField, SetupSection } from '@/components/fun/GameSetupSheet'
+import { useLongPressDrag } from '@/hooks/useLongPressDrag'
+import { createPortal } from 'react-dom'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { PositionSelect } from '@/components/PositionSelect'
 import { cn } from '@/lib/utils'
 import {
@@ -22,7 +26,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog'
 
@@ -81,104 +84,105 @@ function AddPlayerDialog({ teamId, teams, addPlayer }) {
     }
   }
 
+  function handleOpenChange(next) {
+    if (!next) reset()
+    setOpen(next)
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset()
-        setOpen(next)
-      }}
-    >
-      <DialogTrigger render={<Button size="sm" />}>
+    <>
+      <Button size="sm" onClick={() => handleOpenChange(true)}>
         <Plus className="size-4" />
         選手を追加
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>選手を追加</DialogTitle>
-          <DialogDescription>ロスターに新しい選手を登録します</DialogDescription>
-        </DialogHeader>
-
+      </Button>
+      <GameSetupSheet
+        open={open}
+        onOpenChange={handleOpenChange}
+        eyebrow="NEW PLAYER"
+        title="選手を追加"
+        description="ロスターに新しい選手を登録します"
+        onSubmit={mode === 'new' ? handleAdd : (e) => e.preventDefault()}
+        submitLabel={mode === 'new' ? '追加する' : undefined}
+        savingLabel="追加中..."
+        saving={saving}
+        error={error}
+      >
         {teams.length > 1 && (
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === 'new' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setMode('new')}
-            >
-              新規登録
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === 'existing' ? 'default' : 'outline'}
-              className="flex-1"
-              onClick={() => setMode('existing')}
-            >
-              既存の選手から追加
-            </Button>
+          <div className="grid grid-cols-2 rounded-xl bg-muted p-1" role="tablist">
+            {[
+              { key: 'new', label: '新規登録' },
+              { key: 'existing', label: '既存の選手から追加' },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={mode === t.key}
+                onClick={() => setMode(t.key)}
+                className={cn(
+                  'min-h-10 rounded-lg text-sm font-bold transition-colors',
+                  mode === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
         )}
 
         {mode === 'new' ? (
-          <form onSubmit={handleAdd} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="player-name">名前</Label>
-              <Input id="player-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 山田太郎" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="player-number">背番号</Label>
-                <Input id="player-number" type="number" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="例: 7" />
+          <>
+            <SetupSection icon={UserRound} title="PROFILE">
+              <div className="flex items-center gap-3">
+                <Jersey number={number === '' ? null : number} color={positionColor(position)} className="size-14 shrink-0 drop-shadow" />
+                <div className="flex min-w-0 flex-1 flex-col gap-3">
+                  <SetupField id="player-name" label="名前">
+                    <Input id="player-name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="例: 山田太郎" className="h-11 rounded-xl text-base" />
+                  </SetupField>
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="player-position">ポジション</Label>
-                <PositionSelect id="player-position" value={position} onChange={setPosition} />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="player-position2">ポジション(第2)</Label>
-              <PositionSelect id="player-position2" value={position2} onChange={setPosition2} />
-            </div>
-            {error && <p className="text-destructive text-sm">{error}</p>}
-            <DialogFooter>
-              <Button type="submit" disabled={saving}>
-                {saving ? '追加中...' : '追加する'}
-              </Button>
-            </DialogFooter>
-          </form>
+              <SetupField id="player-number" label="背番号">
+                <Input id="player-number" type="number" inputMode="numeric" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="例: 7" className="h-11 rounded-xl text-base" />
+              </SetupField>
+            </SetupSection>
+            <SetupSection icon={MapPinned} title="POSITION">
+              <SetupField id="player-position" label="ポジション">
+                <PositionSelect id="player-position" value={position} onChange={setPosition} className="h-11 w-full rounded-xl text-base" />
+              </SetupField>
+              <SetupField id="player-position2" label="ポジション(第2)">
+                <PositionSelect id="player-position2" value={position2} onChange={setPosition2} className="h-11 w-full rounded-xl text-base" />
+              </SetupField>
+            </SetupSection>
+          </>
         ) : (
-          <div className="flex flex-col gap-2">
+          <SetupSection icon={Users} title="OTHER TEAMS" sub="所属している他のチームの選手を、このチームにも登録します">
             {otherLoading ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">読み込み中...</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">読み込み中...</p>
             ) : otherPlayers.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">他のチームに選手が登録されていません</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">他のチームに選手が登録されていません</p>
             ) : (
-              <ul className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+              <ul className="flex flex-col gap-1.5">
                 {otherPlayers.map((p) => (
-                  <li key={p.id} className="flex items-center gap-3 rounded-lg border px-3 py-2">
-                    <Avatar className="size-8 shrink-0 text-xs font-medium">
+                  <li key={p.id} className="flex min-h-14 items-center gap-3 rounded-xl border bg-background px-3 py-2">
+                    <Avatar className="size-9 shrink-0 text-xs font-medium">
                       <AvatarImage src={p.photo_url} alt={p.name} />
                       <AvatarFallback className="tabular-nums">{p.number ?? '-'}</AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{p.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{p.teams?.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold">{p.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{p.teams?.name}</p>
                     </div>
-                    <Button type="button" size="sm" variant="outline" disabled={saving} onClick={() => handleAddExisting(p)}>
+                    <Button type="button" size="sm" variant="outline" className="h-9 rounded-lg" disabled={saving} onClick={() => handleAddExisting(p)}>
                       追加
                     </Button>
                   </li>
                 ))}
               </ul>
             )}
-            {error && <p className="text-destructive text-sm">{error}</p>}
-          </div>
+          </SetupSection>
         )}
-      </DialogContent>
-    </Dialog>
+      </GameSetupSheet>
+    </>
   )
 }
 
@@ -266,8 +270,8 @@ function StarterPips({ count }) {
 }
 
 export function Players({ teamId, teams = [] }) {
-  const { players: allPlayers, addPlayer, updatePlayer } = usePlayers(teamId)
-  const players = allPlayers.filter((p) => !p.guest_game_id)
+  const { players: allPlayers, loading: playersLoading, addPlayer, updatePlayer } = usePlayers(teamId)
+  const players = teamRoster(allPlayers)
   const [viewMode, setViewMode] = useState('starting') // 'starting' | 'roster'
   const [positionFilter, setPositionFilter] = useState('ALL')
   const [search, setSearch] = useState('')
@@ -284,7 +288,6 @@ export function Players({ teamId, teams = [] }) {
   const positionGroups = useMemo(() => groupPlayersByPosition(filteredPlayers), [filteredPlayers])
   // STARTING FIVEの人数(5人制限の判定)は検索結果に関わらず常に全選手基準で数える
   const starters = useMemo(() => players.filter((p) => p.is_starter), [players])
-  const bench = useMemo(() => players.filter((p) => !p.is_starter), [players])
   const startersCount = starters.length
   const allGroups = useMemo(() => groupPlayersByPosition(players), [players])
   const countByPosition = useMemo(() => Object.fromEntries(allGroups.map((g) => [g.key, g.players.length])), [allGroups])
@@ -293,7 +296,60 @@ export function Players({ teamId, teams = [] }) {
       ? filteredPlayers
       : (positionGroups.find((g) => g.key === positionFilter)?.players ?? [])
 
+  // STARTINGタブのドラッグ&ドロップで変えた先発(is_starter)を、保存の完了を待たずに表示へ反映する上書き。
+  // ROSTERタブの★で変えた場合は空に戻し、DBの値をそのまま使う
+  const [starterOverrides, setStarterOverrides] = useState({})
+  const isStarter = (p) => (p.id in starterOverrides ? starterOverrides[p.id] : !!p.is_starter)
+  const courtStarters = players.filter(isStarter).slice(0, 5)
+  const reservePlayers = players.filter((p) => !courtStarters.includes(p))
+  const courtStarterIds = new Set(courtStarters.map((p) => p.id))
+
+  async function applyStarterChanges(changes) {
+    setStarterOverrides((prev) => ({ ...prev, ...changes }))
+    try {
+      await Promise.all(Object.entries(changes).map(([id, value]) => updatePlayer(id, { is_starter: value })))
+    } catch (err) {
+      console.error('STARTING FIVEの更新に失敗しました', err)
+      setStarterOverrides((prev) => {
+        const next = { ...prev }
+        for (const id of Object.keys(changes)) delete next[id]
+        return next
+      })
+    }
+  }
+
+  // ドロップ先: 'court'(コートの余白) / 'slot:PG'(空き枠) / 'player:<id>'(選手) / 'reserve'(RESERVEの列)
+  function canDropOn(dragId, dropKey) {
+    const fromCourt = courtStarterIds.has(dragId)
+    if (dropKey.startsWith('player:')) {
+      const otherId = dropKey.slice(7)
+      return otherId !== dragId && courtStarterIds.has(otherId) !== fromCourt
+    }
+    if (dropKey === 'reserve') return fromCourt
+    // コートへ入れられるのは、RESERVEの選手で、かつ先発が5人未満のときだけ(5人なら選手の上で入れ替え)
+    return !fromCourt && courtStarters.length < 5
+  }
+
+  function handleDrop(dragId, dropKey) {
+    if (!canDropOn(dragId, dropKey)) return
+    const fromCourt = courtStarterIds.has(dragId)
+    if (dropKey.startsWith('player:')) {
+      const otherId = dropKey.slice(7)
+      applyStarterChanges({ [dragId]: !fromCourt, [otherId]: fromCourt })
+    } else if (dropKey === 'reserve') {
+      applyStarterChanges({ [dragId]: false })
+    } else {
+      applyStarterChanges({ [dragId]: true })
+    }
+  }
+
+  const { drag, bind, rootRef } = useLongPressDrag({ onDrop: handleDrop })
+  const draggedPlayer = drag ? players.find((p) => p.id === drag.id) : null
+  const draggingFromCourt = drag ? courtStarterIds.has(drag.id) : false
+  const courtDnd = { bind, drag, canDropOn: (key) => (drag ? canDropOn(drag.id, key) : false) }
+
   async function handleToggleStarter(player) {
+    setStarterOverrides({})
     if (!player.is_starter && startersCount >= 5) {
       setSwapTarget(player)
       return
@@ -303,6 +359,7 @@ export function Players({ teamId, teams = [] }) {
 
   async function handleSwap(outgoingPlayer) {
     if (!swapTarget) return
+    setStarterOverrides({})
     const incomingPlayer = swapTarget
     setSwapTarget(null)
     await Promise.all([
@@ -344,7 +401,9 @@ export function Players({ teamId, teams = [] }) {
         </div>
       )}
 
-      {players.length === 0 ? (
+      {players.length === 0 && playersLoading ? (
+        <LoadingState />
+      ) : players.length === 0 ? (
         <EmptyState title="まだ選手が登録されていません" description="「選手を追加」からチームのメンバーを登録しましょう" />
       ) : viewMode === 'roster' ? (
         <div className="flex flex-col gap-3">
@@ -402,29 +461,50 @@ export function Players({ teamId, teams = [] }) {
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          <StartingCourt starters={starters} onPickStarter={() => setViewMode('roster')} />
-          {starters.length < 5 && (
+        <div ref={rootRef} className="flex flex-col gap-4">
+          <p className="-mb-2 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+            <Hand className="size-3.5" />
+            長押ししてコートとRESERVEの間で運ぶと入れ替えられます
+          </p>
+          <StartingCourt starters={courtStarters} onPickStarter={() => setViewMode('roster')} dnd={courtDnd} />
+          {courtStarters.length < 5 && (
             <p className="text-xs text-muted-foreground text-center -mt-2">
-              空いている枠をタップすると、ROSTERからSTARTING FIVEを選べます
+              空いている枠をタップするとROSTERから選べます。RESERVEの選手を運んで入れることもできます
             </p>
           )}
-          {bench.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 px-1">
-                <h2 className="font-heading text-xs tracking-[0.2em] text-muted-foreground">BENCH</h2>
-                <span className="h-px flex-1 bg-border" />
-                <span className="font-heading text-xs tabular-nums text-muted-foreground">{bench.length}</span>
-              </div>
-              <ul
-                data-no-pull-refresh
-                className="flex snap-x snap-proximity gap-2 overflow-x-auto overscroll-x-contain scroll-px-1 px-1 pb-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch]"
-              >
-                {bench.map((player, i) => (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 px-1">
+              <h2 className="font-heading text-xs tracking-[0.2em] text-muted-foreground">RESERVE</h2>
+              <span className="h-px flex-1 bg-border" />
+              <span className="font-heading text-xs tabular-nums text-muted-foreground">{reservePlayers.length}</span>
+            </div>
+            <ul
+              data-no-pull-refresh
+              data-drop="reserve"
+              className={cn(
+                'flex min-h-24 snap-x snap-proximity gap-2 overflow-x-auto overscroll-x-contain scroll-px-1 rounded-2xl px-1 py-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] transition-shadow',
+                draggingFromCourt && 'bg-primary/5 ring-2 ring-primary/60 ring-inset'
+              )}
+            >
+              {reservePlayers.length === 0 && (
+                <li className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+                  {draggingFromCourt ? 'ここで離すとRESERVEへ' : 'RESERVEの選手はいません'}
+                </li>
+              )}
+              {reservePlayers.map((player, i) => {
+                const over = drag?.over === `player:${player.id}` && courtDnd.canDropOn(`player:${player.id}`)
+                return (
                   <li key={player.id} className="animate-rise-in shrink-0 snap-start" style={{ '--i': i }}>
                     <Link
                       to={`/players/${player.id}`}
-                      className="press flex w-20 flex-col items-center gap-1 rounded-xl border bg-card px-1.5 py-2"
+                      draggable={false}
+                      {...bind(player.id)}
+                      data-drop={`player:${player.id}`}
+                      className={cn(
+                        'press flex w-20 select-none flex-col items-center gap-1 rounded-xl border bg-card px-1.5 py-2 transition-[opacity,box-shadow] [-webkit-touch-callout:none]',
+                        drag?.id === player.id && 'opacity-40',
+                        over && 'ring-2 ring-chart-3'
+                      )}
                     >
                       <PlayerFace player={player} className="size-10" />
                       <span className="w-full truncate text-center text-[11px] font-medium">{player.name}</span>
@@ -433,10 +513,25 @@ export function Players({ teamId, teams = [] }) {
                       </span>
                     </Link>
                   </li>
-                ))}
-              </ul>
-            </div>
-          )}
+                )
+              })}
+            </ul>
+          </div>
+          {drag?.moved &&
+            draggedPlayer &&
+            createPortal(
+              <div
+                aria-hidden
+                className="pointer-events-none fixed z-[100] flex flex-col items-center"
+                style={{ left: 0, top: 0, transform: `translate3d(${drag.x - 28}px, ${drag.y - 64}px, 0) rotate(-4deg)` }}
+              >
+                <Jersey number={draggedPlayer.number} color={positionColor(draggedPlayer.position)} className="size-14 drop-shadow-xl" />
+                <span className="-mt-1 max-w-28 truncate rounded-full bg-secondary px-2 py-0.5 text-[11px] font-bold text-secondary-foreground shadow ring-2 ring-chart-3">
+                  {draggedPlayer.name}
+                </span>
+              </div>,
+              document.body
+            )}
         </div>
       )}
 
