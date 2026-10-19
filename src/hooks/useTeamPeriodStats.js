@@ -5,12 +5,15 @@ import { isGuest } from '@/lib/roster'
 const SUM_KEYS = ['pts', 'reb', 'ast', 'stl', 'blk', 'tov', 'pf', 'fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta']
 
 function emptyBucket() {
-  return { gamesPlayed: 0, totals: Object.fromEntries(SUM_KEYS.map((k) => [k, 0])) }
+  // gamePts: その試合でチームが実際に取った得点(ゲストの得点も含む)。TEAMのAVG PTS(PPG)に使う
+  return { gamesPlayed: 0, gamePts: 0, totals: Object.fromEntries(SUM_KEYS.map((k) => [k, 0])) }
 }
 
 // チームの成績を、2Q制/4Q制それぞれと全公式戦(all)で集計する。TEAM画面の1試合平均は
 // '2q'/'4q'、シュート成功率とシーズン合計は'all'を使う。各試合のplayer_game_stats(選手ごとの行)を
 // 合算するが、ゲスト選手(players.guest_game_id付き=その試合限定の助っ人)の行は除く。
+// 例外としてgamePts(TEAMのAVG PTS用)だけはゲストの得点も含める。AVG PTSは「その試合で
+// チームが実際に取った得点」の平均であり、試合の最終スコア・GAMESのAVG PTSと一致させるため。
 // ゲストは「その試合の参加者」であり、試合をまたぐチームの公式集計(TEAMの1試合平均・
 // シーズン合計・シュート成功率)には含めない。player_season_stats(個人成績)・LEADERS・
 // ホットゾーン(useShotChart)と同じ扱いで、3つの数字の対象範囲がそろう。
@@ -81,10 +84,12 @@ export function useTeamPeriodStats(teamId) {
       result.all.gamesPlayed += 1
     }
     for (const row of boxRows ?? []) {
-      if (guestIds.has(row.player_id)) continue
       const periodSystem = periodSystemByGame.get(row.game_id)
       if (!periodSystem) continue
       const bucket = result[periodSystem]
+      if (bucket) bucket.gamePts += row.pts ?? 0
+      result.all.gamePts += row.pts ?? 0
+      if (guestIds.has(row.player_id)) continue
       for (const k of SUM_KEYS) {
         if (bucket) bucket.totals[k] += row[k] ?? 0
         result.all.totals[k] += row[k] ?? 0

@@ -375,7 +375,8 @@ export function TeamSettings({ team, teams = [], onTeamUpdated, onSwitchTeam }) 
     const g = periodBucket.gamesPlayed
     const t = periodBucket.totals
     return {
-      pts: perGame(t.pts, g),
+      // AVG PTSだけはゲストの得点も含めた「試合で実際に取った得点」の平均(最終スコアと一致させる)
+      pts: perGame(periodBucket.gamePts, g),
       reb: perGame(t.reb, g),
       ast: perGame(t.ast, g),
       stl: perGame(t.stl, g),
