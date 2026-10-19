@@ -8,6 +8,7 @@ import { useGames } from '@/hooks/useGames'
 import { useTeamPeriodStats } from '@/hooks/useTeamPeriodStats'
 import { useShotChart } from '@/hooks/useShotChart'
 import { EmptyState } from '@/components/fun/EmptyState'
+import { ShootingRing } from '@/components/fun/ShootingRing'
 import { uploadTeamIcon } from '@/lib/uploadTeamIcon'
 import { getShareUrl, saveShareUrl } from '@/lib/shareUrlStore'
 import { formatAvg, formatPct, perGame, shootingSplits } from '@/lib/stats'
@@ -38,7 +39,6 @@ import {
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/fun/PageHeader'
 import { CourtLines } from '@/components/fun/CourtLines'
-import { WinRing } from '@/components/fun/WinRing'
 import { ShareLinkPanel } from '@/components/fun/ShareLinkPanel'
 import { TeamSwitcherSheet } from '@/components/fun/TeamSwitcherSheet'
 import { Glow } from '@/components/fun/Glow'
@@ -285,31 +285,6 @@ function StatTile({ label, value, index = 0 }) {
     <div className="animate-rise-in flex flex-col items-center gap-1 rounded-xl bg-muted/60 py-2.5" style={{ '--i': index }}>
       <p className="font-heading text-2xl leading-none tabular-nums">{value}</p>
       <p className="font-heading text-[10px] tracking-widest text-muted-foreground">{label}</p>
-    </div>
-  )
-}
-
-// split.pctは0〜100の百分率(stats.jsのshootingSplits)。リングには0〜1の割合で渡す
-function ShootingRing({ split }) {
-  const { label, made, att, pct: value, invalid } = split
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <WinRing
-        value={invalid || value == null ? 0 : value / 100}
-        size={64}
-        stroke={6}
-        color="var(--primary)"
-        track="var(--foreground)"
-      >
-        <span className="font-heading text-base tabular-nums">
-          {invalid ? '!' : value == null ? '-' : value.toFixed(1)}
-          {!invalid && value != null && <span className="text-[8px]">%</span>}
-        </span>
-      </WinRing>
-      <span className="font-heading text-[11px] tracking-widest">{label}</span>
-      <span className={cn('text-[10px] tabular-nums', invalid ? 'font-bold text-destructive' : 'text-muted-foreground')}>
-        {invalid ? `要確認 ${made}/${att}` : `${made}/${att}`}
-      </span>
     </div>
   )
 }

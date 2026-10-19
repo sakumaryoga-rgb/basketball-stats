@@ -9,11 +9,12 @@ import { Jersey } from '@/components/fun/Jersey'
 import { CourtLines } from '@/components/fun/CourtLines'
 import { Glow } from '@/components/fun/Glow'
 import { GameSetupSheet, PlayerToggleList } from '@/components/fun/GameSetupSheet'
+import { ShootingRing } from '@/components/fun/ShootingRing'
 import { useGames } from '@/hooks/useGames'
 import { useShootingEntries } from '@/hooks/useShootingEntries'
 import { formatDate } from '@/lib/format'
 import { formatPct } from '@/lib/stats'
-import { ZONES, ZONE_ORDER, classifyShotZone, aggregateHotZonesFromTallies } from '@/lib/hotZones'
+import { ZONES, ZONE_ORDER, classifyShotZone, aggregateHotZonesFromTallies, isThreePointZone } from '@/lib/hotZones'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -119,6 +120,39 @@ function ZoneEntryDialog({ zone, existing, onClose, onConfirm }) {
   )
 }
 
+// 成功率・ホットゾーンを「全体」か選手ごとに切り替えるチップ(上部の枠とHOT ZONESで共通の選択)
+function StatsPlayerPicker({ players, value, onChange, onDark = false }) {
+  const options = [{ id: 'all', name: '全体' }, ...players]
+  return (
+    <div className="-mx-1 flex gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-0.5 [scrollbar-width:none]" data-no-pull-refresh role="tablist">
+      {options.map((p) => {
+        const active = value === p.id
+        return (
+          <button
+            key={p.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(p.id)}
+            className={cn(
+              'min-h-9 max-w-[10rem] shrink-0 truncate rounded-full px-3 text-xs font-bold transition-colors',
+              onDark
+                ? active
+                  ? 'bg-chart-3 text-secondary'
+                  : 'bg-white/10 text-white/80 hover:bg-white/15'
+                : active
+                  ? 'bg-secondary text-secondary-foreground'
+                  : 'border bg-background text-muted-foreground hover:bg-muted'
+            )}
+          >
+            {p.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function ShootingDetail({ teamId }) {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -194,7 +228,26 @@ export function ShootingDetail({ teamId }) {
     [entries, selectedPlayerId]
   )
   const playerHotZones = useMemo(() => aggregateHotZonesFromTallies(playerEntries), [playerEntries])
-  const sessionHotZones = useMemo(() => aggregateHotZonesFromTallies(entries), [entries])
+  // 成功率・ホットゾーンを表示する対象('all' = 全体、それ以外は選手ID)。記録する選手の選択とは別
+  const [statsPlayerId, setStatsPlayerId] = useState('all')
+  const statsEntries = useMemo(
+    () => (statsPlayerId === 'all' ? entries : entries.filter((e) => e.player_id === statsPlayerId)),
+    [entries, statsPlayerId]
+  )
+  const statsHotZones = useMemo(() => aggregateHotZonesFromTallies(statsEntries), [statsEntries])
+  // 2P% / 3P%(ゾーンの区分で2Pと3Pに分ける。TEAMタブと同じリング表示)
+  const shootingSplits = useMemo(() => {
+    const sum = { two: { made: 0, att: 0 }, three: { made: 0, att: 0 } }
+    for (const e of statsEntries) {
+      const bucket = isThreePointZone(e.zone) ? sum.three : sum.two
+      bucket.made += e.makes
+      bucket.att += e.attempts
+    }
+    return [
+      { key: '2p', label: '2P%', ...sum.two },
+      { key: '3p', label: '3P%', ...sum.three },
+    ].map((s) => ({ ...s, pct: s.att > 0 ? (s.made / s.att) * 100 : null, invalid: s.made > s.att }))
+  }, [statsEntries])
 
   const playerTotals = playerEntries.reduce(
     (acc, e) => ({ attempts: acc.attempts + e.attempts, makes: acc.makes + e.makes }),
@@ -288,17 +341,13 @@ export function ShootingDetail({ teamId }) {
             {session.status === 'final' ? '完了' : '下書き'}
           </span>
         </div>
-        <div className="relative mt-3 grid grid-cols-3 gap-2 text-center">
-          {[
-            { label: 'PLAYERS', value: visiblePlayers.length },
-            { label: 'MAKES', value: entries.reduce((n, e) => n + e.makes, 0) },
-            { label: 'ATTEMPTS', value: entries.reduce((n, e) => n + e.attempts, 0) },
-          ].map((t) => (
-            <div key={t.label} className="rounded-xl bg-white/[0.08] py-2">
-              <p className="font-heading text-2xl leading-none tabular-nums">{t.value}</p>
-              <p className="mt-0.5 font-heading text-[9px] tracking-[0.2em] text-white/60">{t.label}</p>
-            </div>
-          ))}
+        <div className="relative mt-3 flex flex-col gap-2 rounded-2xl bg-white/[0.08] p-2.5">
+          <StatsPlayerPicker players={visiblePlayers} value={statsPlayerId} onChange={setStatsPlayerId} onDark />
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            {shootingSplits.map((split) => (
+              <ShootingRing key={split.key} split={split} onDark />
+            ))}
+          </div>
         </div>
         {session.status !== 'final' && (
           <p className="relative mt-2 text-[11px] text-white/60">「ワークアウトを完了する」を押すまで、個人のPRACTICE記録には反映されません</p>
@@ -462,8 +511,9 @@ export function ShootingDetail({ teamId }) {
       )}
 
       <section className="flex flex-col gap-2 rounded-3xl border bg-card p-3 shadow-sm">
-        <h2 className="font-heading text-lg leading-none tracking-wide">SESSION HOT ZONES</h2>
-        <HotZoneChart hotZones={sessionHotZones} />
+        <h2 className="font-heading text-lg leading-none tracking-wide">HOT ZONES</h2>
+        <StatsPlayerPicker players={visiblePlayers} value={statsPlayerId} onChange={setStatsPlayerId} />
+        <HotZoneChart hotZones={statsHotZones} />
       </section>
 
       <button
