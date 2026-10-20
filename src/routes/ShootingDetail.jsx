@@ -129,13 +129,13 @@ export function ShootingDetail({ teamId }) {
   const players = useMemo(() => teamRoster(allPlayers), [allPlayers])
   const { games, updateGame, deleteGame } = useGames(teamId, 'shooting')
   const { entries, addTally, resetZone } = useShootingEntries(id)
-  // シューティング追加時に選手を選んでいれば、その選手だけをこの画面に表示し、1人目を
-  // 最初から選択済みにしておく(追加直後にもう一度選手を選び直す手間を省く)。
+  // シューティング追加時に選手を選んでいれば、その選手だけをこの画面に表示する。
+  // 1人だけならその選手を最初から選択済みにし(選び直す手間を省く)、複数人なら「全体」から始める。
   // location.stateはマウント直後にuseActiveShareToken(App.jsx)がURLへ?t=を付与するための
   // replaceナビゲーションで失われてしまうため、マウント時に一度だけstateで捕まえておく
   // stateが無い(一覧から開き直した等)場合は、作成時にこの端末へ保存した参加メンバーを使う
   const [participantIds] = useState(() => location.state?.playerIds ?? loadShootingParticipants(id))
-  const [selectedPlayerId, setSelectedPlayerId] = useState(() => participantIds?.[0] ?? null)
+  const [selectedPlayerId, setSelectedPlayerId] = useState(() => (participantIds?.length === 1 ? participantIds[0] : null))
   const [pendingZone, setPendingZone] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [showCompleteAnimation, setShowCompleteAnimation] = useState(false)
@@ -184,7 +184,8 @@ export function ShootingDetail({ teamId }) {
     e.preventDefault()
     if (addSelection.length === 0) return
     setVisiblePlayerIds((prev) => new Set([...prev, ...addSelection]))
-    if (!selectedPlayerId) setSelectedPlayerId(addSelection[0])
+    // 選手が1人だけになる場合はその選手を選ぶ。複数人なら「全体」のまま
+    if (!selectedPlayerId && visiblePlayerIds.size + addSelection.length === 1) setSelectedPlayerId(addSelection[0])
     setAddOpen(false)
   }
 
