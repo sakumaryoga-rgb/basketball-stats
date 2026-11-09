@@ -92,13 +92,8 @@ export function hashIpForAdmin(ip) {
   return createHash('sha256').update(`admin:${ip}:${process.env.CONTACT_HASH_SALT || ''}`).digest('hex')
 }
 
-export function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for']
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0].trim()
-  }
-  return req.socket?.remoteAddress || 'unknown'
-}
+// 送信元のIPは共通の関数(Vercel の専用ヘッダーを優先)
+export { getClientIp } from './client-ip.js'
 
 // 直近15分の「失敗した」ログイン試行が上限に達しているか(達していればtrue=拒否すべき)
 export async function isLoginRateLimited(ipHash) {

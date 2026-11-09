@@ -27,6 +27,7 @@ import {
   jstDateKey,
   jstMonthKey,
 } from './_lib/contact-shared.js'
+import { getClientIp } from './_lib/client-ip.js'
 
 const NOTION_VERSION = '2022-06-28'
 
@@ -89,13 +90,7 @@ function hashMessage(message) {
   return sha256Hex(`${normalizeMessage(message)}:${process.env.CONTACT_HASH_SALT || ''}`)
 }
 
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for']
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0].trim()
-  }
-  return req.socket?.remoteAddress || 'unknown'
-}
+
 
 // 匿名認証(Supabase Auth)のアクセストークンをGoTrueで検証し、なりすましのuser_idを防ぐ
 async function verifySupabaseUser(authHeader) {
