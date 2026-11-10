@@ -1,4 +1,4 @@
-import { useRef, useState, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, Megaphone, HelpCircle, Mail, Shield, FileText, Info, Link2, ChevronRight, ChevronDown, RefreshCw, BadgeCheck } from 'lucide-react'
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet'
@@ -6,7 +6,6 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { RelatedSitesList } from '@/components/RelatedSitesList'
-import { ViewportDiagnosticsDialog } from '@/components/ViewportDiagnosticsDialog'
 import { APP_VERSION } from '@/lib/appVersion'
 import { applyUpdate, getState, subscribe } from '@/lib/swUpdate'
 
@@ -70,17 +69,6 @@ function RelatedSitesMenuItem() {
 // 「お使いのバージョンが最新か」の判定に流用する
 function VersionFooter() {
   const { needRefresh } = useSyncExternalStore(subscribe, getState)
-  // バージョン表記を短時間に5回タップすると、開発者向けの表示領域の診断画面を開く
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
-  const tapsRef = useRef([])
-  function handleVersionTap(e) {
-    const now = e.timeStamp
-    tapsRef.current = [...tapsRef.current.filter((t) => now - t < 3000), now]
-    if (tapsRef.current.length >= 5) {
-      tapsRef.current = []
-      setDiagnosticsOpen(true)
-    }
-  }
 
   return (
     <div className="shrink-0 border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
@@ -89,9 +77,7 @@ function VersionFooter() {
           <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             バージョン
           </span>
-          <span className="text-sm font-medium tabular-nums" onClick={handleVersionTap}>
-            v{APP_VERSION}
-          </span>
+          <span className="text-sm font-medium tabular-nums">v{APP_VERSION}</span>
         </div>
         {needRefresh ? (
           <button
@@ -109,7 +95,6 @@ function VersionFooter() {
           </span>
         )}
       </div>
-      {diagnosticsOpen && <ViewportDiagnosticsDialog onClose={() => setDiagnosticsOpen(false)} />}
     </div>
   )
 }
