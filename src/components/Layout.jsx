@@ -4,6 +4,7 @@ import { CalendarDays, Users, Trophy, Settings, Dumbbell } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { PullToRefresh } from '@/components/PullToRefresh'
 import { HamburgerMenu } from '@/components/HamburgerMenu'
+import { ViewportDiagnosticsPanel } from '@/components/ViewportDiagnosticsPanel'
 import { checkForUpdate } from '@/lib/swUpdate'
 import { measureAppHeight } from '@/lib/appHeight'
 
@@ -117,6 +118,8 @@ export function Layout({ teamName, teamIconUrl }) {
       </nav>
       </div>
       <div aria-hidden="true" style={{ height: 1 }} />
+      {/* 開発者向けの診断パネル(バージョン表記を5回タップしたときだけ表示。閉じている間は何も描画しない) */}
+      <ViewportDiagnosticsPanel />
     </>
   )
 }

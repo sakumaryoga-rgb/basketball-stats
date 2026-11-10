@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { RelatedSitesList } from '@/components/RelatedSitesList'
-import { ViewportDiagnosticsDialog } from '@/components/ViewportDiagnosticsDialog'
+import { openDiagnostics } from '@/lib/viewportDiagnostics'
 import { APP_VERSION } from '@/lib/appVersion'
 import { applyUpdate, getState, subscribe } from '@/lib/swUpdate'
 
@@ -68,17 +68,16 @@ function RelatedSitesMenuItem() {
 // 末尾(Z)がマイナーアップデートの通し番号で、更新のたびに末尾を+1する運用。
 // needRefreshはSWが新しいバージョンを取得済みかどうかを表すため、これをそのまま
 // 「お使いのバージョンが最新か」の判定に流用する
-function VersionFooter() {
+function VersionFooter({ onOpenDiagnostics }) {
   const { needRefresh } = useSyncExternalStore(subscribe, getState)
-  // バージョン表記を短時間に5回タップすると、開発者向けの表示領域の診断画面を開く
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
+  // バージョン表記を短時間に5回タップすると、開発者向けの表示領域の診断パネルを開く
   const tapsRef = useRef([])
   function handleVersionTap(e) {
     const now = e.timeStamp
     tapsRef.current = [...tapsRef.current.filter((t) => now - t < 3000), now]
     if (tapsRef.current.length >= 5) {
       tapsRef.current = []
-      setDiagnosticsOpen(true)
+      onOpenDiagnostics()
     }
   }
 
@@ -109,14 +108,20 @@ function VersionFooter() {
           </span>
         )}
       </div>
-      {diagnosticsOpen && <ViewportDiagnosticsDialog onClose={() => setDiagnosticsOpen(false)} />}
     </div>
   )
 }
 
 export function HamburgerMenu() {
+  // 診断パネルは画面の上に浮かべて使うため、開くときはメニューのシートを閉じる
+  const [open, setOpen] = useState(false)
+  function handleOpenDiagnostics() {
+    setOpen(false)
+    openDiagnostics()
+  }
+
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={<Button variant="ghost" size="icon-sm" aria-label="メニュー" />}
       >
@@ -135,7 +140,7 @@ export function HamburgerMenu() {
           <MenuLink icon={Info} label="運用元情報" to="/operator" />
           <RelatedSitesMenuItem />
         </nav>
-        <VersionFooter />
+        <VersionFooter onOpenDiagnostics={handleOpenDiagnostics} />
       </SheetContent>
     </Sheet>
   )
