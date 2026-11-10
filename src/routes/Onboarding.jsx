@@ -14,6 +14,7 @@ import { CourtLines } from '@/components/fun/CourtLines'
 import { ShareLinkPanel } from '@/components/fun/ShareLinkPanel'
 import { TeamPickerList } from '@/components/fun/TeamPickerList'
 import { Glow } from '@/components/fun/Glow'
+import { StatusBarCover } from '@/components/StatusBarCover'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -254,6 +255,7 @@ export function Onboarding({ onTeamJoined, hasTeam, teams = [], activeTeamId, on
 
   return (
     <div className="overscroll-none relative flex flex-col bg-background" style={{ minHeight: 'var(--app-height, 100svh)' }}>
+      <StatusBarCover className="bg-secondary" />
       {/* ヒーロー: GAMES/TEAMのヒーローカードと同じ紺+コートラインの表現 */}
       <div className="relative overflow-hidden rounded-b-[2rem] bg-secondary px-4 pb-8 pt-[calc(1rem+env(safe-area-inset-top))] text-secondary-foreground shadow-md">
         <CourtLines className="text-white/10" />

@@ -6,6 +6,7 @@ import { PullToRefresh } from '@/components/PullToRefresh'
 import { HamburgerMenu } from '@/components/HamburgerMenu'
 import { checkForUpdate } from '@/lib/swUpdate'
 import { measureAppHeight } from '@/lib/appHeight'
+import { StatusBarCover } from '@/components/StatusBarCover'
 
 const NAV_ITEMS = [
   { to: '/games', label: 'GAMES', icon: CalendarDays },
@@ -60,6 +61,7 @@ export function Layout({ teamName, teamIconUrl }) {
     // ことはない
     <>
       <div className="app-shell flex flex-col overflow-hidden bg-background" style={{ height: 'var(--app-height, 100%)' }}>
+      <StatusBarCover className="bg-background" />
       <header className="border-b bg-background z-10 pt-[env(safe-area-inset-top)] shrink-0">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <Link to="/team" className="flex items-center gap-2 min-w-0">
