@@ -28,26 +28,8 @@
     <meta name="twitter:description" content="リンクを開くとチームに参加できます。試合や練習のスタッツを、チームのみんなで一緒に記録しよう。" />
     <meta name="twitter:image" content="https://basketball-stats-mu.vercel.app/og/og-invite-v2.jpg" />
     <title>チームに招待されています｜BASKETBALL STATS</title>
-    <!-- iOSのホーム画面アプリで画面上部に重なるぼかし(iOS 27で報告)の対策の検証用。
-         画面最上部に幅100%・高さ6px以上の不透明な背景色付きのposition:fixed要素があると、iOSはステータスバーを
-         その色の帯として描きぼかしを出さないと報告されている。React内(overflow:hiddenの.app-shell内)では効かなかったため、
-         最初のHTMLからbody直下に置く。transformは使わない。ヘッダー(bg-background)と同じ色にする -->
-    <style>
-      #ios-pwa-status-bg {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
-        height: 8px;
-        background: var(--background, #fbfbfa);
-        pointer-events: none;
-        z-index: 2147483647;
-      }
-    </style>
   </head>
   <body>
-    <div id="ios-pwa-status-bg" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
