@@ -75,6 +75,32 @@ function nudgeScrollAnimated(onDone) {
 // 一度学習した値を下回ることはない
 function lockOverscroll() {
   document.documentElement.classList.add('app-height-locked')
+  pinShellToTop()
+}
+
+// --app-heightに画面の物理的な高さ(screen.height)を採用した場合など、アプリシェルが
+// 実際の表示領域より少し高くなると、body側がその分だけ縦にスクロールできてしまう。
+// 起動直後の揺さぶりやiOSのスクロール位置の復元でbodyが少しでもずれたまま止まると、
+// ヘッダーがステータスバー(半透明)の下に潜り込み、ベゼルに迫って上半分が透けて見える。
+// 学習の完了後は、アプリシェル(Layout.jsx)を表示している間だけbodyのスクロールを
+// 常に先頭へ戻す。Onboarding等の通常のドキュメントスクロールを使う画面には影響しない
+function resetShellScroll() {
+  if (!document.documentElement.classList.contains('app-height-locked')) return
+  if (!document.querySelector('.app-shell')) return
+  // 入力中はiOSがキーボードの上に入力欄を見せるためにbodyをスクロールさせるので、邪魔しない
+  if (document.activeElement?.matches?.('input, textarea, select, [contenteditable="true"]')) return
+  if (window.scrollY !== 0) window.scrollTo(0, 0)
+}
+
+function pinShellToTop() {
+  resetShellScroll()
+  // キーボードを閉じた後(入力欄からフォーカスが外れた後)にずれが残らないよう戻す
+  document.addEventListener('focusout', () => setTimeout(resetShellScroll, 300))
+  window.addEventListener('scroll', resetShellScroll, { passive: true })
+  window.addEventListener('pageshow', resetShellScroll)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestAnimationFrame(resetShellScroll)
+  })
 }
 
 export function setupAppHeight() {
