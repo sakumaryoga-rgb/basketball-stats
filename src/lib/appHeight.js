@@ -8,9 +8,10 @@
 //
 // 1. 観測した最大の高さを記憶し、それを下回る値は採用しない(ratchet)。
 //    正しい大きな値を一度でも観測できたら、それ以降はその値に固定する。
-// 2. (廃止)以前は起動直後にページを1pxスクロールさせて戻し、iOSに高さを再計算させていた。
-//    新しいiOSのホーム画面アプリでは、画面上部のぼかしがスクロール状態で変わる可能性があり、
-//    その切り分けのため無効化した(v23.2.5)。
+// 2. プログラムによるscrollTo(実際のタッチ操作を伴わない瞬間移動)では
+//    iOSの再計算のきっかけにならなかったため、起動直後に複数フレームに
+//    分けて1px分をアニメーションさせるように動かし、実際のタッチスワイプの
+//    動きに近づける(nudgeScrollAnimated)。
 // 3. 起動直後の学習が完了した後は、この仕組みのために意図的に残している
 //    body側の1pxスクロール余地(index.css/Layout.jsx参照)がユーザーの
 //    通常操作中に誤って弾み(rubber-band)を起こし、画面全体が持ち上がって
@@ -43,6 +44,29 @@ export function measureAppHeight() {
     maxObservedHeight = candidate
     document.documentElement.style.setProperty('--app-height', `${maxObservedHeight}px`)
   }
+}
+
+// 実際のタッチスワイプに近づけるため、瞬間移動ではなく複数フレームに分けて
+// 1px分だけスクロール位置を動かす。動かした後は毎フレームmeasureAppHeightを
+// 呼び、iOSがこのタイミングで報告する値の変化を取りこぼさないようにする
+function nudgeScrollAnimated(onDone) {
+  if (window.scrollY !== 0) {
+    onDone?.()
+    return
+  }
+  let frame = 0
+  const totalFrames = 6 // 前半でscrollTop 0→1、後半で1→0に戻す
+  function step() {
+    frame += 1
+    window.scrollTo(0, frame <= totalFrames / 2 ? 1 : 0)
+    measureAppHeight()
+    if (frame < totalFrames) {
+      requestAnimationFrame(step)
+    } else {
+      onDone?.()
+    }
+  }
+  requestAnimationFrame(step)
 }
 
 // 起動直後の学習が完了したとみなせるタイミングで、以降の意図しない弾み
@@ -92,7 +116,7 @@ export function setupAppHeight() {
   for (const delay of [50, 150, 300, 500, 1000, 2000]) {
     setTimeout(measureAppHeight, delay)
   }
-  // 以前はここで1pxスクロールの揺さぶり(約0.2秒後に開始し、終了の0.3秒後にロック)を行っていた。
-  // 揺さぶりは無効化し、ロックだけを同じくらいのタイミングで行う
-  setTimeout(lockOverscroll, 600)
+  // 起動直後に1度だけ、実際のタッチスワイプに近い動きでビューポートの
+  // 揺さぶりを行う。完了後、学習は十分完了したとみなしoverscrollをロックする
+  setTimeout(() => nudgeScrollAnimated(() => setTimeout(lockOverscroll, 300)), 200)
 }
