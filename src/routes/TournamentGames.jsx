@@ -10,6 +10,7 @@ import { finishGameSetup } from '@/lib/gameSetup'
 import { useTeamScoresByGame } from '@/hooks/useTeamScoresByGame'
 import { summarizeRecord } from '@/lib/record'
 import { GameScoreCard } from '@/components/fun/GameScoreCard'
+import { TournamentLeaders } from '@/components/fun/TournamentLeaders'
 import { EmptyState } from '@/components/fun/EmptyState'
 import { LoadingState } from '@/components/fun/LoadingState'
 import { DateTile } from '@/components/fun/DateTile'
@@ -257,6 +258,8 @@ export function TournamentGames({ teamId }) {
           )}
         </div>
       )}
+
+      {games.length > 0 && <TournamentLeaders gameIds={games.map((g) => g.id)} players={players} />}
 
       {games.length === 0 && gamesLoading ? (
         <LoadingState />

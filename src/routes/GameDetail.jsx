@@ -18,6 +18,7 @@ import { CourtDiagram } from '@/components/CourtDiagram'
 import { GameLogPanel } from '@/components/GameLogPanel'
 import { WheelPicker } from '@/components/WheelPicker'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogTrigger,
@@ -116,9 +117,34 @@ function AddGuestDialog({ addPlayer, gameId, onAdded }) {
 const MINUTES = Array.from({ length: 21 }, (_, i) => i)
 const SECONDS = Array.from({ length: 60 }, (_, i) => i)
 
-function TimePickerDialog({ open, onOpenChange, secondsLeft, onApply }) {
+// 1QTの試合時間。タイマー設定で「各QTの試合時間にする」を選ぶと試合ごとに端末へ保存し、
+// QTを切り替えたときはこの時間から始める
+const DEFAULT_PERIOD_SECONDS = 600
+const PERIOD_SECONDS_KEY_PREFIX = 'periodSeconds:'
+
+function readPeriodSeconds(gameId) {
+  try {
+    const value = Number(localStorage.getItem(PERIOD_SECONDS_KEY_PREFIX + gameId))
+    return Number.isInteger(value) && value > 0 ? value : DEFAULT_PERIOD_SECONDS
+  } catch {
+    return DEFAULT_PERIOD_SECONDS
+  }
+}
+
+function savePeriodSeconds(gameId, seconds) {
+  try {
+    localStorage.setItem(PERIOD_SECONDS_KEY_PREFIX + gameId, String(seconds))
+  } catch {
+    // 保存できない環境(プライベートブラウズ等)では、この画面を開いている間だけ有効
+  }
+}
+
+// asPeriodDefault: 「各QTの試合時間にする」の初期値。QT開始前(まだクロックを動かしていない)なら試合時間の設定、
+// 途中なら残り時間の微調整とみなして外しておく
+function TimePickerDialog({ open, onOpenChange, secondsLeft, asPeriodDefault, onApply }) {
   const [minutes, setMinutes] = useState(0)
   const [seconds, setSeconds] = useState(0)
+  const [asPeriod, setAsPeriod] = useState(false)
   const openCountRef = useRef(0)
 
   // openがtrueになった瞬間の secondsLeft でホイールの位置を初期化する。
@@ -130,12 +156,13 @@ function TimePickerDialog({ open, onOpenChange, secondsLeft, onApply }) {
       openCountRef.current += 1
       setMinutes(Math.floor(secondsLeft / 60))
       setSeconds(secondsLeft % 60)
+      setAsPeriod(asPeriodDefault)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   function handleApply() {
-    onApply(minutes * 60 + seconds)
+    onApply(minutes * 60 + seconds, asPeriod)
     onOpenChange(false)
   }
 
@@ -152,6 +179,10 @@ function TimePickerDialog({ open, onOpenChange, secondsLeft, onApply }) {
           <WheelPicker key={`s-${openCountRef.current}`} values={SECONDS} value={seconds} onChange={setSeconds} />
           <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 h-9 rounded-md border-y bg-muted/30" />
         </div>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={asPeriod} onCheckedChange={setAsPeriod} />
+          各QTの試合時間にする(QTを切り替えるとこの時間から始まります)
+        </label>
         <DialogFooter>
           <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
           <Button type="button" onClick={handleApply}>
@@ -288,8 +319,11 @@ export function GameDetail({ teamId }) {
   const [pendingOutcome, setPendingOutcome] = useState(null)
   // 2P/3Pが成功した直後に表示する「アシストした選手」選択ダイアログの対象
   const [pendingAssist, setPendingAssist] = useState(null)
-  const [secondsLeft, setSecondsLeft] = useState(600)
+  const [periodSeconds, setPeriodSeconds] = useState(() => readPeriodSeconds(id))
+  const [secondsLeft, setSecondsLeft] = useState(() => readPeriodSeconds(id))
   const [clockRunning, setClockRunning] = useState(false)
+  // このQTでまだクロックを動かしていないか(タイマー設定を試合時間の設定とみなすかの初期値に使う)
+  const [quarterNotStarted, setQuarterNotStarted] = useState(true)
   const [statsTab, setStatsTab] = useState('basic')
   const [shotChartPlayerId, setShotChartPlayerId] = useState('all')
   const [hotZoneEnabled, setHotZoneEnabled] = useState(
@@ -446,6 +480,7 @@ export function GameDetail({ teamId }) {
     if (game.status === 'scheduled') {
       await updateGame(game.id, { status: 'in_progress' })
     }
+    if (!clockRunning) setQuarterNotStarted(false)
     setClockRunning((r) => !r)
   }
 
@@ -490,9 +525,18 @@ export function GameDetail({ teamId }) {
   }
 
   async function handleQuarterChange(next) {
-    setSecondsLeft(600)
+    setSecondsLeft(periodSeconds)
+    setQuarterNotStarted(true)
     setClockRunning(false)
     await updateGame(game.id, { quarter: next, home_fouls: 0, away_fouls: 0 })
+  }
+
+  function handleTimeApply(seconds, asPeriod) {
+    setSecondsLeft(seconds)
+    if (asPeriod && seconds > 0) {
+      setPeriodSeconds(seconds)
+      savePeriodSeconds(id, seconds)
+    }
   }
 
   function adjustClock(delta) {
@@ -821,7 +865,8 @@ export function GameDetail({ teamId }) {
           open={timePickerOpen}
           onOpenChange={setTimePickerOpen}
           secondsLeft={secondsLeft}
-          onApply={setSecondsLeft}
+          asPeriodDefault={quarterNotStarted}
+          onApply={handleTimeApply}
         />
 
         {/* 左が自チーム、右が相手(上のスコアと同じ並び) */}
