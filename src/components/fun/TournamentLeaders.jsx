@@ -6,6 +6,7 @@ import { positionColor } from '@/lib/positionStyle'
 import { TOURNAMENT_LEADER_CATEGORIES, rankLeaders } from '@/lib/tournamentLeaders'
 import { useTournamentPlayerTotals } from '@/hooks/useTournamentPlayerTotals'
 import { PlayerIcon } from '@/components/fun/PlayerIcon'
+import { formatAvg } from '@/lib/stats'
 import { cn } from '@/lib/utils'
 
 const RANK_STYLE = {
@@ -14,7 +15,7 @@ const RANK_STYLE = {
   3: 'bg-[oklch(0.68_0.13_50)] text-[oklch(0.99_0_0)]', // 銅
 }
 
-// 大会(TOURNAMENTS)内の全試合の合計で見る「本日のスタッツリーダー」。
+// 大会(TOURNAMENTS)内の全試合の1試合平均で見る「本日のスタッツリーダー」。
 // 得点・リバウンド・アシスト・スティール・ブロックを切り替えて1〜3位を表示する。
 // ゲスト選手(その試合限定の助っ人)はLEADERSと同じく対象外
 export function TournamentLeaders({ gameIds, players }) {
@@ -28,7 +29,7 @@ export function TournamentLeaders({ gameIds, players }) {
     <section className="flex flex-col gap-2 rounded-2xl bg-secondary p-3 text-secondary-foreground shadow-md animate-rise-in">
       <div className="px-1">
         <h2 className="whitespace-nowrap font-heading text-base tracking-[0.2em]">TODAY'S LEADERS</h2>
-        <p className="text-[11px] text-white/60">本日のスタッツリーダー・大会の全試合の合計</p>
+        <p className="text-[11px] text-white/60">本日のスタッツリーダー・大会の1試合平均</p>
       </div>
 
       <div role="tablist" aria-label="スタッツの種類" className="grid grid-cols-5 gap-1 rounded-xl bg-white/10 p-1">
@@ -82,7 +83,7 @@ export function TournamentLeaders({ gameIds, players }) {
                   <p className="text-[10px] text-white/60">{row.games_played}試合出場</p>
                 </div>
                 <p className={cn('font-heading tabular-nums leading-none', row.rank === 1 ? 'text-3xl text-chart-3' : 'text-2xl')}>
-                  {row.value}
+                  {formatAvg(row.value)}
                   <span className="ml-1 text-[10px] tracking-wider text-white/60">{active.short}</span>
                 </p>
               </Link>
@@ -90,7 +91,7 @@ export function TournamentLeaders({ gameIds, players }) {
           ))}
           {tiedOthers > 0 && (
             <li className="px-1 text-right text-[11px] text-white/60">
-              ほか{tiedOthers}人が同じ{rows[rows.length - 1].value}
+              ほか{tiedOthers}人が同じ{formatAvg(rows[rows.length - 1].value)}
               {active.short}
             </li>
           )}

@@ -9,8 +9,9 @@ import { cn } from '@/lib/utils'
 // (needRefresh)があっても全画面ブロックにせず、記録の妨げにならないバナー表示に留める。
 // 記録完了で一覧へ戻る/画面を離れると、この判定が変わって自動的にブロッキング表示になる。
 // ただしDBスキーマ変更等で互換性がなくなる場合(forceUpdateRequired)は、記録中でも
-// 常にブロッキング表示にする
+// 常にブロッキング表示にする。大会の試合一覧(/games/t/:tournamentId)は記録画面ではないので対象外
 function isRecordingRoute(pathname) {
+  if (pathname.startsWith('/games/t/')) return false
   return /^\/(games|shooting)\/[^/]+/.test(pathname)
 }
 

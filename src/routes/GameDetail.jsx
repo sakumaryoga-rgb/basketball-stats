@@ -18,7 +18,6 @@ import { CourtDiagram } from '@/components/CourtDiagram'
 import { GameLogPanel } from '@/components/GameLogPanel'
 import { WheelPicker } from '@/components/WheelPicker'
 import { Switch } from '@/components/ui/switch'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogTrigger,
@@ -117,8 +116,8 @@ function AddGuestDialog({ addPlayer, gameId, onAdded }) {
 const MINUTES = Array.from({ length: 21 }, (_, i) => i)
 const SECONDS = Array.from({ length: 60 }, (_, i) => i)
 
-// 1QTの試合時間。タイマー設定で「各QTの試合時間にする」を選ぶと試合ごとに端末へ保存し、
-// QTを切り替えたときはこの時間から始める
+// 1QTの試合時間。QT開始前(まだクロックを動かしていない)にタイマーを設定すると試合時間とみなして
+// 試合ごとに端末へ保存し、QTを切り替えたときはこの時間から始める。QTの途中の設定は残り時間の調整として扱う
 const DEFAULT_PERIOD_SECONDS = 600
 const PERIOD_SECONDS_KEY_PREFIX = 'periodSeconds:'
 
@@ -139,12 +138,9 @@ function savePeriodSeconds(gameId, seconds) {
   }
 }
 
-// asPeriodDefault: 「各QTの試合時間にする」の初期値。QT開始前(まだクロックを動かしていない)なら試合時間の設定、
-// 途中なら残り時間の微調整とみなして外しておく
-function TimePickerDialog({ open, onOpenChange, secondsLeft, asPeriodDefault, onApply }) {
+function TimePickerDialog({ open, onOpenChange, secondsLeft, onApply }) {
   const [minutes, setMinutes] = useState(0)
   const [seconds, setSeconds] = useState(0)
-  const [asPeriod, setAsPeriod] = useState(false)
   const openCountRef = useRef(0)
 
   // openがtrueになった瞬間の secondsLeft でホイールの位置を初期化する。
@@ -156,13 +152,12 @@ function TimePickerDialog({ open, onOpenChange, secondsLeft, asPeriodDefault, on
       openCountRef.current += 1
       setMinutes(Math.floor(secondsLeft / 60))
       setSeconds(secondsLeft % 60)
-      setAsPeriod(asPeriodDefault)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   function handleApply() {
-    onApply(minutes * 60 + seconds, asPeriod)
+    onApply(minutes * 60 + seconds)
     onOpenChange(false)
   }
 
@@ -179,10 +174,6 @@ function TimePickerDialog({ open, onOpenChange, secondsLeft, asPeriodDefault, on
           <WheelPicker key={`s-${openCountRef.current}`} values={SECONDS} value={seconds} onChange={setSeconds} />
           <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 h-9 rounded-md border-y bg-muted/30" />
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={asPeriod} onCheckedChange={setAsPeriod} />
-          各QTの試合時間にする(QTを切り替えるとこの時間から始まります)
-        </label>
         <DialogFooter>
           <DialogClose render={<Button type="button" variant="outline" />}>キャンセル</DialogClose>
           <Button type="button" onClick={handleApply}>
@@ -322,8 +313,14 @@ export function GameDetail({ teamId }) {
   const [periodSeconds, setPeriodSeconds] = useState(() => readPeriodSeconds(id))
   const [secondsLeft, setSecondsLeft] = useState(() => readPeriodSeconds(id))
   const [clockRunning, setClockRunning] = useState(false)
-  // このQTでまだクロックを動かしていないか(タイマー設定を試合時間の設定とみなすかの初期値に使う)
+  // このQTでまだクロックを動かしていないか(タイマー設定を試合時間の設定とみなすかの判定に使う)
   const [quarterNotStarted, setQuarterNotStarted] = useState(true)
+  // 試合途中で画面を開き直したときは、そのQTはもう始まっているとみなす(残り時間の設定で試合時間を上書きしない)
+  const [checkedInProgressGameId, setCheckedInProgressGameId] = useState(null)
+  if (game && checkedInProgressGameId !== game.id) {
+    setCheckedInProgressGameId(game.id)
+    if (game.status === 'in_progress') setQuarterNotStarted(false)
+  }
   const [statsTab, setStatsTab] = useState('basic')
   const [shotChartPlayerId, setShotChartPlayerId] = useState('all')
   const [hotZoneEnabled, setHotZoneEnabled] = useState(
@@ -531,9 +528,9 @@ export function GameDetail({ teamId }) {
     await updateGame(game.id, { quarter: next, home_fouls: 0, away_fouls: 0 })
   }
 
-  function handleTimeApply(seconds, asPeriod) {
+  function handleTimeApply(seconds) {
     setSecondsLeft(seconds)
-    if (asPeriod && seconds > 0) {
+    if (quarterNotStarted && seconds > 0) {
       setPeriodSeconds(seconds)
       savePeriodSeconds(id, seconds)
     }
@@ -865,7 +862,6 @@ export function GameDetail({ teamId }) {
           open={timePickerOpen}
           onOpenChange={setTimePickerOpen}
           secondsLeft={secondsLeft}
-          asPeriodDefault={quarterNotStarted}
           onApply={handleTimeApply}
         />
 

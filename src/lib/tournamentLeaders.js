@@ -1,4 +1,4 @@
-// 大会(1日の複数試合)の合計スタッツから、主要スタッツのリーダー(上位)を求める
+// 大会(1日の複数試合)の1試合平均スタッツから、主要スタッツのリーダー(上位)を求める
 export const TOURNAMENT_LEADER_CATEGORIES = [
   { key: 'pts', label: '得点', short: 'PTS' },
   { key: 'reb', label: 'リバウンド', short: 'REB' },
@@ -25,17 +25,21 @@ export function sumByPlayer(rows) {
   return [...byPlayer.values()]
 }
 
-// key の合計で上位 limit 位までを返す。0は除外し、同じ値は同順位(1,1,3…)にする。
+// key の1試合平均(合計÷出場試合数)で上位 limit 位までを返す。0は除外し、
+// 表示上同じ値(小数第1位で四捨五入)は同順位(1,1,3…)にする。
 // 表示は limit 人までにし、limit 人目と同じ値でその後ろに並ぶ人数を tiedOthers で返す。
 // playersById にいない選手(ゲストなど)は含めない
 export function rankLeaders(totals, key, playersById, limit = 3) {
   const list = totals
-    .map((t) => ({ player: playersById.get(t.player_id), value: t[key] ?? 0, games_played: t.games_played }))
-    .filter((row) => row.player && row.value > 0)
+    .map((t) => {
+      const value = t.games_played ? (t[key] ?? 0) / t.games_played : 0
+      return { player: playersById.get(t.player_id), value, tenths: Math.round(value * 10), games_played: t.games_played }
+    })
+    .filter((row) => row.player && row.tenths > 0)
     .sort((a, b) => b.value - a.value || (a.player.number ?? Infinity) - (b.player.number ?? Infinity))
   const ranked = []
   for (let i = 0; i < list.length; i++) {
-    const rank = i > 0 && list[i].value === list[i - 1].value ? ranked[i - 1].rank : i + 1
+    const rank = i > 0 && list[i].tenths === list[i - 1].tenths ? ranked[i - 1].rank : i + 1
     if (rank > limit) break
     ranked.push({ ...list[i], rank })
   }
