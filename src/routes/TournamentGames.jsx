@@ -259,8 +259,6 @@ export function TournamentGames({ teamId }) {
         </div>
       )}
 
-      {games.length > 0 && <TournamentLeaders gameIds={games.map((g) => g.id)} players={players} />}
-
       {games.length === 0 && gamesLoading ? (
         <LoadingState />
       ) : games.length === 0 ? (
@@ -281,6 +279,8 @@ export function TournamentGames({ teamId }) {
           ))}
         </ul>
       )}
+
+      {games.length > 0 && <TournamentLeaders gameIds={games.map((g) => g.id)} players={players} />}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
